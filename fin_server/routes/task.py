@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from fin_server.repository.task_repository import task_repository
 from fin_server.security.authentication import AuthSecurity
 import logging
+import time
 
 
 task_bp = Blueprint('task', __name__, url_prefix='/task')
@@ -47,9 +48,49 @@ def get_tasks():
         payload = AuthSecurity.decode_token(token)
         user_key = payload.get('user_key')
         tasks = task_repository.get_tasks_by_user(user_key)
+        now = 1764556800  # 2025-12-01 epoch
+        meta = {
+            'pending': 0,
+            'inprogress': 0,
+            'completed': 0,
+            'overdue': 0,
+            'critical': 0,
+            'read': 0,
+            'unread': 0
+        }
+        task_objs = []
         for t in tasks:
             t['_id'] = str(t['_id'])
-        return jsonify({'success': True, 'tasks': tasks}), 200
+            # Add viewed field if missing
+            if 'viewed' not in t:
+                t['viewed'] = False
+            # Status counts
+            status = t.get('status', '').lower()
+            if status == 'pending':
+                meta['pending'] += 1
+            elif status == 'inprogress':
+                meta['inprogress'] += 1
+            elif status == 'completed':
+                meta['completed'] += 1
+            # Overdue: if not completed and end_date < now
+            end_date = t.get('end_date')
+            if status != 'completed' and end_date:
+                try:
+                    end_epoch = int(time.mktime(time.strptime(end_date, '%Y-%m-%d')))
+                    if end_epoch < now:
+                        meta['overdue'] += 1
+                except Exception:
+                    pass
+            # Critical: priority == 'high'
+            if t.get('priority', '').lower() == 'high':
+                meta['critical'] += 1
+            # Read/unread: viewed field
+            if t['viewed']:
+                meta['read'] += 1
+            else:
+                meta['unread'] += 1
+            task_objs.append(t)
+        return jsonify({'success': True, 'meta': meta, 'tasks': task_objs}), 200
     except Exception as e:
         logging.exception("Error in get_tasks")
         return jsonify({'success': False, 'error': 'Server error'}), 500
