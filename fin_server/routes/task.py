@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from fin_server.repository.task_repository import task_repository
+from fin_server.repository.user_repository import mongo_db_repository
 from fin_server.security.authentication import AuthSecurity
 import logging
 import time
@@ -16,10 +17,23 @@ def create_task():
     try:
         payload = AuthSecurity.decode_token(token)
         user_key = payload.get('user_key')
+        roles = payload.get('roles', [])
         data = request.get_json(force=True)
-        remind_before = data.get('remind_before', 30)  # minutes before, default 30
+        remind_before = data.get('remind_before', 30)
+        assigned_to = data.get('assigned_to', user_key)
+        # Admin can assign to any user, others only to themselves
+        if assigned_to != user_key:
+            if 'admin' not in roles:
+                return jsonify({'success': False, 'error': 'Only admin can assign tasks to other users'}), 403
+            assigned_user = mongo_db_repository.find_one('users', {'user_key': assigned_to})
+            if not assigned_user:
+                return jsonify({'success': False, 'error': 'Assigned user does not exist'}), 404
+        # Default fields
         task_data = {
             'userkey': user_key,
+            'reporter': user_key,
+            'assignee': assigned_to,
+            'assigned_to': assigned_to,
             'title': data.get('title'),
             'description': data.get('description', ''),
             'status': data.get('status', 'pending'),
@@ -27,11 +41,19 @@ def create_task():
             'task_date': data.get('task_date'),
             'priority': data.get('priority', 'normal'),
             'notes': data.get('notes', ''),
-            'recurring': data.get('recurring', 'once'),  # once, daily, weekly, monthly, yearly
-            'reminder': data.get('reminder', False), # boolean for reminder
-            'reminder_time': data.get('reminder_time', ''), # time for reminder
-            'remind_before': remind_before # minutes before reminder, default 30
+            'recurring': data.get('recurring', 'once'),
+            'reminder': data.get('reminder', False),
+            'reminder_time': data.get('reminder_time', ''),
+            'remind_before': remind_before,
+            'history': [],
+            'comments': [],
+            'tags': [],
+            'viewed': False
         }
+        # Merge any extra fields for flexibility
+        for k, v in data.items():
+            if k not in task_data:
+                task_data[k] = v
         task_id = task_repository.create_task(task_data)
         return jsonify({'success': True, 'task_id': task_id}), 201
     except Exception as e:
@@ -104,8 +126,31 @@ def update_task(task_id):
     try:
         payload = AuthSecurity.decode_token(token)
         user_key = payload.get('user_key')
+        roles = payload.get('roles', [])
         data = request.get_json(force=True)
-        update_fields = {k: v for k, v in data.items() if k in ['title', 'description', 'status', 'end_date', 'task_date', 'priority', 'notes', 'recurring', 'reminder', 'reminder_time', 'remind_before']}
+        # Accept all fields for flexibility
+        update_fields = dict(data)
+        task = task_repository.get_task(task_id)
+        if not task:
+            return jsonify({'success': False, 'error': 'Task not found'}), 404
+        # If assignee/assigned_to is being changed, check permissions and update history
+        new_assignee = update_fields.get('assignee') or update_fields.get('assigned_to')
+        if new_assignee and new_assignee != task.get('assignee', task.get('assigned_to')):
+            if new_assignee != user_key:
+                if 'admin' not in roles:
+                    admin_user = mongo_db_repository.find_one('users', {'roles': {'$in': ['admin']}})
+                    if not admin_user or new_assignee != admin_user['user_key'] or task.get('assignee', task.get('assigned_to')) != user_key:
+                        return jsonify({'success': False, 'error': 'Only admin can assign to other users, or user can reassign their own task to admin'}), 403
+            history = task.get('history', [])
+            history.append({
+                'from': task.get('assignee', task.get('assigned_to')),
+                'to': new_assignee,
+                'by': user_key,
+                'timestamp': int(time.time())
+            })
+            update_fields['history'] = history
+            update_fields['assignee'] = new_assignee
+            update_fields['assigned_to'] = new_assignee
         updated = task_repository.update_task(task_id, update_fields)
         return jsonify({'success': True, 'updated': bool(updated)}), 200
     except Exception as e:
@@ -125,4 +170,47 @@ def delete_task(task_id):
         return jsonify({'success': True, 'deleted': bool(deleted)}), 200
     except Exception as e:
         logging.exception("Error in delete_task")
+        return jsonify({'success': False, 'error': 'Server error'}), 500
+
+@task_bp.route('/<task_id>/move', methods=['POST'])
+def move_task(task_id):
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
+    token = auth_header.split(' ', 1)[1]
+    try:
+        payload = AuthSecurity.decode_token(token)
+        user_key = payload.get('user_key')
+        roles = payload.get('roles', [])
+        data = request.get_json(force=True)
+        new_assignee = data.get('new_assignee')
+        if not new_assignee:
+            return jsonify({'success': False, 'error': 'Missing new_assignee'}), 400
+        task = task_repository.get_task(task_id)
+        if not task:
+            return jsonify({'success': False, 'error': 'Task not found'}), 404
+        # Only admin or current assignee can move the task
+        if 'admin' not in roles and user_key != task.get('assignee', task.get('assigned_to')):
+            return jsonify({'success': False, 'error': 'Permission denied'}), 403
+        # Check if new assignee exists
+        assigned_user = mongo_db_repository.find_one('users', {'user_key': new_assignee})
+        if not assigned_user:
+            return jsonify({'success': False, 'error': 'New assignee does not exist'}), 404
+        # Update assignee and history
+        history = task.get('history', [])
+        history.append({
+            'from': task.get('assignee', task.get('assigned_to')),
+            'to': new_assignee,
+            'by': user_key,
+            'timestamp': int(time.time())
+        })
+        update_fields = {
+            'assignee': new_assignee,
+            'assigned_to': new_assignee,
+            'history': history
+        }
+        updated = task_repository.update_task(task_id, update_fields)
+        return jsonify({'success': True, 'updated': bool(updated)}), 200
+    except Exception as e:
+        logging.exception("Error in move_task")
         return jsonify({'success': False, 'error': 'Server error'}), 500
