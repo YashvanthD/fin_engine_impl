@@ -32,7 +32,14 @@ def build_user(data, account_key=None):
         if not mongo_db_repository.get_collection('users').find_one({'user_key': user_key}):
             break
     user_data['user_key'] = user_key
-    user_data['permission_key'] = generate_key(9)
+    # Set permission level based on role
+    roles = user_data.get('roles', ['user'])
+    if isinstance(roles, str):
+        roles = [roles]
+    if 'admin' in roles:
+        user_data['permission'] = {'level': 'admin', 'granted': True}
+    else:
+        user_data['permission'] = {'level': 'user', 'granted': True}
     user_data['joined_date'] = get_current_timestamp()
     # Use admin's subscription if available, else default
     user_data['subscription'] = admin_subscription if admin_subscription else default_subscription()
@@ -41,7 +48,7 @@ def build_user(data, account_key=None):
     refresh_payload = {
         'user_key': user_data['user_key'],
         'account_key': user_data['account_key'],
-        'permission_key': user_data['permission_key'],
+        'permission': user_data['permission'],
         'roles': user_data.get('roles', ['user']),
         'type': 'refresh'
     }
@@ -53,7 +60,7 @@ def build_refresh(user_data):
     refresh_payload = {
         'user_key': user_data['user_key'],
         'account_key': user_data['account_key'],
-        'permission_key': user_data['permission_key'],
+        'permission': user_data['permission'],
         'roles': user_data.get('roles', []),
         'type': 'refresh'
     }

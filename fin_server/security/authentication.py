@@ -129,8 +129,8 @@ class AuthSecurity:
             payload = cls.decode_token(token)
             user_key = payload.get('user_key')
             account_key = payload.get('account_key')
-            permission_key = payload.get('permission_key')
-            user = repository.find_one(collection_name, {'user_key': user_key, 'account_key': account_key, 'permission_key': permission_key})
+            permission = payload.get('permission')
+            user = repository.find_one(collection_name, {'user_key': user_key, 'account_key': account_key, 'permission': permission})
             return user is not None
         except Exception:
             return False

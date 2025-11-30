@@ -10,7 +10,7 @@ class UserDTO:
     _cache = {}
     _CACHE_EXPIRY_SECONDS = 86400  # 1 day
 
-    def __init__(self, user_id, account_key, user_key, roles=None, refresh_tokens=None, settings=None, subscription=None, **kwargs):
+    def __init__(self, user_id, account_key, user_key, roles=None, refresh_tokens=None, settings=None, subscription=None, password=None, **kwargs):
         self.user_id = user_id
         self.account_key = account_key
         self.user_key = user_key
@@ -19,6 +19,7 @@ class UserDTO:
         self._refresh_token_cache = set(self._refresh_tokens)
         self.settings = settings or {}
         self.subscription = subscription or {}
+        self.password = password
         self._extra_fields = kwargs
         self._last_activity = int(time.time())
         # Add to cache
@@ -60,11 +61,12 @@ class UserDTO:
             'last_active': int(self._last_activity),
             'settings': self.settings,
             'subscription': self.subscription,
-            'profile': getattr(self, 'profile', {})
+            'profile': getattr(self, 'profile', {}),
+            'password': self.password
         }
         # Ensure all extra fields are snake_case and ObjectId-safe
         for k, v in self._extra_fields.items():
-            if k == '_id':
+            if k == '_id' or k == 'password':
                 continue
             if hasattr(v, 'binary') or type(v).__name__ == 'ObjectId':
                 base[k.lower()] = str(v)
@@ -79,7 +81,7 @@ class UserDTO:
         raise AttributeError(f"'UserDTO' object has no attribute '{item}'")
 
     def __setattr__(self, key, value):
-        if key in {'user_id', 'account_key', 'user_key', 'roles', '_refresh_tokens', '_refresh_token_cache', '_extra_fields', '_last_activity', 'settings', 'subscription'}:
+        if key in {'user_id', 'account_key', 'user_key', 'roles', '_refresh_tokens', '_refresh_token_cache', '_extra_fields', '_last_activity', 'settings', 'subscription', 'password'}:
             super().__setattr__(key, value)
         else:
             self._extra_fields[key] = value
