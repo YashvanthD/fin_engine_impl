@@ -70,7 +70,7 @@ def get_tasks():
         payload = AuthSecurity.decode_token(token)
         user_key = payload.get('user_key')
         tasks = task_repository.get_tasks_by_user(user_key)
-        now = 1764556800  # 2025-12-01 epoch
+        now = int(time.time())  # Current timestamp
         meta = {
             'pending': 0,
             'inprogress': 0,
