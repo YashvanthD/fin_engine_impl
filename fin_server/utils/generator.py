@@ -66,3 +66,26 @@ def build_refresh(user_data):
     }
     refresh_token = AuthSecurity.create_refresh_token(refresh_payload)
     return refresh_token
+
+def resolve_user(identifier, account_key):
+    """Find user by userkey, email, phone, username, or name within the given account."""
+    from fin_server.repository.user_repository import mongo_db_repository
+    query_fields = ['user_key', 'email', 'phone', 'username', 'name']
+    for field in query_fields:
+        user = mongo_db_repository.find_one('users', {field: identifier, 'account_key': account_key})
+        if user:
+            return user
+    return None
+
+def get_default_task_date(current_time=None):
+    """Return current date as YYYY-MM-DD."""
+    if current_time is None:
+        current_time = time.time()
+    return time.strftime('%Y-%m-%d', time.localtime(current_time))
+
+def get_default_end_date(current_time=None):
+    """Return date 24 hours from current_time as YYYY-MM-DD."""
+    if current_time is None:
+        current_time = time.time()
+    end_epoch = int(current_time) + 86400
+    return time.strftime('%Y-%m-%d', time.localtime(end_epoch))
