@@ -145,6 +145,8 @@ def get_tasks():
         task_objs = []
         for t in tasks:
             t['_id'] = str(t['_id'])
+            if 'task_id' not in t:
+                t['task_id'] = t['_id']  # fallback for legacy tasks
             # Add viewed field if missing
             if 'viewed' not in t:
                 t['viewed'] = False
@@ -192,6 +194,7 @@ def update_task(task_id):
         roles = payload.get('roles', [])
         data = request.get_json(force=True)
         update_fields = dict(data)
+        update_fields.pop('_id', None)  # Remove immutable _id field before update
         task = task_repository.get_task(task_id)
         if not task:
             return jsonify({'success': False, 'error': 'Task not found'}), 404
@@ -218,7 +221,11 @@ def update_task(task_id):
             update_fields['assignee'] = new_assignee
             update_fields['assigned_to'] = new_assignee
         updated = task_repository.update_task(task_id, update_fields)
-        return jsonify({'success': True, 'updated': bool(updated)}), 200
+        if not updated:
+            logging.error(f"Task update failed for task_id={task_id}, user_key={user_key}, update_fields={update_fields}")
+            return jsonify({'success': False, 'error': 'Task update failed'}), 400
+        logging.info(f"Task updated successfully for task_id={task_id}, user_key={user_key}")
+        return jsonify({'success': True, 'updated': True}), 200
     except Exception as e:
         logging.exception("Error in update_task")
         return jsonify({'success': False, 'error': 'Server error'}), 500

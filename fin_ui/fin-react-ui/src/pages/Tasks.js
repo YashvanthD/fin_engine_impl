@@ -9,7 +9,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import { apiFetch } from '../utils/api';
 import { getUserInfo } from '../utils/auth';
 import { fetchAccountUsers } from '../utils/userApi';
-import { getDefaultEndDate } from '../utils/date';
+import { getDefaultEndDate, getTimeLeft } from '../utils/date';
 
 const initialForm = {
   title: '',
@@ -22,7 +22,10 @@ const initialForm = {
   notes: '',
 };
 
-function getPriorityStyle(priority) {
+function getPriorityStyle(priority, status) {
+  if (status === 'completed') {
+    return { border: '1.5px solid #4caf50', boxShadow: '0 0 4px #4caf50' };
+  }
   switch (priority) {
     case 1: return { border: '1.5px solid #f44336', boxShadow: '0 0 4px #f44336' };
     case 2: return { border: '1.5px solid #ff7961', boxShadow: '0 0 4px #ff7961' };
@@ -90,15 +93,27 @@ export default function Tasks() {
     return acc;
   }, { completed: 0, inprogress: 0, pending: 0, total: 0 });
 
-  // Filter/search
+  // Filter/search and sort
   const filteredTasks = tasks.filter(t => {
     const matchesStatus = filterStatus === 'all' || t.status === filterStatus;
     const matchesSearch =
       !searchTerm ||
-      (t._id && t._id.includes(searchTerm)) ||
+      (t.task_id && t.task_id.includes(searchTerm)) ||
       (t.title && t.title.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (t.description && t.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    // Show completed tasks if searching or filtering for completed
+    if (t.status === 'completed' && t.end_date) {
+      const now = new Date();
+      let end = new Date(t.end_date.replace(' ', 'T'));
+      if ((now - end) > 3600000 && !searchTerm && filterStatus !== 'completed') return false;
+    }
     return matchesStatus && matchesSearch;
+  })
+  // Move resolved (completed) tasks to end
+  .sort((a, b) => {
+    if (a.status === 'completed' && b.status !== 'completed') return 1;
+    if (b.status === 'completed' && a.status !== 'completed') return -1;
+    return 0;
   });
 
   // Form handlers
@@ -112,14 +127,16 @@ export default function Tasks() {
       setFormError('Fields marked * are required');
       return;
     }
-    // If editing (task has _id), use PUT, else POST
-    const isEdit = !!form._id;
-    const url = isEdit ? `/task/${form._id}` : '/task/';
+    // If editing (task has task_id), use PUT, else POST
+    const isEdit = !!form.task_id;
+    const url = isEdit ? `/task/${form.task_id}` : '/task/';
     const method = isEdit ? 'PUT' : 'POST';
+    const submitForm = { ...form };
+    delete submitForm._id;
     apiFetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form)
+      body: JSON.stringify(submitForm)
     })
       .then(res => res.json())
       .then(data => {
@@ -146,9 +163,78 @@ export default function Tasks() {
       end_date: task.end_date || getDefaultEndDate(),
       task_date: task.task_date || '',
       notes: task.notes || '',
-      _id: task._id // Track for edit
+      task_id: task.task_id // Track for edit
     });
     setDialogOpen(true);
+  }
+
+  function getPriorityLabel(priority) {
+    switch(priority) {
+      case 1: return 'High';
+      case 2: return 'Critical';
+      case 3: return 'Medium';
+      case 4: return 'Low';
+      case 5: return 'Normal';
+      default: return 'Unknown';
+    }
+  }
+  function getPriorityColor(priority) {
+    switch(priority) {
+      case 1: return 'error';
+      case 2: return 'warning';
+      case 3: return 'info';
+      case 4: return 'success';
+      case 5: return 'default';
+      default: return 'default';
+    }
+  }
+  function getUsername(userKey) {
+    const user = userOptions.find(u => u.user_key === userKey);
+    return user ? user.username : userKey;
+  }
+  function getNextAction(status) {
+    switch(status) {
+      case 'pending': return 'Start';
+      case 'inprogress': return 'Resolve';
+      case 'completed': return 'Resolved';
+      case 'wontdo': return "Won't Do";
+      default: return 'Next';
+    }
+  }
+  function getNextActionColor(status) {
+    switch(status) {
+      case 'pending': return 'primary'; // blue
+      case 'inprogress': return 'success'; // green
+      case 'completed': return 'success'; // green
+      case 'wontdo': return 'warning'; // yellow
+      default: return 'default';
+    }
+  }
+  function getNextActionVariant(status) {
+    switch(status) {
+      case 'pending': return 'contained';
+      case 'inprogress': return 'contained';
+      case 'completed': return 'contained';
+      case 'wontdo': return 'contained';
+      default: return 'contained';
+    }
+  }
+
+  function handleNextAction(task) {
+    // Update status: pending -> inprogress, inprogress -> completed, completed -> no-op
+    let nextStatus = task.status;
+    if (task.status === 'pending') nextStatus = 'inprogress';
+    else if (task.status === 'inprogress') nextStatus = 'completed';
+    else return; // completed or other: no-op
+    apiFetch(`/task/${task.task_id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...task, status: nextStatus })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) setRefresh(r => !r);
+      });
   }
 
   return (
@@ -201,17 +287,54 @@ export default function Tasks() {
       ) : (
         <Grid container spacing={2}>
           {filteredTasks.map((task, idx) => (
-            <Grid item xs={12} sm={6} md={4} key={task._id || idx}>
-              <Paper elevation={3} sx={{p:2, mb:2, ...getPriorityStyle(task.priority)}}>
+            <Grid item xs={12} sm={6} md={4} key={task.task_id || idx}>
+              <Paper elevation={3} sx={{p:2, mb:2, ...getPriorityStyle(task.priority, task.status)}}>
                 <Stack direction="row" alignItems="center" justifyContent="space-between">
-                  <Typography variant="h6" sx={{fontWeight:'bold'}}>{task.title} <span style={{fontWeight:'bold', color:'#888'}}>#{task.priority}</span></Typography>
-                  <IconButton onClick={() => handleEdit(task)}><EditIcon /></IconButton>
+                  <Typography variant="h6" sx={{fontWeight:'bold'}}>{task.title}</Typography>
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <Chip label={getPriorityLabel(task.priority)} color={getPriorityColor(task.priority)} size="small" />
+                    <IconButton onClick={() => handleEdit(task)}><EditIcon /></IconButton>
+                  </Stack>
                 </Stack>
-                <Typography variant="body2" sx={{mb:1}}>{task.description}</Typography>
-                <Stack direction="row" spacing={1} sx={{mb:1}}>
-                  <Chip label={task.status} color={task.status === 'completed' ? 'success' : (task.status === 'inprogress' ? 'info' : 'default')} size="small" />
-                  <Chip label={`Due: ${task.end_date}`} size="small" />
-                  {task.task_date && <Chip label={`Start: ${task.task_date}`} size="small" />}
+                <Typography variant="body2" sx={{mb:1, color:'#888'}}>{task.description}</Typography>
+                <Stack spacing={0.5} sx={{mb:1}}>
+                  <Typography variant="body2" sx={{color:'#555'}}>
+                    <strong>End Date:</strong> {task.end_date}
+                  </Typography>
+                  <Typography variant="body2" sx={{color:'#555'}}>
+                    <strong>Time Left:</strong> {getTimeLeft(task.end_date)}
+                  </Typography>
+                  <Typography variant="body2" sx={{color:'#555'}}>
+                    <strong>Assigned To:</strong> {getUsername(task.assigned_to)}
+                  </Typography>
+                  {task.recurring && (
+                    <Typography variant="body2" sx={{color:'#555'}}>
+                      <strong>Recurring:</strong> {task.recurring}
+                    </Typography>
+                  )}
+                  {task.tags && Array.isArray(task.tags) && task.tags.length > 0 && (
+                    <Typography variant="body2" sx={{color:'#555'}}>
+                      <strong>Tags:</strong> {task.tags.join(', ')}
+                    </Typography>
+                  )}
+                  {task.type && (
+                    <Typography variant="body2" sx={{color:'#555'}}>
+                      <strong>Type:</strong> {task.type}
+                    </Typography>
+                  )}
+                  {/* Extendable: add more fields here as needed */}
+                </Stack>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{mt:1}}>
+                  <Button
+                    variant={getNextActionVariant(task.status)}
+                    size="small"
+                    color={getNextActionColor(task.status)}
+                    onClick={() => handleNextAction(task)}
+                    disabled={task.status === 'completed'}
+                  >
+                    {getNextAction(task.status)}
+                  </Button>
+                  <Typography variant="caption" sx={{color:'#aaa'}}>{task.task_id}</Typography>
                 </Stack>
               </Paper>
             </Grid>
