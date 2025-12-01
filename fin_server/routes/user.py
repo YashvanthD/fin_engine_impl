@@ -285,3 +285,23 @@ def list_users():
     except Exception as e:
         logging.exception('Error in list_users')
         return jsonify({'success': False, 'error': 'Server error'}), 500
+
+@user_bp.route('/account/<account_key>/user/<user_key>', methods=['DELETE'])
+def delete_user(account_key, user_key):
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
+    token = auth_header.split(' ', 1)[1]
+    try:
+        payload = AuthSecurity.decode_token(token)
+        roles = payload.get('roles', [])
+        if 'admin' not in roles or payload.get('account_key') != account_key:
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+        deleted_count = mongo_db_repository.delete('users', {'account_key': account_key, 'user_key': user_key})
+        if deleted_count > 0:
+            return jsonify({'success': True, 'message': 'User deleted'}), 200
+        else:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+    except Exception as e:
+        logging.exception('Error in delete_user')
+        return jsonify({'success': False, 'error': 'Server error'}), 500

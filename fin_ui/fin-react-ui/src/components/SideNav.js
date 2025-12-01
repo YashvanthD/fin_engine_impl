@@ -5,6 +5,7 @@ import HomeIcon from '@mui/icons-material/Home';
 import { Link } from 'react-router-dom';
 import { getUserInfo } from '../utils/auth';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import GroupIcon from '@mui/icons-material/Group';
 
 const drawerWidth = 220;
 
@@ -41,9 +42,9 @@ export default function SideNav({ selected = 'tasks', onSelect }) {
           <ListItemText primary="Tasks" />
         </ListItem>
         {isAdmin && (
-          <ListItem button selected={selected === 'adduser'} onClick={() => onSelect && onSelect('adduser')} component={Link} to="/admin/adduser">
-            <ListItemIcon><PersonAddIcon color="primary" /></ListItemIcon>
-            <ListItemText primary="Add User" />
+          <ListItem selected={selected === 'manageusers'} onClick={() => onSelect && onSelect('manageusers')} component={Link} to="/admin/users">
+            <ListItemIcon><GroupIcon color="primary" /></ListItemIcon>
+            <ListItemText primary="Manage Users" />
           </ListItem>
         )}
         {/* Future: Add more nav items here */}
