@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
@@ -10,15 +10,38 @@ import AccountCircle from '@mui/icons-material/AccountCircle';
 import Avatar from '@mui/material/Avatar';
 import { Link, useNavigate } from 'react-router-dom';
 import { getUserInfo, removeUserInfo } from '../utils/auth';
+import { apiFetch } from '../utils/api';
 
 export default function NavBar() {
   const [anchorEl, setAnchorEl] = React.useState(null);
+  const [companyName, setCompanyName] = useState('FinnCorp');
   const open = Boolean(anchorEl);
   const navigate = useNavigate();
 
   // Get user info and role
   const userInfo = getUserInfo();
   const loggedIn = !!userInfo;
+
+  useEffect(() => {
+    async function fetchCompany() {
+      if (userInfo?.account_key) {
+        try {
+          const res = await apiFetch(`/auth/account/${userInfo.account_key}/company`, { method: 'GET' });
+          const data = await res.json();
+          if (res.ok && data.success && data.company_name) {
+            setCompanyName(data.company_name);
+          } else {
+            setCompanyName('FinnCorp');
+          }
+        } catch {
+          setCompanyName('FinnCorp');
+        }
+      } else {
+        setCompanyName('FinnCorp');
+      }
+    }
+    fetchCompany();
+  }, [userInfo?.account_key]);
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -46,7 +69,7 @@ export default function NavBar() {
     <AppBar position="fixed" color="primary" sx={{ top: 0, zIndex: (theme) => theme.zIndex.drawer + 1 }}>
       <Toolbar>
         <Typography variant="h6" component={Link} to="/" sx={{ flexGrow: 1, textDecoration: 'none', color: 'inherit' }}>
-          Fin Engine
+          {companyName}
         </Typography>
         {/* Removed Home and Tasks buttons, navigation is now in SideNav */}
         <IconButton

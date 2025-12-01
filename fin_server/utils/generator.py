@@ -37,6 +37,11 @@ def build_user(data, account_key=None):
     if isinstance(roles, str):
         roles = [roles]
     if 'admin' in roles:
+        # Require company_name for admin
+        company_name = user_data.get('company_name')
+        if not company_name:
+            raise ValueError('company_name is required for admin signup')
+        user_data['company_name'] = company_name
         user_data['permission'] = {'level': 'admin', 'granted': True}
     else:
         user_data['permission'] = {'level': 'user', 'granted': True}

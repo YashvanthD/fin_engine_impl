@@ -533,3 +533,15 @@ def user_subscriptions():
     except Exception as e:
         logging.exception("Exception in /subscriptions endpoint")
         return jsonify({'success': False, 'error': 'Server error'}), 500
+
+@auth_bp.route('/account/<account_key>/company', methods=['GET'])
+def get_company_name(account_key):
+    from fin_server.repository.user_repository import mongo_db_repository
+    # Find any admin user for this account_key
+    admin_doc = mongo_db_repository.get_collection('users').find_one({
+        'account_key': account_key,
+        'roles': {'$in': ['admin']}
+    })
+    if admin_doc and 'company_name' in admin_doc:
+        return jsonify({'success': True, 'company_name': admin_doc['company_name']}), 200
+    return jsonify({'success': False, 'error': 'Company not found'}), 404
