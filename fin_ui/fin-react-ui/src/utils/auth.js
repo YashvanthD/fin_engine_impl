@@ -55,48 +55,79 @@ export function isTokenExpired(token) {
   return Date.now() / 1000 > payload.exp;
 }
 
+// Utility: refresh access token
+export async function refreshAccessToken() {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+  try {
+    const res = await fetch(`${baseUrl}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken })
+    });
+    const data = await res.json();
+    if (data.success && data.access_token) {
+      const userInfo = getUserInfo() || {};
+      userInfo.access_token = data.access_token;
+      saveUserInfo(userInfo);
+      return data.access_token;
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Utility: get token, auto-refresh if expired
 export async function getToken(forceLoginCallback) {
   const info = getUserInfo();
-  if (!info) {
-    console.log('[Auth Debug] No user info, forcing login');
+  let token = info?.access_token || '';
+  if (!token) return '';
+  const payload = parseJwt(token);
+  if (!payload || !payload.exp) return token;
+  const now = Math.floor(Date.now() / 1000);
+  // If token expires in < 2 min, refresh
+  if (payload.exp - now < 120) {
+    const newToken = await refreshAccessToken();
+    if (newToken) return newToken;
     if (forceLoginCallback) forceLoginCallback();
     return '';
   }
-  const { access_token, refresh_token } = info;
-  if (!access_token || isTokenExpired(access_token)) {
-    console.log('[Auth Debug] Access token expired, trying refresh token');
-    if (refresh_token && !isTokenExpired(refresh_token)) {
-      try {
-        // Replace with your actual refresh endpoint and payload
-        const res = await fetch(`${baseUrl}/refresh`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token })
-        });
-        const data = await res.json();
-        if (res.ok && data.access_token) {
-          const newInfo = { ...info, access_token: data.access_token };
-          saveUserInfo(newInfo);
-          console.log('[Auth Debug] Refreshed access token');
-          return data.access_token;
-        } else {
-          console.log('[Auth Debug] Refresh token failed, forcing login');
-          removeUserInfo();
-          if (forceLoginCallback) forceLoginCallback();
-          return '';
-        }
-      } catch (err) {
-        console.log('[Auth Debug] Network error during token refresh', err);
-        removeUserInfo();
-        if (forceLoginCallback) forceLoginCallback();
-        return '';
-      }
-    } else {
-      console.log('[Auth Debug] Both tokens expired, forcing login');
-      removeUserInfo();
-      if (forceLoginCallback) forceLoginCallback();
-      return '';
+  return token;
+}
+
+// Event: auto-refresh access token before expiry
+export function setupAccessTokenAutoRefresh() {
+  const info = getUserInfo();
+  if (!info?.access_token) return;
+  const payload = parseJwt(info.access_token);
+  if (!payload?.exp) return;
+  const now = Math.floor(Date.now() / 1000);
+  const msUntilRefresh = Math.max((payload.exp - now - 60) * 1000, 10000); // 1 min before expiry
+  setTimeout(async () => {
+    await refreshAccessToken();
+    setupAccessTokenAutoRefresh(); // Schedule next refresh
+  }, msUntilRefresh);
+}
+
+// On page load, if refresh_token is valid and access_token is missing/expired, refresh it
+export async function refreshAccessTokenIfNeeded() {
+  const info = getUserInfo();
+  if (!info) return;
+  const accessToken = info.access_token;
+  const refreshToken = info.refresh_token;
+  let expired = false;
+  if (accessToken) {
+    const payload = parseJwt(accessToken);
+    if (!payload || !payload.exp || Math.floor(Date.now() / 1000) > payload.exp) expired = true;
+  } else {
+    expired = true;
+  }
+  if (refreshToken && expired) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      info.access_token = newToken;
+      saveUserInfo(info);
     }
   }
-  return access_token;
 }

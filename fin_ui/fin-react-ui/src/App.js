@@ -6,9 +6,15 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Home from './pages/Home';
 import Tasks from './pages/Tasks';
+import { setupAccessTokenAutoRefresh, refreshAccessTokenIfNeeded } from './utils/auth';
 import './App.css';
 
 function App() {
+  React.useEffect(() => {
+    setupAccessTokenAutoRefresh();
+    refreshAccessTokenIfNeeded();
+  }, []);
+
   return (
     <Router>
       <NavBar />
