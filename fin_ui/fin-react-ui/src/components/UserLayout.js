@@ -1,6 +1,6 @@
 import React from 'react';
 import SideNav from './SideNav';
-import { Box, Container } from '@mui/material';
+import { Box } from '@mui/material';
 
 const drawerWidth = 220;
 const topNavHeight = 64; // AppBar fixed height
@@ -14,9 +14,9 @@ export default function UserLayout({ children }) {
       </Box>
       {/* Main content area with smooth scrolling */}
       <Box sx={{ ml: `${drawerWidth}px`, pt: `${topNavHeight}px`, height: `calc(100vh - ${topNavHeight}px)`, overflowY: 'auto', scrollBehavior: 'smooth', bgcolor: '#f7f7f7' }}>
-        <Container maxWidth="lg">
+        <Box sx={{ width: '95%', px: -10, py: 0 }}>
           {children}
-        </Container>
+        </Box>
       </Box>
     </>
   );
