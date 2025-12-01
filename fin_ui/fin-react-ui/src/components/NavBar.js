@@ -51,10 +51,7 @@ export default function NavBar() {
         <Typography variant="h6" component={Link} to="/" sx={{ flexGrow: 1, textDecoration: 'none', color: 'inherit' }}>
           Fin Engine
         </Typography>
-        <Stack direction="row" spacing={2} sx={{ flexGrow: 0 }}>
-          <Button color="inherit" component={Link} to="/home">Home</Button>
-          <Button color="inherit" component={Link} to="/tasks">Tasks</Button>
-        </Stack>
+        {/* Removed Home and Tasks buttons, navigation is now in SideNav */}
         <IconButton
           size="large"
           edge="end"
@@ -64,6 +61,15 @@ export default function NavBar() {
         >
           {loggedIn ? <Avatar alt="Profile" /> : <AccountCircle />}
         </IconButton>
+        {loggedIn && (
+          <Button
+            color="inherit"
+            sx={{ ml: 2 }}
+            onClick={() => handleProfileAction('logout')}
+          >
+            Logout
+          </Button>
+        )}
         <Menu
           anchorEl={anchorEl}
           open={open}
