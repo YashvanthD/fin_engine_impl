@@ -6,7 +6,6 @@ import {
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
 import { apiFetch } from '../utils/api';
 import { getUserInfo } from '../utils/auth';
 import { fetchAccountUsers } from '../utils/userApi';
@@ -174,11 +173,6 @@ export default function Tasks() {
     setDialogOpen(true);
   }
 
-  function handleDeleteClick(task) {
-    setTaskToDelete(task);
-    setDeleteDialogOpen(true);
-  }
-
   async function handleConfirmDelete() {
     if (!taskToDelete) return;
     try {
@@ -271,6 +265,11 @@ export default function Tasks() {
       });
   }
 
+  function handleDeleteFromDialog() {
+    setTaskToDelete(form);
+    setDeleteDialogOpen(true);
+  }
+
   return (
     <Paper sx={{padding:4, maxWidth:1000, margin:'40px auto'}}>
       {/* Top bar */}
@@ -328,7 +327,6 @@ export default function Tasks() {
                   <Stack direction="row" alignItems="center" spacing={1}>
                     <Chip label={getPriorityLabel(task.priority)} color={getPriorityColor(task.priority)} size="small" />
                     <IconButton onClick={() => handleEdit(task)}><EditIcon /></IconButton>
-                    <IconButton color="error" onClick={() => handleDeleteClick(task)}><DeleteIcon /></IconButton>
                   </Stack>
                 </Stack>
                 <Typography variant="body2" sx={{mb:1, color:'#888'}}>{task.description}</Typography>
@@ -360,16 +358,29 @@ export default function Tasks() {
                   {/* Extendable: add more fields here as needed */}
                 </Stack>
                 <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{mt:1}}>
-                  <Button
-                    variant={getNextActionVariant(task.status)}
-                    size="small"
-                    color={task.status === 'inprogress' ? 'warning' : getNextActionColor(task.status)}
-                    sx={task.status === 'inprogress' ? {backgroundColor: 'orange', color: 'white', '&:hover': {backgroundColor: '#ff9800'}} : {}}
-                    onClick={() => handleNextAction(task)}
-                    disabled={task.status === 'completed'}
-                  >
-                    {getNextAction(task.status)}
-                  </Button>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Button
+                      variant={getNextActionVariant(task.status)}
+                      size="small"
+                      color={task.status === 'inprogress' ? 'warning' : getNextActionColor(task.status)}
+                      sx={task.status === 'inprogress' ? {backgroundColor: 'orange', color: 'white', '&:hover': {backgroundColor: '#ff9800'}} : {}}
+                      onClick={() => handleNextAction(task)}
+                      disabled={task.status === 'completed'}
+                    >
+                      {getNextAction(task.status)}
+                    </Button>
+                    {task.status === 'completed' && (
+                      <Button
+                        variant="contained"
+                        color="error"
+                        size="small"
+                        sx={{ml:1}}
+                        onClick={() => { setTaskToDelete(task); setDeleteDialogOpen(true); }}
+                      >
+                        Delete
+                      </Button>
+                    )}
+                  </Stack>
                   <Typography variant="caption" sx={{color:'#aaa'}}>{task.task_id}</Typography>
                 </Stack>
               </Paper>
@@ -418,6 +429,9 @@ export default function Tasks() {
             </Stack>
           </DialogContent>
           <DialogActions>
+            {form.task_id && (
+              <Button onClick={handleDeleteFromDialog} variant="contained" color="error" sx={{mr:'auto'}}>Delete</Button>
+            )}
             <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button type="submit" variant="contained" color="primary">{form.title ? 'Update' : 'Create'}</Button>
           </DialogActions>
