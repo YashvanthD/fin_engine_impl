@@ -13,8 +13,8 @@ export default function UserLayout({ children }) {
         <SideNav />
       </Box>
       {/* Main content area with smooth scrolling */}
-      <Box sx={{ ml: `${drawerWidth}px`, pt: '64px', height: `calc(100vh - ${topNavHeight}px)`, overflowY: 'auto', scrollBehavior: 'smooth', bgcolor: '#f7f7f7' }}>
-        <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Box sx={{ ml: `${drawerWidth}px`, pt: `${topNavHeight}px`, height: `calc(100vh - ${topNavHeight}px)`, overflowY: 'auto', scrollBehavior: 'smooth', bgcolor: '#f7f7f7' }}>
+        <Container maxWidth="lg">
           {children}
         </Container>
       </Box>

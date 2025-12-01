@@ -10,7 +10,7 @@ import Profile from './pages/user/Profile';
 import ManageUsers from './pages/admin/ManageUsers';
 import { setupAccessTokenAutoRefresh, refreshAccessTokenIfNeeded } from './utils/auth';
 import './App.css';
-import SideNav from './components/SideNav';
+import UserLayout from './components/UserLayout';
 
 function App() {
   React.useEffect(() => {
@@ -21,20 +21,15 @@ function App() {
   return (
     <Router>
       <NavBar />
-      <div style={{ display: 'flex' }}>
-        <SideNav selected={window.location.pathname.startsWith('/admin/users') ? 'manageusers' : undefined} />
-        <div style={{ flex: 1 }}>
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/home" element={<Home />} />
-            <Route path="/tasks" element={<Tasks />} />
-            <Route path="/users/profile" element={<Profile />} />
-            <Route path="/admin/users" element={<ManageUsers />} />
-          </Routes>
-        </div>
-      </div>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/home" element={<UserLayout><Home /></UserLayout>} />
+        <Route path="/tasks" element={<UserLayout><Tasks /></UserLayout>} />
+        <Route path="/users/profile" element={<UserLayout><Profile /></UserLayout>} />
+        <Route path="/admin/users" element={<UserLayout><ManageUsers /></UserLayout>} />
+      </Routes>
     </Router>
   );
 }
