@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Home from './pages/Home';
 import Tasks from './pages/Tasks';
+import Profile from './pages/user/Profile';
 import { setupAccessTokenAutoRefresh, refreshAccessTokenIfNeeded } from './utils/auth';
 import './App.css';
 
@@ -24,6 +25,7 @@ function App() {
         <Route path="/register" element={<Register />} />
         <Route path="/home" element={<Home />} />
         <Route path="/tasks" element={<Tasks />} />
+        <Route path="/users/profile" element={<Profile />} />
       </Routes>
     </Router>
   );

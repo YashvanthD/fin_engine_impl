@@ -36,7 +36,7 @@ export default function NavBar() {
       console.log('[NavBar Debug] User logged out');
       navigate('/login');
     }
-    if (action === 'profile') navigate('/profile');
+    if (action === 'profile') navigate('/users/profile');
     if (action === 'settings') navigate('/settings');
     if (action === 'theme') navigate('/theme');
     if (action === 'adduser') navigate('/adduser');
@@ -45,7 +45,7 @@ export default function NavBar() {
   };
 
   return (
-    <AppBar position="static" color="primary">
+    <AppBar position="fixed" color="primary" sx={{ top: 0, zIndex: (theme) => theme.zIndex.drawer + 1 }}>
       <Toolbar>
         <Typography variant="h6" component={Link} to="/" sx={{ flexGrow: 1, textDecoration: 'none', color: 'inherit' }}>
           Fin Engine

@@ -3,7 +3,7 @@ import SideNav from './SideNav';
 import { Box, Container } from '@mui/material';
 
 const drawerWidth = 220;
-const topNavHeight = 64;
+const topNavHeight = 64; // AppBar fixed height
 
 export default function UserLayout({ children }) {
   return (
@@ -13,7 +13,7 @@ export default function UserLayout({ children }) {
         <SideNav />
       </Box>
       {/* Main content area with smooth scrolling */}
-      <Box sx={{ ml: `${drawerWidth}px`, pt: `${topNavHeight}px`, height: `calc(100vh - ${topNavHeight}px)`, overflowY: 'auto', scrollBehavior: 'smooth', bgcolor: '#f7f7f7' }}>
+      <Box sx={{ ml: `${drawerWidth}px`, pt: '64px', height: `calc(100vh - ${topNavHeight}px)`, overflowY: 'auto', scrollBehavior: 'smooth', bgcolor: '#f7f7f7' }}>
         <Container maxWidth="lg" sx={{ py: 4 }}>
           {children}
         </Container>
@@ -21,4 +21,3 @@ export default function UserLayout({ children }) {
     </>
   );
 }
-
