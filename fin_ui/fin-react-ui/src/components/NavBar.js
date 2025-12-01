@@ -75,7 +75,7 @@ export default function NavBar() {
           onClose={handleClose}
           anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
           transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-          PaperProps={{ sx: { minWidth: 220, p: 1 } }}
+          sx={{ '& .MuiPaper-root': { minWidth: 220, p: 1 } }}
         >
           {loggedIn ? (
             [
