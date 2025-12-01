@@ -1,6 +1,6 @@
 import React from 'react';
 import SideNav from '../components/SideNav';
-import TopNavBar from './TopNavBar';
+
 
 export default function Layout({ children, selectedNav, user, onProfileClick }) {
   return (

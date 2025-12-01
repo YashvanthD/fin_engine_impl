@@ -6,6 +6,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { getRefreshToken } from '../utils/auth';
 import { apiFetch } from '../utils/api';
+import UserLayout from '../components/UserLayout';
 
 export default function Home() {
   const navigate = useNavigate();
@@ -264,11 +265,11 @@ export default function Home() {
   );
 
   return (
-    <div>
+    <UserLayout>
       {renderCriticalSummary}
       {renderTaskStats}
       {renderAlerts}
       {renderActions}
-    </div>
+    </UserLayout>
   );
 }

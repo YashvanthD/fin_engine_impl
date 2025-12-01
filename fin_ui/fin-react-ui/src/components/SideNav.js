@@ -27,11 +27,11 @@ export default function SideNav({ selected = 'tasks', onSelect }) {
       }}
     >
       <List>
-        <ListItem button selected={selected === 'home'} onClick={() => onSelect && onSelect('home')} component={Link} to="/user/home">
+        <ListItem button selected={selected === 'home'} onClick={() => onSelect && onSelect('home')} component={Link} to="/home">
           <ListItemIcon><HomeIcon color="primary" /></ListItemIcon>
           <ListItemText primary="Home" />
         </ListItem>
-        <ListItem button selected={selected === 'tasks'} onClick={() => onSelect && onSelect('tasks')} component={Link} to="/user/tasks">
+        <ListItem button selected={selected === 'tasks'} onClick={() => onSelect && onSelect('tasks')} component={Link} to="/tasks">
           <ListItemIcon><AssignmentIcon color="primary" /></ListItemIcon>
           <ListItemText primary="Tasks" />
         </ListItem>
