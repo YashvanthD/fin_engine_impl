@@ -362,8 +362,8 @@ export default function Tasks() {
                     <Button
                       variant={getNextActionVariant(task.status)}
                       size="small"
-                      color={task.status === 'inprogress' ? 'warning' : getNextActionColor(task.status)}
-                      sx={task.status === 'inprogress' ? {backgroundColor: 'orange', color: 'white', '&:hover': {backgroundColor: '#ff9800'}} : {}}
+                      color={task.status === 'completed' ? 'success' : (task.status === 'inprogress' ? 'warning' : getNextActionColor(task.status))}
+                      sx={task.status === 'inprogress' ? {backgroundColor: 'orange', color: 'white', '&:hover': {backgroundColor: '#ff9800'}} : (task.status === 'completed' ? {backgroundColor: '#4caf50', color: 'white', opacity: 1, pointerEvents: 'none'} : {})}
                       onClick={() => handleNextAction(task)}
                       disabled={task.status === 'completed'}
                     >
