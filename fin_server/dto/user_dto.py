@@ -25,6 +25,10 @@ class UserDTO:
         # Add to cache
         UserDTO._cache[self.user_key] = self
 
+        # Add timezone to settings if not present
+        if 'timezone' not in self.settings:
+            self.settings['timezone'] = 'Asia/Kolkata'  # Default to IST
+
     def touch(self):
         self._last_activity = int(time.time())
 

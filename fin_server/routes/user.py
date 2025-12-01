@@ -58,8 +58,11 @@ def update_profile():
         if not user_dto.refresh_tokens:
             return jsonify({'success': False, 'error': 'User is logged out'}), 401
         data = request.get_json(force=True)
-        profile_fields = ['first_name', 'last_name', 'dob', 'address1', 'address2', 'pincode']
+        profile_fields = ['first_name', 'last_name', 'dob', 'address1', 'address2', 'pincode', 'timezone']
         profile_data = {k: data[k] for k in profile_fields if k in data}
+        # Update timezone in settings if provided
+        if 'timezone' in profile_data:
+            user_dto.settings['timezone'] = profile_data['timezone']
         user_dto.save_profile(profile_data)
         return jsonify({'success': True, 'message': 'Profile updated'}), 200
     except ValueError as ve:
@@ -251,4 +254,34 @@ def update_help_support():
         return jsonify({'success': False, 'error': str(ve)}), 401
     except Exception as e:
         logging.exception("Error in update_help_support")
+        return jsonify({'success': False, 'error': 'Server error'}), 500
+
+@user_bp.route('/list', methods=['GET'])
+def list_users():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
+    token = auth_header.split(' ', 1)[1]
+    try:
+        payload = AuthSecurity.decode_token(token)
+        account_key = payload.get('account_key')
+        if not account_key:
+            return jsonify({'success': False, 'error': 'Missing account_key'}), 400
+        users = mongo_db_repository.find_many('users', {'account_key': account_key})
+        show_phone = request.args.get('phone', 'false').lower() == 'true'
+        filtered_users = []
+        for u in users:
+            user_obj = {
+                'user_key': u.get('user_key'),
+                'username': u.get('username'),
+                'roles': u.get('roles', []),
+                'account_key': u.get('account_key'),
+                'email': u.get('email')
+            }
+            if show_phone:
+                user_obj['phone'] = u.get('phone')
+            filtered_users.append(user_obj)
+        return jsonify({'success': True, 'users': filtered_users}), 200
+    except Exception as e:
+        logging.exception('Error in list_users')
         return jsonify({'success': False, 'error': 'Server error'}), 500

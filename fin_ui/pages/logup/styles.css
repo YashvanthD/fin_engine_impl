@@ -1,0 +1,82 @@
+.logup-container {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    padding: 32px;
+    max-width: 400px;
+    margin: 40px auto;
+}
+.logup-container h2 {
+    color: #2d6cdf;
+    margin-bottom: 16px;
+    text-align: center;
+}
+.logup-container form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.logup-container input, .logup-container button {
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #dbeafe;
+    font-size: 1rem;
+}
+.logup-container button {
+    background: linear-gradient(90deg, #2d6cdf 60%, #4f8cff 100%);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+.logup-container button:hover {
+    background: linear-gradient(90deg, #1e4fa3 60%, #3573c9 100%);
+}
+#logupResponse {
+    margin-top: 12px;
+    padding: 8px;
+    background: #e0f2fe;
+    border-radius: 6px;
+    color: #2563eb;
+    min-height: 24px;
+    white-space: pre-wrap;
+}
+.main-nav {
+    width: 100vw;
+    background: linear-gradient(90deg, #6366f1 0%, #38bdf8 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 32px;
+    height: 60px;
+    box-shadow: 0 2px 12px rgba(56,189,248,0.08);
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 100;
+}
+.nav-logo {
+    color: #fff;
+    font-size: 1.4rem;
+    font-weight: 700;
+    text-decoration: none;
+    letter-spacing: 1px;
+}
+.nav-links {
+    display: flex;
+    gap: 32px;
+}
+.nav-links a {
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+    font-size: 1.05rem;
+    transition: color 0.18s;
+}
+.nav-links a:hover {
+    color: #e0e7ff;
+}
+.logup-container {
+    margin-top: 80px; /* To avoid nav overlap */
+}

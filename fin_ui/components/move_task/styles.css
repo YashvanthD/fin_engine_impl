@@ -1,0 +1,43 @@
+.move-task-component {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    padding: 32px;
+    margin-bottom: 32px;
+}
+.move-task-component h2 {
+    color: #2563eb;
+    margin-bottom: 16px;
+}
+.move-task-component form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.move-task-component input, .move-task-component select, .move-task-component button {
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid #dbeafe;
+    font-size: 1rem;
+}
+.move-task-component button {
+    background: linear-gradient(90deg, #2d6cdf 60%, #4f8cff 100%);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+.move-task-component button:hover {
+    background: linear-gradient(90deg, #1e4fa3 60%, #3573c9 100%);
+}
+#moveResponse {
+    margin-top: 12px;
+    padding: 8px;
+    background: #e0f2fe;
+    border-radius: 6px;
+    color: #2563eb;
+    min-height: 24px;
+    white-space: pre-wrap;
+}
+

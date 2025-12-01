@@ -3,8 +3,10 @@ from fin_server.repository.task_repository import task_repository
 from fin_server.repository.user_repository import mongo_db_repository
 from fin_server.security.authentication import AuthSecurity
 from fin_server.utils.generator import resolve_user, get_default_task_date, get_default_end_date
+from pytz import timezone
 import logging
 import time
+from datetime import datetime
 
 
 task_bp = Blueprint('task', __name__, url_prefix='/task')
@@ -45,9 +47,38 @@ def create_task():
         end_date = data.get('end_date')
         if not end_date:
             end_date = get_default_end_date()
+        # Get user's timezone from settings, default to IST
+        user_tz = 'Asia/Kolkata'
+        if hasattr(assigned_user, 'settings') and assigned_user.settings.get('timezone'):
+            user_tz = assigned_user.settings['timezone']
+        tz = timezone(user_tz)
+        # Convert end_date and task_date to user's timezone if possible
+        try:
+            # Try to parse and localize end_date
+            dt_format = '%Y-%m-%d %H:%M'
+            try:
+                dt = datetime.strptime(end_date, dt_format)
+            except Exception:
+                dt_format = '%Y-%m-%d'
+                dt = datetime.strptime(end_date, dt_format)
+            dt = tz.localize(dt)
+            end_date = dt.strftime(dt_format)
+        except Exception:
+            pass
+        try:
+            dt_format = '%Y-%m-%d %H:%M'
+            try:
+                dt = datetime.strptime(task_date, dt_format)
+            except Exception:
+                dt_format = '%Y-%m-%d'
+                dt = datetime.strptime(task_date, dt_format)
+            dt = tz.localize(dt)
+            task_date = dt.strftime(dt_format)
+        except Exception:
+            pass
         # Default fields
         task_data = {
-            'userkey': user_key,
+            'user_key': user_key,
             'reporter': user_key,
             'assignee': assigned_to,
             'assigned_to': assigned_to,
@@ -71,6 +102,20 @@ def create_task():
         for k, v in data.items():
             if k not in task_data:
                 task_data[k] = v
+        # Set high priority if due date is < 30min from now
+        try:
+            if end_date:
+                # Parse end_date as 'YYYY-MM-DD HH:mm' or 'YYYY-MM-DD'
+                try:
+                    end_dt = time.strptime(end_date, '%Y-%m-%d %H:%M')
+                except Exception:
+                    end_dt = time.strptime(end_date, '%Y-%m-%d')
+                end_epoch = int(time.mktime(end_dt))
+                now_epoch = int(time.time())
+                if 0 < end_epoch - now_epoch < 1800:
+                    task_data['priority'] = 1
+        except Exception:
+            pass
         task_id = task_repository.create_task(task_data)
         return jsonify({'success': True, 'task_id': task_id}), 201
     except Exception as e:
@@ -120,8 +165,8 @@ def get_tasks():
                         meta['overdue'] += 1
                 except Exception:
                     pass
-            # Critical: priority == 'high'
-            if t.get('priority', '').lower() == 'high':
+            # Critical: priority == 1
+            if t.get('priority') == 1:
                 meta['critical'] += 1
             # Read/unread: viewed field
             if t['viewed']:

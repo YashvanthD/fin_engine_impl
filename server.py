@@ -1,4 +1,5 @@
 from flask import Flask
+from flask_cors import CORS
 from fin_server.routes.auth import auth_bp
 from fin_server.routes.user import user_bp
 from fin_server.routes.task import task_bp
@@ -7,6 +8,7 @@ from fin_server.notification.scheduler import TaskScheduler
 import logging
 
 app = Flask(__name__)
+CORS(app)
 
 # Set your JWT secret key here (use a secure random string in production)
 AuthSecurity.configure(secret_key="your-very-secret-key", algorithm="HS256", access_token_expire_minutes=60, refresh_token_expire_days=7)

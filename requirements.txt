@@ -8,3 +8,5 @@ pymongo
 requests
 flask
 cryptography
+flask-cors
+pytz
