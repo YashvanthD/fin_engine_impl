@@ -157,7 +157,7 @@ export default function Home() {
   const renderTaskStats = (
     <Grid container spacing={2} sx={{ mb: 4 }}>
       <Grid item xs={12} sm={6}>
-        <Card>
+        <Card sx={{ p: 2, m: 2 }}>
           <CardContent>
             <Typography variant="h6">Active Tasks</Typography>
             <Typography variant="h3" color="primary">{activeTasks}</Typography>
@@ -165,7 +165,7 @@ export default function Home() {
         </Card>
       </Grid>
       <Grid item xs={12} sm={6}>
-        <Card>
+        <Card sx={{ p: 2, m: 2 }}>
           <CardContent>
             <Typography variant="h6">Critical Tasks</Typography>
             <Typography variant="h3" color="error">{criticalTasks}</Typography>
@@ -190,7 +190,7 @@ export default function Home() {
         <Grid container spacing={2}>
           {alerts.map((alert, idx) => (
             <Grid item xs={12} sm={6} md={4} key={alert.task_id || idx}>
-              <Card sx={{ cursor: 'pointer', ...getPriorityStyle(alert.priority) }} onClick={() => handleAlertClick(alert, idx)}>
+              <Card sx={{ cursor: 'pointer', ...getPriorityStyle(alert.priority), p: 2, m: 2 }} onClick={() => handleAlertClick(alert, idx)}>
                 <CardContent>
                   <Typography variant="body1" sx={{ fontWeight: alert.unread ? 'bold' : 'normal', color: alert.unread ? 'error.main' : 'inherit' }}>
                     {alert.title} <span style={{float:'right', fontWeight:'bold', color:'#888'}}>#{alert.priority}</span>
@@ -252,7 +252,7 @@ export default function Home() {
       <Grid container spacing={2}>
         {actions.map((action) => (
           <Grid item xs={12} sm={6} md={4} key={action.label}>
-            <Card sx={{ cursor: 'pointer' }} onClick={() => { navigate(action.to); }}>
+            <Card sx={{ cursor: 'pointer', p: 2, m: 2 }} onClick={() => { navigate(action.to); }}>
               <CardContent>
                 <Typography variant="body1">{action.label}</Typography>
               </CardContent>

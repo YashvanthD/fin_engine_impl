@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { apiFetch } from '../utils/api';
 import { getUserInfo } from '../utils/auth';
 import { fetchAccountUsers } from '../utils/userApi';
@@ -47,6 +48,8 @@ export default function Tasks() {
   const [form, setForm] = useState(initialForm);
   const [formError, setFormError] = useState('');
   const [userOptions, setUserOptions] = useState([]);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState(null);
   const userInfo = getUserInfo();
 
   useEffect(() => {
@@ -123,15 +126,18 @@ export default function Tasks() {
   function handleFormSubmit(e) {
     e.preventDefault();
     setFormError('');
-    if (!form.title || !form.assigned_to || !form.end_date) {
+    let submitForm = { ...form };
+    // Always set assigned_to to self if not set
+    if (!submitForm.assigned_to && userInfo?.user_key) {
+      submitForm.assigned_to = userInfo.user_key;
+    }
+    if (!submitForm.title || !submitForm.assigned_to || !submitForm.end_date) {
       setFormError('Fields marked * are required');
       return;
     }
-    // If editing (task has task_id), use PUT, else POST
-    const isEdit = !!form.task_id;
-    const url = isEdit ? `/task/${form.task_id}` : '/task/';
+    const isEdit = !!submitForm.task_id;
+    const url = isEdit ? `/task/${submitForm.task_id}` : '/task/';
     const method = isEdit ? 'PUT' : 'POST';
-    const submitForm = { ...form };
     delete submitForm._id;
     apiFetch(url, {
       method,
@@ -148,7 +154,7 @@ export default function Tasks() {
           setFormError(data.error || (isEdit ? 'Failed to update task' : 'Failed to create task'));
         }
       })
-      .catch(() => setFormError('Network/server error'));
+      .catch((err) => setFormError('Network/server error: ' + err));
   }
 
   // Edit (future: open dialog with task data)
@@ -166,6 +172,32 @@ export default function Tasks() {
       task_id: task.task_id // Track for edit
     });
     setDialogOpen(true);
+  }
+
+  function handleDeleteClick(task) {
+    setTaskToDelete(task);
+    setDeleteDialogOpen(true);
+  }
+
+  async function handleConfirmDelete() {
+    if (!taskToDelete) return;
+    try {
+      await apiFetch(`/task/${taskToDelete.task_id}`, {
+        method: 'DELETE',
+      });
+      setDeleteDialogOpen(false);
+      setTaskToDelete(null);
+      setRefresh(r => !r);
+    } catch (err) {
+      setError('Failed to delete task');
+      setDeleteDialogOpen(false);
+      setTaskToDelete(null);
+    }
+  }
+
+  function handleCancelDelete() {
+    setDeleteDialogOpen(false);
+    setTaskToDelete(null);
   }
 
   function getPriorityLabel(priority) {
@@ -207,6 +239,7 @@ export default function Tasks() {
       case 'inprogress': return 'success'; // green
       case 'completed': return 'success'; // green
       case 'wontdo': return 'warning'; // yellow
+      case 'resolve': return 'orange'; // orange for resolve
       default: return 'default';
     }
   }
@@ -216,6 +249,7 @@ export default function Tasks() {
       case 'inprogress': return 'contained';
       case 'completed': return 'contained';
       case 'wontdo': return 'contained';
+      case 'resolve': return 'contained';
       default: return 'contained';
     }
   }
@@ -294,6 +328,7 @@ export default function Tasks() {
                   <Stack direction="row" alignItems="center" spacing={1}>
                     <Chip label={getPriorityLabel(task.priority)} color={getPriorityColor(task.priority)} size="small" />
                     <IconButton onClick={() => handleEdit(task)}><EditIcon /></IconButton>
+                    <IconButton color="error" onClick={() => handleDeleteClick(task)}><DeleteIcon /></IconButton>
                   </Stack>
                 </Stack>
                 <Typography variant="body2" sx={{mb:1, color:'#888'}}>{task.description}</Typography>
@@ -328,7 +363,8 @@ export default function Tasks() {
                   <Button
                     variant={getNextActionVariant(task.status)}
                     size="small"
-                    color={getNextActionColor(task.status)}
+                    color={task.status === 'inprogress' ? 'warning' : getNextActionColor(task.status)}
+                    sx={task.status === 'inprogress' ? {backgroundColor: 'orange', color: 'white', '&:hover': {backgroundColor: '#ff9800'}} : {}}
                     onClick={() => handleNextAction(task)}
                     disabled={task.status === 'completed'}
                   >
@@ -386,6 +422,17 @@ export default function Tasks() {
             <Button type="submit" variant="contained" color="primary">{form.title ? 'Update' : 'Create'}</Button>
           </DialogActions>
         </form>
+      </Dialog>
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onClose={handleCancelDelete}>
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <Typography>Are you sure you want to delete the task "{taskToDelete?.title}"?</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelDelete}>Cancel</Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained">Delete</Button>
+        </DialogActions>
       </Dialog>
     </Paper>
   );
