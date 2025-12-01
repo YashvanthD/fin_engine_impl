@@ -8,7 +8,6 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import AccountCircle from '@mui/icons-material/AccountCircle';
 import Avatar from '@mui/material/Avatar';
-import Stack from '@mui/material/Stack';
 import { Link, useNavigate } from 'react-router-dom';
 import { getUserInfo, removeUserInfo } from '../utils/auth';
 
@@ -76,6 +75,7 @@ export default function NavBar() {
           onClose={handleClose}
           anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
           transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          PaperProps={{ sx: { minWidth: 220, p: 1 } }}
         >
           {loggedIn ? (
             [
