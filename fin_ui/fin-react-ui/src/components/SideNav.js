@@ -3,10 +3,15 @@ import { Drawer, List, ListItem, ListItemIcon, ListItemText } from '@mui/materia
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import HomeIcon from '@mui/icons-material/Home';
 import { Link } from 'react-router-dom';
+import { getUserInfo } from '../utils/auth';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
 
 const drawerWidth = 220;
 
 export default function SideNav({ selected = 'tasks', onSelect }) {
+  const userInfo = getUserInfo();
+  const isAdmin = userInfo?.roles?.includes('admin');
+
   return (
     <Drawer
       variant="permanent"
@@ -35,6 +40,12 @@ export default function SideNav({ selected = 'tasks', onSelect }) {
           <ListItemIcon><AssignmentIcon color="primary" /></ListItemIcon>
           <ListItemText primary="Tasks" />
         </ListItem>
+        {isAdmin && (
+          <ListItem button selected={selected === 'adduser'} onClick={() => onSelect && onSelect('adduser')} component={Link} to="/admin/adduser">
+            <ListItemIcon><PersonAddIcon color="primary" /></ListItemIcon>
+            <ListItemText primary="Add User" />
+          </ListItem>
+        )}
         {/* Future: Add more nav items here */}
       </List>
     </Drawer>

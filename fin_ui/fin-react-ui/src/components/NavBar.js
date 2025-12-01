@@ -19,7 +19,6 @@ export default function NavBar() {
   // Get user info and role
   const userInfo = getUserInfo();
   const loggedIn = !!userInfo;
-  const isAdmin = userInfo?.roles?.includes('admin');
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -39,7 +38,6 @@ export default function NavBar() {
     if (action === 'profile') navigate('/users/profile');
     if (action === 'settings') navigate('/settings');
     if (action === 'theme') navigate('/theme');
-    if (action === 'adduser') navigate('/adduser');
     if (action === 'login') navigate('/login');
     if (action === 'signup') navigate('/register');
   };
@@ -82,9 +80,8 @@ export default function NavBar() {
               <MenuItem key="profile" onClick={() => handleProfileAction('profile')}>Profile</MenuItem>,
               <MenuItem key="settings" onClick={() => handleProfileAction('settings')}>Settings</MenuItem>,
               <MenuItem key="theme" onClick={() => handleProfileAction('theme')}>Theme</MenuItem>,
-              isAdmin && <MenuItem key="adduser" onClick={() => handleProfileAction('adduser')}>Add User</MenuItem>,
               <MenuItem key="logout" onClick={() => handleProfileAction('logout')}>Logout</MenuItem>
-            ].filter(Boolean)
+            ]
           ) : (
             [
               <MenuItem key="login" onClick={() => handleProfileAction('login')}>Login</MenuItem>,

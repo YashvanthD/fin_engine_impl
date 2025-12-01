@@ -7,8 +7,10 @@ import Register from './pages/Register';
 import Home from './pages/Home';
 import Tasks from './pages/Tasks';
 import Profile from './pages/user/Profile';
+import AddUser from './pages/admin/AddUser';
 import { setupAccessTokenAutoRefresh, refreshAccessTokenIfNeeded } from './utils/auth';
 import './App.css';
+import SideNav from './components/SideNav';
 
 function App() {
   React.useEffect(() => {
@@ -26,6 +28,7 @@ function App() {
         <Route path="/home" element={<Home />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/users/profile" element={<Profile />} />
+          <Route path="/admin/adduser" element={<AddUser />} />
       </Routes>
     </Router>
   );
