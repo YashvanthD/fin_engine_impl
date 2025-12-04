@@ -3,6 +3,7 @@ from flask_cors import CORS
 from fin_server.routes.auth import auth_bp
 from fin_server.routes.user import user_bp
 from fin_server.routes.task import task_bp
+from fin_server.routes.company import company_bp
 from fin_server.security.authentication import AuthSecurity
 from fin_server.notification.scheduler import TaskScheduler
 import logging
@@ -16,6 +17,7 @@ AuthSecurity.configure(secret_key="your-very-secret-key", algorithm="HS256", acc
 app.register_blueprint(auth_bp)
 app.register_blueprint(user_bp)
 app.register_blueprint(task_bp)
+app.register_blueprint(company_bp)
 
 logging.basicConfig(level=logging.INFO)
 

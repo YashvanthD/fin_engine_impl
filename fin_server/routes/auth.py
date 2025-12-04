@@ -1,4 +1,6 @@
 import datetime
+import os
+import hmac
 
 from flask import Blueprint, request, jsonify
 from fin_server.utils.validation import validate_signup, validate_signup_user
@@ -12,6 +14,8 @@ import time
 import logging
 import base64
 
+MASTER_ADMIN_PASSWORD = os.getenv('MASTER_ADMIN_PASSWORD')  # Set this in deployment environment
+
 # Blueprint for auth routes
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -21,6 +25,15 @@ def signup():
     logging.info("Signup endpoint called")
     data = request.get_json(force=True)
     logging.info("Received signup data: %s", data)
+    provided_master = data.get('master_password')
+    if MASTER_ADMIN_PASSWORD is None:
+        logging.error("MASTER_ADMIN_PASSWORD is not configured in environment")
+        return jsonify({'success': False, 'error': 'Server not configured for admin registration'}), 500
+    if not provided_master or not hmac.compare_digest(str(provided_master), str(MASTER_ADMIN_PASSWORD)):
+        logging.warning("Invalid master password provided for admin signup")
+        return jsonify({'success': False, 'error': 'Unauthorized: invalid master password'}), 403
+    # Remove master_password from data before storing user
+    data.pop('master_password', None)
     is_valid, errors = validate_signup(data)
     logging.info("Signup validation result: %s", is_valid)
     if not is_valid:
