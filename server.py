@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, send_file
+from flask import Flask, jsonify, send_file, render_template
 from flask_cors import CORS
 from fin_server.routes.auth import auth_bp
 from fin_server.routes.user import user_bp
@@ -9,7 +9,7 @@ from fin_server.notification.scheduler import TaskScheduler
 import logging
 import os
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 CORS(app)
 
 # Set your JWT secret key here (use a secure random string in production)
@@ -24,13 +24,9 @@ logging.basicConfig(level=logging.INFO)
 
 @app.route('/')
 def index():
-    doc_path = os.path.join(os.path.dirname(__file__), '../API_DOC.md')
-    with open(doc_path, 'r') as f:
-        content = f.read()
-    # Return as plain text for easy viewing
-    return content, 200, {'Content-Type': 'text/plain; charset=utf-8'}
+    return render_template('API_DOC.html')
 
 if __name__ == "__main__":
     scheduler = TaskScheduler(interval_seconds=60)
     scheduler.start()
-    app.run(host="0.0.0.0", port=80, debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True)

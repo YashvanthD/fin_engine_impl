@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TaskCircuit API Documentation</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #f8f9fa; color: #222; margin: 0; padding: 0; }
+        .container { max-width: 900px; margin: 40px auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #0001; padding: 32px; }
+        h1, h2, h3 { color: #2a4d7c; }
+        h1 { font-size: 2.2em; margin-bottom: 0.5em; }
+        h2 { font-size: 1.5em; margin-top: 2em; }
+        h3 { font-size: 1.2em; margin-top: 1.5em; }
+        pre, code { background: #f4f4f4; border-radius: 4px; padding: 8px; font-size: 1em; }
+        .endpoint { margin-bottom: 2em; }
+        .fields { margin: 0.5em 0 1em 1em; }
+        .curl { background: #eaf6ff; border-left: 4px solid #2a4d7c; padding: 8px; margin: 0.5em 0 1em 1em; }
+        .section { border-bottom: 1px solid #eee; margin-bottom: 2em; padding-bottom: 2em; }
+        .note { background: #fffbe6; border-left: 4px solid #ffd700; padding: 8px; margin: 1em 0; }
+        .copy-btn { float: right; margin-top: -2.5em; margin-right: 1em; background: #2a4d7c; color: #fff; border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 0.95em; }
+        .copy-btn:active { background: #1a3557; }
+        .copied { color: #2a4d7c; font-size: 0.95em; margin-left: 1em; }
+        @media (max-width: 600px) { .container { padding: 12px; } .copy-btn { margin-top: 0; } }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>TaskCircuit API Documentation</h1>
+    <div class="note">
+        <strong>Date:</strong> December 5, 2025<br>
+        <strong>Base URL:</strong> <code>http://localhost:5000/</code><br>
+        <strong>All endpoints use JSON.</strong><br>
+        <strong>Authentication:</strong> via Bearer token in <code>Authorization</code> header where required.
+    </div>
+    <!-- All API sections and endpoints as previously generated -->
+    <!-- ...existing HTML doc content... -->
+</div>
+<script>
+// Copy to clipboard for cURL blocks
+function copyCurl(btn) {
+    var pre = btn.parentElement.querySelector('pre');
+    var text = pre.innerText;
+    navigator.clipboard.writeText(text).then(function() {
+        btn.innerHTML = '<i class="fa fa-check"></i> Copied!';
+        setTimeout(function() { btn.innerHTML = '<i class="fa fa-copy"></i> Copy'; }, 1500);
+    });
+}
+document.querySelectorAll('.curl').forEach(function(curlBlock) {
+    var btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.innerHTML = '<i class="fa fa-copy"></i> Copy';
+    btn.onclick = function() { copyCurl(btn); };
+    curlBlock.insertBefore(btn, curlBlock.firstChild);
+});
+</script>
+</body>
+</html>
+

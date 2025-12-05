@@ -14,7 +14,7 @@ class AuthSecurity:
     access_token_expire_minutes = 3600
     refresh_token_expire_days = 30
 
-    def __init__(self, secret_key=None, algorithm='HS256', access_token_expire_minutes=60, refresh_token_expire_days=7):
+    def __init__(self, secret_key=None, algorithm='HS256', access_token_expire_minutes=3600, refresh_token_expire_days=30):
         if secret_key:
             self.__class__.secret_key = secret_key
         self.__class__.algorithm = algorithm
