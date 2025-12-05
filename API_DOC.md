@@ -268,6 +268,163 @@ curl -X GET http://localhost:5000/pond/<pond_id>/events \
   -H "Authorization: Bearer ACCESS_TOKEN"
 ```
 
+## Auth (More Endpoints)
+### GET /auth/validate
+- Validate a token and get user info
+- **Fields Required:**
+  - Authorization header: Bearer ACCESS_TOKEN or REFRESH_TOKEN
+- cURL:
+```
+curl -X GET http://localhost:5000/auth/validate \
+  -H "Authorization: Bearer ACCESS_TOKEN_OR_REFRESH_TOKEN"
+```
+- **Fields Returned:**
+  - user_key
+  - account_key
+  - roles
+  - settings
+  - subscription
+  - last_active
+
+### GET /auth/account/users
+- List all users for an account (admin only)
+- **Fields Required:**
+  - Authorization header: Bearer ACCESS_TOKEN
+- cURL:
+```
+curl -X GET http://localhost:5000/auth/account/users \
+  -H "Authorization: Bearer ACCESS_TOKEN"
+```
+- **Fields Returned:**
+  - users: [user objects]
+
+### GET /auth/settings
+- Get or update user settings
+- **Fields Required:**
+  - Authorization header: Bearer ACCESS_TOKEN
+- cURL:
+```
+curl -X GET http://localhost:5000/auth/settings \
+  -H "Authorization: Bearer ACCESS_TOKEN"
+```
+- **Fields Returned:**
+  - user_key
+  - account_key
+  - settings
+  - subscription
+
+### PUT /auth/settings
+- Update user settings
+- **Fields:**
+  - settings (object, required)
+- cURL:
+```
+curl -X PUT http://localhost:5000/auth/settings \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "settings": { ... } }'
+```
+
+## User APIs
+### GET /auth/account/users
+- List all users for an account (admin only)
+- See above in Auth section.
+
+### GET /auth/account/<account_key>/user/<user_key>
+- Get user details
+- **Fields Required:**
+  - Authorization header: Bearer ACCESS_TOKEN
+- cURL:
+```
+curl -X GET http://localhost:5000/auth/account/<account_key>/user/<user_key> \
+  -H "Authorization: Bearer ACCESS_TOKEN"
+```
+- **Fields Returned:**
+  - All user fields
+
+### PUT /auth/account/<account_key>/user/<user_key>
+- Update user details
+- **Fields:**
+  - Any updatable user field
+- cURL:
+```
+curl -X PUT http://localhost:5000/auth/account/<account_key>/user/<user_key> \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ ...fields... }'
+```
+
+### DELETE /auth/account/<account_key>/user/<user_key>
+- Delete user
+- cURL:
+```
+curl -X DELETE http://localhost:5000/auth/account/<account_key>/user/<user_key> \
+  -H "Authorization: Bearer ACCESS_TOKEN"
+```
+
+## Tasks APIs
+### POST /tasks/
+- Create a new task
+- **Fields:**
+  - title (str, required)
+  - description (str, optional)
+  - assigned_to (user_key, required)
+  - due_date (str, optional)
+  - status (str, optional)
+  - account_key (str, required)
+- cURL:
+```
+curl -X POST http://localhost:5000/tasks/ \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "title": "Task 1", "assigned_to": "USER123", "account_key": "ACC123" }'
+```
+
+### GET /tasks/?account_key=xxx
+- List all tasks for an account
+- **Fields Required:**
+  - account_key (str, required, as query param)
+  - Authorization header: Bearer ACCESS_TOKEN
+- cURL:
+```
+curl -X GET "http://localhost:5000/tasks/?account_key=ACC123" \
+  -H "Authorization: Bearer ACCESS_TOKEN"
+```
+- **Fields Returned:**
+  - tasks: [task objects]
+
+### GET /tasks/<task_id>
+- Get task details
+- **Fields Required:**
+  - Authorization header: Bearer ACCESS_TOKEN
+- cURL:
+```
+curl -X GET http://localhost:5000/tasks/<task_id> \
+  -H "Authorization: Bearer ACCESS_TOKEN"
+```
+- **Fields Returned:**
+  - All task fields
+
+### PUT /tasks/<task_id>
+- Update task
+- **Fields:**
+  - Any updatable task field
+- cURL:
+```
+curl -X PUT http://localhost:5000/tasks/<task_id> \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ ...fields... }'
+```
+
+### DELETE /tasks/<task_id>
+- Delete task
+- cURL:
+```
+curl -X DELETE http://localhost:5000/tasks/<task_id> \
+  -H "Authorization: Bearer ACCESS_TOKEN"
+```
+
 ## Messaging & Notification (Socket.io)
 - Connect with JWT token (access_token or refresh_token)
 - **Fields:**
