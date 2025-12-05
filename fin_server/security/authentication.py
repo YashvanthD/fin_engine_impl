@@ -250,3 +250,40 @@ class AuthSecurity:
             new_refresh_token = cls.create_refresh_token(refresh_payload)
             user_dto.add_refresh_token(new_refresh_token)
         return True, new_refresh_token
+
+    @classmethod
+    def decode_any_token(cls, token: str) -> dict:
+        """
+        Accepts either access_token or refresh_token and returns payload if valid.
+        """
+        if not token or token.count('.') != 2:
+            raise UnauthorizedError("Malformed or missing token. Please provide a valid JWT token in the Authorization header.")
+        try:
+            payload = jwt.decode(token, AuthSecurity.secret_key, algorithms=[AuthSecurity.algorithm])
+            exp = payload.get('exp')
+            if exp is not None:
+                now = int(time.time())
+                if isinstance(exp, datetime):
+                    exp = int(exp.timestamp())
+                elif isinstance(exp, float):
+                    exp = int(exp)
+                elif isinstance(exp, str):
+                    exp = int(float(exp))
+                if exp < now:
+                    raise UnauthorizedError("Token expired. Please login again or refresh your session.")
+            # Accept both access and refresh tokens
+            if payload.get('type') not in [None, 'access', 'refresh']:
+                raise UnauthorizedError("Invalid token type.")
+            return payload
+        except JWTError as e:
+            msg = str(e)
+            if 'Signature has expired' in msg:
+                raise UnauthorizedError("Token expired. Please login again or refresh your session.")
+            elif 'Not enough segments' in msg or 'Invalid header string' in msg:
+                raise UnauthorizedError("Malformed or missing token. Please provide a valid JWT token in the Authorization header.")
+            elif 'Signature verification failed' in msg:
+                raise UnauthorizedError("Invalid token signature. Please login again or contact support if the problem persists.")
+            else:
+                raise UnauthorizedError(f"Invalid token: {msg}. Please check your authentication and try again.")
+        except Exception as e:
+            raise UnauthorizedError(f"Token decode error: {str(e)}. Please contact support if this persists.")

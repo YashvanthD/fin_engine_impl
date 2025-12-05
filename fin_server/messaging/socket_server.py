@@ -25,7 +25,7 @@ def connect(sid, environ):
         return False
     token = token.split(' ', 1)[1]
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = AuthSecurity.decode_any_token(token)
         user_key = payload.get('user_key')
         connected_users[user_key] = sid
         sio.emit('user_connected', {'user_key': user_key}, room=sid)
@@ -70,20 +70,56 @@ def send_message(sid, data):
 
 @sio.event
 def broadcast_notification(sid, data):
-    # data: {account_key, notification, from_user_key}
+    # data: {account_key, notification, from_user_key, user_keys (optional)}
     account_key = data.get('account_key')
     notification = data.get('notification')
     from_user_key = data.get('from_user_key')
-    # TODO: Lookup all user_keys for account_key (for now, broadcast to all connected users)
-    for user_key, user_sid in connected_users.items():
-        sio.emit('receive_notification', {'from_user_key': from_user_key, 'notification': notification}, room=user_sid)
-        notification_repository.save_notification(account_key, user_key, notification, delivered=True)
-    # For offline users, store notification for later delivery
-    # You would need to fetch all user_keys for the account_key from your user repository
-    # Example: offline_user_keys = ...
-    # for user_key in offline_user_keys:
-    #     if user_key not in connected_users:
-    #         notification_repository.save_notification(account_key, user_key, notification, delivered=False)
+    user_keys = data.get('user_keys')  # Optional: list of user_keys to notify
+    notified_users = set()
+    # If user_keys provided, use them; else, broadcast to all connected users
+    if user_keys:
+        for user_key in user_keys:
+            if user_key in connected_users:
+                sio.emit('receive_notification', {'from_user_key': from_user_key, 'notification': notification}, room=connected_users[user_key])
+                notification_repository.save_notification({
+                    'account_key': account_key,
+                    'user_key': user_key,
+                    'notification': notification,
+                    'from_user_key': from_user_key,
+                    'delivered': True
+                })
+                notified_users.add(user_key)
+            else:
+                notification_repository.save_notification({
+                    'account_key': account_key,
+                    'user_key': user_key,
+                    'notification': notification,
+                    'from_user_key': from_user_key,
+                    'delivered': False
+                })
+    else:
+        for user_key, user_sid in connected_users.items():
+            sio.emit('receive_notification', {'from_user_key': from_user_key, 'notification': notification}, room=user_sid)
+            notification_repository.save_notification({
+                'account_key': account_key,
+                'user_key': user_key,
+                'notification': notification,
+                'from_user_key': from_user_key,
+                'delivered': True
+            })
+            notified_users.add(user_key)
+        # For offline users, store notification for later delivery
+        # You would need to fetch all user_keys for the account_key from your user repository
+        # Example: offline_user_keys = ...
+        # for user_key in offline_user_keys:
+        #     if user_key not in notified_users:
+        #         notification_repository.save_notification({
+        #             'account_key': account_key,
+        #             'user_key': user_key,
+        #             'notification': notification,
+        #             'from_user_key': from_user_key,
+        #             'delivered': False
+        #         })
 
 # Flask app wrapper for socketio
 application = socketio.WSGIApp(sio, app)
