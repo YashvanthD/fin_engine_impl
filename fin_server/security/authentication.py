@@ -1,17 +1,18 @@
 from jose import jwt, JWTError
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import base64
-from cryptography.hazmat.primitives import serialization, hashes
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.backends import default_backend
 import hashlib
 import time
+from fin_server.exception.UnauthorizedError import UnauthorizedError
 
 class AuthSecurity:
     secret_key = None
     algorithm = 'HS256'
-    access_token_expire_minutes = 60
-    refresh_token_expire_days = 1
+    access_token_expire_minutes = 3600
+    refresh_token_expire_days = 30
 
     def __init__(self, secret_key=None, algorithm='HS256', access_token_expire_minutes=60, refresh_token_expire_days=7):
         if secret_key:
@@ -30,15 +31,17 @@ class AuthSecurity:
     @classmethod
     def encode_token(cls, data: dict, expires_delta: timedelta = None) -> str:
         to_encode = data.copy()
-        expire = datetime.utcnow() + (expires_delta or timedelta(minutes=cls.access_token_expire_minutes))
+        expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=cls.access_token_expire_minutes))
         to_encode.update({"exp": expire})
         return jwt.encode(to_encode, cls.secret_key, algorithm=cls.algorithm)
 
     @classmethod
     def decode_token(cls, token: str) -> dict:
+        # Check for well-formed JWT (should have 2 dots)
+        if not token or token.count('.') != 2:
+            raise UnauthorizedError("Malformed or missing token. Please provide a valid JWT token in the Authorization header.")
         try:
             payload = jwt.decode(token, cls.secret_key, algorithms=[cls.algorithm])
-            # Check expiry
             exp = payload.get('exp')
             if exp is not None:
                 now = int(time.time())
@@ -49,17 +52,25 @@ class AuthSecurity:
                 elif isinstance(exp, str):
                     exp = int(float(exp))
                 if exp < now:
-                    raise ValueError("Token expired")
+                    raise UnauthorizedError("Token expired. Please login again or refresh your session.")
             return payload
         except JWTError as e:
-            raise ValueError(f"Invalid token: {str(e)}")
+            msg = str(e)
+            if 'Signature has expired' in msg:
+                raise UnauthorizedError("Token expired. Please login again or refresh your session.")
+            elif 'Not enough segments' in msg or 'Invalid header string' in msg:
+                raise UnauthorizedError("Malformed or missing token. Please provide a valid JWT token in the Authorization header.")
+            elif 'Signature verification failed' in msg:
+                raise UnauthorizedError("Invalid token signature. Please login again or contact support if the problem persists.")
+            else:
+                raise UnauthorizedError(f"Invalid token: {msg}. Please check your authentication and try again.")
         except Exception as e:
-            raise ValueError(f"Token decode error: {str(e)}")
+            raise UnauthorizedError(f"Token decode error: {str(e)}. Please contact support if this persists.")
 
     @classmethod
     def create_refresh_token(cls, data: dict) -> str:
         to_encode = data.copy()
-        expire = datetime.utcnow() + timedelta(days=cls.refresh_token_expire_days)
+        expire = datetime.now(timezone.utc) + timedelta(days=cls.refresh_token_expire_days)
         to_encode.update({"exp": expire, "type": "refresh"})
         return jwt.encode(to_encode, cls.secret_key, algorithm=cls.algorithm)
 

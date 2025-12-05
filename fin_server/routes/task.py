@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from fin_server.repository.task_repository import task_repository
 from fin_server.repository.user_repository import mongo_db_repository
-from fin_server.security.authentication import AuthSecurity
+from fin_server.security.authentication import AuthSecurity, UnauthorizedError
 from fin_server.utils.generator import resolve_user, get_default_task_date, get_default_end_date
 from pytz import timezone
 import logging
@@ -147,10 +147,8 @@ def get_tasks():
             t['_id'] = str(t['_id'])
             if 'task_id' not in t:
                 t['task_id'] = t['_id']  # fallback for legacy tasks
-            # Add viewed field if missing
             if 'viewed' not in t:
                 t['viewed'] = False
-            # Status counts
             status = t.get('status', '').lower()
             if status == 'pending':
                 meta['pending'] += 1
@@ -158,7 +156,6 @@ def get_tasks():
                 meta['inprogress'] += 1
             elif status == 'completed':
                 meta['completed'] += 1
-            # Overdue: if not completed and end_date < now
             end_date = t.get('end_date')
             if status != 'completed' and end_date:
                 try:
@@ -167,16 +164,16 @@ def get_tasks():
                         meta['overdue'] += 1
                 except Exception:
                     pass
-            # Critical: priority == 1
             if t.get('priority') == 1:
                 meta['critical'] += 1
-            # Read/unread: viewed field
             if t['viewed']:
                 meta['read'] += 1
             else:
                 meta['unread'] += 1
             task_objs.append(t)
         return jsonify({'success': True, 'meta': meta, 'tasks': task_objs}), 200
+    except UnauthorizedError as e:
+        return jsonify({'success': False, 'error': str(e)}), 401
     except Exception as e:
         logging.exception("Error in get_tasks")
         return jsonify({'success': False, 'error': 'Server error'}), 500

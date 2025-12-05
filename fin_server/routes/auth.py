@@ -405,6 +405,10 @@ def generate_token():
 
     # If type is 'refresh_token' and token is provided, generate access token from refresh token
     if token_type == 'refresh_token' and token:
+        # Validate token format before decoding
+        if not token or token.count('.') != 2:
+            logging.warning("Malformed or missing refresh token in /auth/token endpoint")
+            return jsonify({'success': False, 'error': 'Malformed or missing refresh token. Please provide a valid JWT refresh token.'}), 401
         try:
             payload = AuthSecurity.decode_token(token)
             user_key = payload.get('user_key')
@@ -441,7 +445,7 @@ def generate_token():
             return jsonify({'success': False, 'error': str(ve)}), 401
         except Exception as e:
             logging.exception("Exception in token generation from refresh token")
-            return jsonify({'success': False, 'error': 'Server error'}), 500
+            return jsonify({'success': False, 'error': 'Invalid or corrupted refresh token. Please login again.'}), 401
     # If type is 'refresh_token' and password+identifier is provided, generate new refresh token
     elif token_type == 'refresh_token':
         if not password or not (username or phone or email):
