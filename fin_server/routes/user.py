@@ -1,20 +1,20 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from fin_server.dto.user_dto import UserDTO
-from fin_server.security.authentication import AuthSecurity
-from fin_server.repository.user_repository import mongo_db_repository
+from fin_server.repository.user_repository import UserRepository
+from fin_server.routes.task import user_repo
+from fin_server.security.authentication import AuthSecurity, get_auth_payload
+from fin_server.repository.mongo_helper import MongoRepositorySingleton
 import logging
 import base64
 
+# Add debug logging to all endpoints and update route prefixes to /api/v1/
 user_bp = Blueprint('user', __name__, url_prefix='/user')
 
 @user_bp.route('/profile', methods=['GET'])
 def get_profile():
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
+    current_app.logger.debug('GET /api/v1/user/profile called')
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = get_auth_payload(request)
         user_key = payload.get('user_key')
         account_key = payload.get('account_key')
         user_dto = UserDTO.find_by_user_key(user_key, account_key)
@@ -43,12 +43,9 @@ def get_profile():
 
 @user_bp.route('/profile', methods=['PUT'])
 def update_profile():
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
+    current_app.logger.debug('PUT /api/v1/user/profile called with data: %s', request.json)
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = get_auth_payload(request)
         user_key = payload.get('user_key')
         account_key = payload.get('account_key')
         user_dto = UserDTO.find_by_user_key(user_key, account_key)
@@ -81,12 +78,9 @@ def update_profile():
 
 @user_bp.route('/password', methods=['PUT'])
 def update_password():
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
+    current_app.logger.debug('PUT /api/v1/user/password called')
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = get_auth_payload(request)
         user_key = payload.get('user_key')
         account_key = payload.get('account_key')
         user_dto = UserDTO.find_by_user_key(user_key, account_key)
@@ -122,12 +116,9 @@ def update_password():
 
 @user_bp.route('/logout', methods=['POST'])
 def logout():
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
+    current_app.logger.debug('POST /api/v1/user/logout called')
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = get_auth_payload(request)
         user_key = payload.get('user_key')
         account_key = payload.get('account_key')
         user_dto = UserDTO.find_by_user_key(user_key, account_key)
@@ -153,12 +144,9 @@ def logout():
 
 @user_bp.route('/settings', methods=['PUT'])
 def update_settings():
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
+    current_app.logger.debug('PUT /api/v1/user/settings called with data: %s', request.json)
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = get_auth_payload(request)
         user_key = payload.get('user_key')
         account_key = payload.get('account_key')
         user_dto = UserDTO.find_by_user_key(user_key, account_key)
@@ -188,12 +176,9 @@ def update_settings():
 
 @user_bp.route('/settings/notifications', methods=['PUT'])
 def update_notification_settings():
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
+    current_app.logger.debug('PUT /api/v1/user/settings/notifications called with data: %s', request.json)
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = get_auth_payload(request)
         user_key = payload.get('user_key')
         account_key = payload.get('account_key')
         user_dto = UserDTO.find_by_user_key(user_key, account_key)
@@ -223,12 +208,9 @@ def update_notification_settings():
 
 @user_bp.route('/settings/help_support', methods=['PUT'])
 def update_help_support():
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
+    current_app.logger.debug('PUT /api/v1/user/settings/help_support called with data: %s', request.json)
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = get_auth_payload(request)
         user_key = payload.get('user_key')
         account_key = payload.get('account_key')
         user_dto = UserDTO.find_by_user_key(user_key, account_key)
@@ -258,6 +240,7 @@ def update_help_support():
 
 @user_bp.route('/list', methods=['GET'])
 def list_users():
+    current_app.logger.debug('GET /api/v1/user/list called')
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
         return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
@@ -267,7 +250,7 @@ def list_users():
         account_key = payload.get('account_key')
         if not account_key:
             return jsonify({'success': False, 'error': 'Missing account_key'}), 400
-        users = mongo_db_repository.find_many('users', {'account_key': account_key})
+        users = user_repo.find_many('users', {'account_key': account_key})
         show_phone = request.args.get('phone', 'false').lower() == 'true'
         filtered_users = []
         for u in users:
@@ -288,6 +271,7 @@ def list_users():
 
 @user_bp.route('/account/<account_key>/user/<user_key>', methods=['DELETE'])
 def delete_user(account_key, user_key):
+    current_app.logger.debug('DELETE /api/v1/user/account/%s/user/%s called', account_key, user_key)
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
         return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
@@ -297,7 +281,7 @@ def delete_user(account_key, user_key):
         roles = payload.get('roles', [])
         if 'admin' not in roles or payload.get('account_key') != account_key:
             return jsonify({'success': False, 'error': 'Unauthorized'}), 403
-        deleted_count = mongo_db_repository.delete('users', {'account_key': account_key, 'user_key': user_key})
+        deleted_count = user_repo.delete('users', {'account_key': account_key, 'user_key': user_key})
         if deleted_count > 0:
             return jsonify({'success': True, 'message': 'User deleted'}), 200
         else:

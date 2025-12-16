@@ -2,6 +2,10 @@ import time
 import random
 import base64
 
+from fin_server.repository.mongo_helper import MongoRepositorySingleton
+repo = MongoRepositorySingleton.get_instance()
+user_repo = repo.user
+
 from fin_server.security.authentication import AuthSecurity
 
 def epoch_to_datetime(epoch):
@@ -16,12 +20,10 @@ def generate_key(length):
 def build_user(data, account_key=None):
     user_data = data.copy()
     user_data['account_key'] = account_key if account_key else generate_key(6)
-    from fin_server.repository.user_repository import mongo_db_repository
-    from fin_server.routes.auth import default_subscription
     # If account_key is provided, try to fetch admin's subscription
     admin_subscription = None
     if account_key:
-        admin_doc = mongo_db_repository.get_collection('users').find_one({
+        admin_doc = user_repo.find_one({
             'account_key': account_key,
             'roles': {'$in': ['admin']}
         })
@@ -29,7 +31,7 @@ def build_user(data, account_key=None):
             admin_subscription = admin_doc['subscription']
     while True:
         user_key = generate_key(9)
-        if not mongo_db_repository.get_collection('users').find_one({'user_key': user_key}):
+        if not user_repo.find_one({'user_key': user_key}):
             break
     user_data['user_key'] = user_key
     # Set permission level based on role
@@ -74,10 +76,9 @@ def build_refresh(user_data):
 
 def resolve_user(identifier, account_key):
     """Find user by userkey, email, phone, username, or name within the given account."""
-    from fin_server.repository.user_repository import mongo_db_repository
     query_fields = ['user_key', 'email', 'phone', 'username', 'name']
     for field in query_fields:
-        user = mongo_db_repository.find_one('users', {field: identifier, 'account_key': account_key})
+        user = user_repo.find_one({field: identifier, 'account_key': account_key})
         if user:
             return user
     return None

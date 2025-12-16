@@ -1,54 +1,67 @@
-from pymongo import MongoClient
+from fin_server.repository.base_repository import BaseRepository
+from fin_server.repository.mongo_helper import MongoRepositorySingleton
 
+class UserRepository(BaseRepository):
+    def __init__(self, db=None, collection_name="users"):
+        self.collection_name = collection_name
+        print("Initializing User, collection:", self.collection_name)
+        self.collection = MongoRepositorySingleton.get_collection(self.collection_name, db)
 
-class MongoDBRepository:
-    _instance = None
-
-    def __new__(cls, uri=None, db_name=None):
-        if cls._instance is None:
-            cls._instance = super(MongoDBRepository, cls).__new__(cls)
-            cls._instance._init(uri, db_name)
-        return cls._instance
-
-    def _init(self, uri, db_name):
-        self.uri = uri or 'mongodb+srv://finuser:finpass@yashmongo1.pdwb1iv.mongodb.net/?appName=yashmongo1'
-        self.db_name = db_name or 'user_db'
-        self.client = MongoClient(self.uri)
-        self.db = self.client[self.db_name]
-
-    def get_collection(self, collection_name):
-        return self.db[collection_name]
-
-    def create(self, collection_name, document):
+    def create(self, data):
         # Check for duplicate user_key before insert
-        user_key = document.get('user_key')
+        user_key = data.get('user_key')
         if user_key:
-            existing = self.get_collection(collection_name).find_one({'user_key': user_key})
+            existing = self.find_one({'user_key': user_key})
             if existing:
                 raise ValueError(f"Duplicate user_key '{user_key}' not allowed.")
-        return str(self.get_collection(collection_name).insert_one(document).inserted_id)
+        return str(self.collection.insert_one(data).inserted_id)
 
-    def find(self, collection_name, query=None):
+    def find(self, query=None):
         if query is None:
             query = {}
-        return list(self.get_collection(collection_name).find(query))
+        return list(self.collection.find(query))
 
-    def find_many(self, collection_name, query=None):
+    def find_one(self, query):
+        return self.collection.find_one(query)
+
+    def find_many(self, query=None, limit=0, skip=0, sort=None):
         if query is None:
             query = {}
-        return list(self.get_collection(collection_name).find(query))
+        cursor = self.collection.find(query)
+        if sort:
+            cursor = cursor.sort(sort)
+        if skip:
+            cursor = cursor.skip(skip)
+        if limit:
+            cursor = cursor.limit(limit)
+        return list(cursor)
 
-    def update(self, collection_name, query, update_fields):
-        result = self.get_collection(collection_name).update_many(query, {'$set': update_fields})
-        return result.modified_count
+    def update(self, query, update_fields, multi=False):
+        if multi:
+            return self.collection.update_many(query, {'$set': update_fields}).modified_count
+        else:
+            return self.collection.update_one(query, {'$set': update_fields}).modified_count
 
-    def delete(self, collection_name, query):
-        result = self.get_collection(collection_name).delete_many(query)
-        return result.deleted_count
+    def delete(self, query, multi=False):
+        if multi:
+            return self.collection.delete_many(query).deleted_count
+        else:
+            return self.collection.delete_one(query).deleted_count
 
-    def find_one(self, collection_name, query):
-        return self.get_collection(collection_name).find_one(query)
+    def find_many_by_user_keys(self, user_keys):
+        return list(self.collection.find({'user_key': {'$in': user_keys}}))
 
+    def get_by_user_key(self, user_key):
+        return self.find_one({'user_key': user_key})
 
-# Singleton instance for DB reuse
-mongo_db_repository = MongoDBRepository()
+    def get_by_account_key(self, account_key):
+        return self.find({'account_key': account_key})
+
+    def get_by_email(self, email):
+        return self.find_one({'email': email})
+
+    def get_by_username(self, username):
+        return self.find_one({'username': username})
+
+    def get_by_phone(self, phone):
+        return self.find_one({'phone': phone})

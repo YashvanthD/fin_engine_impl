@@ -22,7 +22,7 @@ class AuthSecurity:
         self.__class__.refresh_token_expire_days = refresh_token_expire_days
 
     @classmethod
-    def configure(cls, secret_key, algorithm='HS256', access_token_expire_minutes=60, refresh_token_expire_days=7):
+    def configure(cls, secret_key, algorithm='HS256', access_token_expire_minutes=3660, refresh_token_expire_days=30):
         cls.secret_key = secret_key
         cls.algorithm = algorithm
         cls.access_token_expire_minutes = access_token_expire_minutes
@@ -287,3 +287,15 @@ class AuthSecurity:
                 raise UnauthorizedError(f"Invalid token: {msg}. Please check your authentication and try again.")
         except Exception as e:
             raise UnauthorizedError(f"Token decode error: {str(e)}. Please contact support if this persists.")
+
+def get_auth_payload(request):
+    """
+    Extracts and decodes the Bearer token from the Authorization header in the request.
+    Raises UnauthorizedError if missing or invalid.
+    Returns the decoded payload.
+    """
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        raise UnauthorizedError('Missing or invalid token')
+    token = auth_header.split(' ', 1)[1]
+    return AuthSecurity.decode_token(token)

@@ -1,24 +1,31 @@
+from fin_server.repository.base_repository import BaseRepository
+from fin_server.repository.mongo_helper import MongoRepositorySingleton
+import logging
 from datetime import datetime, timezone
-from pymongo import MongoClient
 
-class PondRepository:
-    def __init__(self, db):
-        self.collection = db['ponds']
+class PondRepository(BaseRepository):
+    def __init__(self, db=None, collection_name="ponds"):
+        self.collection_name = collection_name
+        print("Initializing PondRepository, collection:", self.collection_name)
+        self.collection = MongoRepositorySingleton.get_collection(self.collection_name, db)
 
-    def create_pond(self, pond_data):
-        pond_data['created_at'] = datetime.now(timezone.utc)
-        return self.collection.insert_one(pond_data)
+    def create(self, data):
+        logging.info(f"Inserting pond data: {data}")
+        data['created_at'] = datetime.now(timezone.utc)
+        return self.collection.insert_one(data)
 
-    def get_pond(self, pond_id):
-        return self.collection.find_one({'_id': pond_id})
-
-    def update_pond(self, pond_id, update_fields):
-        update_fields['updated_at'] = datetime.now(timezone.utc)
-        return self.collection.update_one({'_id': pond_id}, {'$set': update_fields})
-
-    def delete_pond(self, pond_id):
-        return self.collection.delete_one({'_id': pond_id})
-
-    def list_ponds(self, query=None):
+    def find(self, query=None):
         return list(self.collection.find(query or {}))
 
+    def find_one(self, query):
+        return self.collection.find_one(query)
+
+    def update(self, query, update_fields):
+        update_fields['updated_at'] = datetime.now(timezone.utc)
+        return self.collection.update_one(query, {'$set': update_fields})
+
+    def delete(self, query):
+        return self.collection.delete_one(query)
+
+    def get_pond(self, pond_id):
+        return self.find_one({'pond_id': pond_id})

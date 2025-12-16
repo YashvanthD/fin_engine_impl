@@ -1,11 +1,13 @@
 import logging
-from flask import Blueprint, request, jsonify
-from fin_server.repository.user_repository import mongo_db_repository
-from fin_server.security.authentication import AuthSecurity
+from flask import Blueprint, request, jsonify, current_app
+
+from fin_server.repository.user_repository import UserRepository
+from fin_server.security.authentication import AuthSecurity, get_auth_payload
 from fin_server.utils.generator import build_user, get_current_timestamp, epoch_to_datetime
-from fin_server.dto.user_dto import UserDTO
-import datetime
-import time
+from fin_server.repository.mongo_helper import MongoRepositorySingleton
+repo = MongoRepositorySingleton.get_instance()
+user_repo = repo.user
+
 import os
 import hmac
 
@@ -16,7 +18,7 @@ company_bp = Blueprint('company', __name__, url_prefix='/company')
 # Helper to build company users list from user collection
 
 def build_company_users_list(account_key):
-    users = mongo_db_repository.find_many('users', {'account_key': account_key})
+    users = user_repo.find_many('users', {'account_key': account_key})
     result = []
     for u in users:
         user_entry = {
@@ -33,6 +35,8 @@ def build_company_users_list(account_key):
 # Register a new company and its admin user
 @company_bp.route('/register', methods=['POST'])
 def register_company():
+    current_app.logger.debug('POST /api/v1/company/register called with data: %s', request.json)
+    current_app.logger.info('POST /company/register called')
     data = request.get_json(force=True)
     # Master password verification
     provided_master = data.get('master_password')
@@ -58,6 +62,7 @@ def register_company():
     elif 'admin' not in roles:
         roles.append('admin')
     data['roles'] = roles
+    current_app.logger.info(f'Received company registration data: {data}')
     # Pass company_name into build_user; build_user enforces company_name for admin
     try:
         admin_data = build_user(data)
@@ -65,9 +70,10 @@ def register_company():
         return jsonify({'success': False, 'error': str(ve)}), 400
     # Insert admin user
     try:
-        user_id = mongo_db_repository.create('users', admin_data)
+        user_id = user_repo.create('users', admin_data)
     except ValueError as ve:
         return jsonify({'success': False, 'error': str(ve)}), 400
+    current_app.logger.info(f'Admin user created with ID: {user_id}')
     account_key = admin_data['account_key']
     admin_user_key = admin_data['user_key']
     # Create company doc
@@ -90,7 +96,8 @@ def register_company():
         'description': data.get('description'),
         'employee_count': 1
     }
-    mongo_db_repository.get_collection('companies').insert_one(company_doc)
+    user_repo.get_collection('companies').insert_one(company_doc)
+    current_app.logger.info(f'Company document: {company_doc}')
     # Issue access token for admin
     access_payload = {
         'user_key': admin_user_key,
@@ -119,11 +126,13 @@ def register_company():
         'access_token': access_token,
         'refresh_token': refresh_token
     }
+    current_app.logger.info(f'Company registered: {response}')
     return jsonify(response), 201
 
 # Get company details (requires any authenticated user of account)
 @company_bp.route('/<account_key>', methods=['GET'])
 def get_company(account_key):
+    current_app.logger.debug('GET /api/v1/company/%s called', account_key)
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
         return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
@@ -132,14 +141,14 @@ def get_company(account_key):
         payload = AuthSecurity.decode_token(token)
         if payload.get('account_key') != account_key:
             return jsonify({'success': False, 'error': 'Unauthorized'}), 403
-        company = mongo_db_repository.find_one('companies', {'account_key': account_key})
+        company = user_repo.find_one('companies', {'account_key': account_key})
         if not company:
             return jsonify({'success': False, 'error': 'Company not found'}), 404
         company.pop('_id', None)
         # Rebuild users list to ensure it is current
         users_list = build_company_users_list(account_key)
         employee_count = sum(1 for u in users_list if u.get('active'))
-        mongo_db_repository.update('companies', {'account_key': account_key}, {
+        user_repo.update('companies', {'account_key': account_key}, {
             'users': users_list,
             'employee_count': employee_count
         })
@@ -155,6 +164,7 @@ def get_company(account_key):
 # Update company details (name, pincode, description) - ONLY original admin of account
 @company_bp.route('/<account_key>', methods=['PUT'])
 def update_company(account_key):
+    current_app.logger.debug('PUT /api/v1/company/%s called with data: %s', account_key, request.json)
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
         return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
@@ -165,7 +175,7 @@ def update_company(account_key):
         user_key = payload.get('user_key')
         if payload.get('account_key') != account_key or 'admin' not in roles:
             return jsonify({'success': False, 'error': 'Unauthorized'}), 403
-        company = mongo_db_repository.find_one('companies', {'account_key': account_key})
+        company = user_repo.find_one('companies', {'account_key': account_key})
         if not company:
             return jsonify({'success': False, 'error': 'Company not found'}), 404
         admin_user_key = company.get('admin_user_key')
@@ -177,18 +187,18 @@ def update_company(account_key):
             if field in data and data[field] is not None:
                 update_fields[field] = data[field]
         if update_fields:
-            mongo_db_repository.update('companies', {'account_key': account_key}, update_fields)
+            user_repo.update('companies', {'account_key': account_key}, update_fields)
             # If company_name changed, propagate to user docs
             if 'company_name' in update_fields:
-                mongo_db_repository.update('users', {'account_key': account_key}, {'company_name': update_fields['company_name']})
+                user_repo.update('users', {'account_key': account_key}, {'company_name': update_fields['company_name']})
         # Rebuild users list and employee count
         users_list = build_company_users_list(account_key)
         employee_count = sum(1 for u in users_list if u.get('active'))
-        mongo_db_repository.update('companies', {'account_key': account_key}, {
+        user_repo.update('companies', {'account_key': account_key}, {
             'users': users_list,
             'employee_count': employee_count
         })
-        updated_company = mongo_db_repository.find_one('companies', {'account_key': account_key})
+        updated_company = user_repo.find_one('companies', {'account_key': account_key})
         updated_company.pop('_id', None)
         updated_company['users'] = users_list
         updated_company['employee_count'] = employee_count
@@ -202,16 +212,17 @@ def update_company(account_key):
 # Public: minimal company info (no auth) -> company_name, created_date, owner, worker_count, account_key
 @company_bp.route('/public/<account_key>', methods=['GET'])
 def get_company_public(account_key):
+    current_app.logger.debug('GET /api/v1/company/public/%s called', account_key)
     try:
-        company = mongo_db_repository.find_one('companies', {'account_key': account_key})
+        company = user_repo.find_one('companies', {'account_key': account_key})
         if not company:
             return jsonify({'success': False, 'error': 'Company not found'}), 404
         admin_user_key = company.get('admin_user_key')
         admin_user = None
         if admin_user_key:
-            admin_user = mongo_db_repository.find_one('users', {'user_key': admin_user_key})
+            admin_user = user_repo.find_one('users', {'user_key': admin_user_key})
         # Recompute active workers count (do not persist/mutate company doc)
-        users = mongo_db_repository.find_many('users', {'account_key': account_key})
+        users = user_repo.find_many('users', {'account_key': account_key})
         worker_count = 0
         for u in users:
             if u.get('refresh_tokens'):

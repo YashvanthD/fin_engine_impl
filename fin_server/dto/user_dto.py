@@ -1,9 +1,8 @@
 import time
-import threading
-from datetime import datetime, timedelta
-from fin_server.repository.user_repository import mongo_db_repository
-from fin_server.response.auth_response import build_user_response
+from fin_server.repository.mongo_helper import MongoRepositorySingleton
 
+repo = MongoRepositorySingleton.get_instance()
+user_repo = repo.user
 
 class UserDTO:
     # Class-level cache: user_key -> UserDTO
@@ -104,13 +103,13 @@ class UserDTO:
         expired_keys = [k for k, v in cls._cache.items() if now - v._last_activity > cls._CACHE_EXPIRY_SECONDS]
         for k in expired_keys:
             user_obj = cls._cache[k]
-            db_user = mongo_db_repository.find_one("users", {"user_key": k})
+            db_user = user_repo.find_one("users", {"user_key": k})
             if db_user:
                 db_user.pop('_id', None)
                 db_last_update = int(db_user.get('last_update', 0))
                 # Only update DB if cache is newer than DB
                 if user_obj._last_activity > db_last_update or user_obj.to_dict() != db_user:
-                    mongo_db_repository.update("users", {"user_key": k}, user_obj.to_dict())
+                    user_repo.update("users", {"user_key": k}, user_obj.to_dict())
             del cls._cache[k]
 
     @classmethod
@@ -125,7 +124,7 @@ class UserDTO:
         query = {'user_key': user_key}
         if account_key:
             query['account_key'] = account_key
-        user_doc = mongo_db_repository.find_one("users", query)
+        user_doc = user_repo.find_one("users", query)
         if not user_doc:
             return None
         user_doc.pop('_id', None)
@@ -134,7 +133,7 @@ class UserDTO:
 
     @classmethod
     def find_many_by_account(cls, account_key, self_user_key=None):
-        users = mongo_db_repository.find_many("users", {"account_key": account_key})
+        users = user_repo.find_many("users", {"account_key": account_key})
         seen_keys = set()
         result = []
         for u in users:
@@ -150,11 +149,11 @@ class UserDTO:
             else:
                 user_dto = cls(**u)
             # Always include self and all users
-            result.append(build_user_response(user_dto))
+            result.append(user_dto.to_dict())
         return result
 
     def save(self):
-        mongo_db_repository.update("users", {"user_key": self.user_key}, self.to_dict())
+        user_repo.update("users", {"user_key": self.user_key}, self.to_dict())
 
     def save_profile(self, profile_data):
         self.profile = profile_data
@@ -162,8 +161,8 @@ class UserDTO:
 
     @classmethod
     def create(cls, user_data):
-        user_id = mongo_db_repository.create("users", user_data)
+        user_id = user_repo.create("users", user_data)
         return user_id
 
     def delete(self):
-        mongo_db_repository.delete("users", {"user_key": self.user_key})
+        user_repo.delete("users", {"user_key": self.user_key})

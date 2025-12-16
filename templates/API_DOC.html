@@ -374,7 +374,9 @@
         </div>
         <div id="fish-section" class="section-content">
             <div class="note">
-                <b>Note:</b> The fish entity does <b>not</b> store <code>account_key</code> or analytics data (count, age, etc). Mapping between <code>account_key</code> and fish is maintained in a separate <b>fish_mapping</b> collection. Analytics (batches, age, etc.) are stored in <b>fish_analytics</b> and also reference <code>account_key</code>.
+                <b>Note:</b> <b>All fish additions/removals must be performed via a <code>pond_event</code> (see Pond Events section).</b><br>
+                The fish entity does <b>not</b> store <code>account_key</code> or analytics data (count, age, etc). Mapping between <code>account_key</code> and fish is maintained in a separate <b>fish_mapping</b> collection. Analytics (batches, age, etc.) are stored in <b>fish_analytics</b> and also reference <code>account_key</code> and <code>pond_id</code>.<br>
+                <b>To add or remove fish, always use the <code>/pond_event/&lt;pond_id&gt;/event/&lt;event_type&gt;</code> endpoint.</b>
             </div>
             <div class="card">
                 <div class="endpoint" onclick="toggleCard('fish-create-card')">
@@ -610,9 +612,8 @@
         </div>
         <div id="pond-events-section" class="section-content">
             <div class="note">
-                Pond events track all activities (adding, selling, sampling, removing, shifting fish). Each event updates the <b>pond_events</b> collection and also updates the <b>metadata</b> field in the related pond in the <b>ponds</b> collection:<br>
-                <code>metadata: { total_fish, fish_types, last_activity }</code><br>
-                <b>Supported event types:</b> <code>add</code>, <code>sell</code>, <code>sample</code>, <code>remove</code>, <code>shift_in</code>, <code>shift_out</code>.
+                <b>All fish additions/removals must be performed as pond events.</b> Each event updates the <b>pond_events</b> collection, <b>ponds</b> metadata, <b>fish_analytics</b> (with batch analytics for the pond/account), and <b>fish_mapping</b> (ensuring mapping of fish to account).<br>
+                <b>Required fields for all fish-related events:</b> <code>fish_id</code>, <code>count</code>, <code>fish_age_in_month</code> (for add/shift_in), and <code>pond_id</code> (in URL).
             </div>
             <div class="card">
                 <div class="endpoint" onclick="toggleCard('pond-event-add-card')">
@@ -620,17 +621,18 @@
                     <span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/add
                 </div>
                 <div class="card-content" id="pond-event-add-card">
-                    <div class="desc">Add fish to a pond. Updates metadata (total_fish, fish_types, last_activity).</div>
+                    <div class="desc">Add fish to a pond. Updates pond_events, pond metadata, fish_analytics, and fish_mapping. <b>This is the only way to add fish to a pond and update analytics/mapping.</b></div>
                     <table class="fields-table">
                         <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-                        <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
+                        <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID (species_code) of the fish</td></tr>
                         <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish added</td></tr>
+                        <tr><td>fish_age_in_month</td><td>int</td><td>Yes</td><td>Age (in months) of fish in this batch</td></tr>
                         <tr><td>details</td><td>object</td><td>No</td><td>Additional event details</td></tr>
                     </table>
                     <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/add \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{ "fish_id": "FISH123", "count": 500 }'</pre></div>
+  -d '{ "fish_id": "CF001", "count": 500, "fish_age_in_month": 3 }'</pre></div>
                 </div>
             </div>
             <div class="card">

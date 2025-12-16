@@ -2,7 +2,7 @@ import time
 import threading
 from datetime import datetime
 from .worker import NotificationWorker
-from fin_server.repository.task_repository import task_repository
+from fin_server.repository.task_repository import TaskRepository
 import logging
 
 class TaskScheduler:
@@ -11,6 +11,7 @@ class TaskScheduler:
         self.worker = NotificationWorker()
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.running = False
+        self.task_repository = TaskRepository()
 
     def start(self):
         self.running = True

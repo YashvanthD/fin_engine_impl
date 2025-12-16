@@ -10,11 +10,8 @@ from fin_server.repository.notification_repository import NotificationRepository
 sio = socketio.Server(async_mode='threading', cors_allowed_origins='*')
 app = Flask(__name__)
 
-# Setup MongoDB connection
-mongo_client = MongoClient('mongodb://localhost:27017/')
-db = mongo_client['fin_db']
-message_repository = MessageRepository(db)
-notification_repository = NotificationRepository(db)
+message_repository = MessageRepository()
+notification_repository = NotificationRepository()
 
 connected_users = {}  # user_key: sid
 

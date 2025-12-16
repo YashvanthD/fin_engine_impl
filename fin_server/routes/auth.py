@@ -2,16 +2,20 @@ import datetime
 import os
 import hmac
 
-from flask import Blueprint, request, jsonify
-from fin_server.utils.validation import validate_signup, validate_signup_user
-from fin_server.repository.user_repository import mongo_db_repository
-from fin_server.utils.generator import generate_key, build_user
-from fin_server.response.auth_response import build_user_response, build_token_only_response, build_signup_login_response
-from fin_server.security.authentication import AuthSecurity
-from fin_server.dto.user_dto import UserDTO
-from fin_server.requests.subscription import default_subscription
-import time
+from flask import Blueprint, request, jsonify, current_app
 import logging
+
+from fin_server.repository.mongo_helper import MongoRepositorySingleton
+repo = MongoRepositorySingleton.get_instance()
+user_repo = repo.user
+from fin_server.utils.validation import validate_signup, validate_signup_user
+
+
+from fin_server.utils.generator import build_user
+from fin_server.response.auth_response import build_signup_login_response
+from fin_server.security.authentication import AuthSecurity, get_auth_payload
+from fin_server.dto.user_dto import UserDTO
+import time
 import base64
 
 MASTER_ADMIN_PASSWORD = os.getenv('MASTER_ADMIN_PASSWORD')  # Set this in deployment environment
@@ -23,8 +27,9 @@ auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 @auth_bp.route('/signup', methods=['POST'])
 def signup():
     logging.info("Signup endpoint called")
+    current_app.logger.info('POST /auth/signup called')
     data = request.get_json(force=True)
-    logging.info("Received signup data: %s", data)
+    current_app.logger.info(f'Received signup data: {data}')
     provided_master = data.get('master_password')
     if MASTER_ADMIN_PASSWORD is None:
         logging.error("MASTER_ADMIN_PASSWORD is not configured in environment")
@@ -35,6 +40,7 @@ def signup():
     # Remove master_password from data before storing user
     data.pop('master_password', None)
     is_valid, errors = validate_signup(data)
+    current_app.logger.info(f'Validation result: {is_valid}, errors: {errors}')
     logging.info("Signup validation result: %s", is_valid)
     if not is_valid:
         logging.warning("Signup validation failed: %s", errors)
@@ -42,10 +48,12 @@ def signup():
     data['roles']=['admin']
     admin_data = build_user(data)
     logging.info("Built admin data: %s", admin_data)
-    user_id = mongo_db_repository.create("users", admin_data)
+    user_id = user_repo.create(admin_data)
+    current_app.logger.info(f'Admin user created with ID: {user_id}')
     logging.info("Admin user created with ID: %s", user_id)
     response = build_signup_login_response(success=True, message='Admin signup validated and saved.', user_id=user_id,
                                            account_key=admin_data['account_key'], user_key=admin_data['user_key'])
+    current_app.logger.info(f'Signup response: {response}')
     logging.info("Signup response: %s", response)
     return jsonify(response), 201
 
@@ -59,7 +67,7 @@ def signup_user(account_key):
     admin_token = auth_header.split(' ', 1)[1]
     logging.info("Validating admin token for account signup")
     is_admin_valid = AuthSecurity.validate_role_token(
-        mongo_db_repository, 'users', admin_token, required_role='admin', account_key=account_key
+        user_repo, 'users', admin_token, required_role='admin', account_key=account_key
     )
     logging.info("Admin token validation result: %s", is_admin_valid)
     if not is_admin_valid:
@@ -74,7 +82,7 @@ def signup_user(account_key):
         return jsonify({'success': False, 'errors': errors}), 400
     user_data = build_user(data, account_key)
     logging.info("Built user data: %s", user_data)
-    user_id = mongo_db_repository.create("users", user_data)
+    user_id = user_repo.create(user_data)
     logging.info("User created with ID: %s", user_id)
     response = build_signup_login_response(success=True, message='User signup validated and saved.', user_id=user_id,
                                            account_key=account_key, user_key=user_data['user_key'])
@@ -83,7 +91,7 @@ def signup_user(account_key):
 
 # Helper: Load user DTO from DB or cache
 def load_user_dto_by_username(username):
-    user_doc = mongo_db_repository.find_one("users", {"username": username})
+    user_doc = user_repo.find_one({"username": username})
     if not user_doc:
         return None, None
     user_dto = UserDTO.get_from_cache(user_doc['user_key'])
@@ -109,7 +117,7 @@ def load_user_dto_by_identifier(username=None, phone=None, email=None):
         query['email'] = email
     if not query:
         return None, None
-    user_doc = mongo_db_repository.find_one("users", query)
+    user_doc = user_repo.find_one(query)
     if not user_doc:
         return None, None
     user_dto = UserDTO.get_from_cache(user_doc.get('user_key') or user_doc.get('user_key'))
@@ -187,7 +195,7 @@ def handle_login_or_token_request(username=None, password=None, refresh_token=No
                 return {'success': False, 'error': 'User not found'}, 404
             # Cleanup expired refresh tokens before validating
             AuthSecurity.validate_and_cleanup_refresh_tokens(user_dto, create_new=False)
-            valid = AuthSecurity.validate_refresh_token(mongo_db_repository, 'users', user_key, refresh_token)
+            valid = AuthSecurity.validate_refresh_token(user_repo, 'users', user_key, refresh_token)
             if not valid:
                 logging.warning("Invalid or expired refresh token")
                 return {'success': False, 'error': 'Invalid or expired refresh token'}, 401
@@ -235,7 +243,7 @@ def handle_login_or_token_request(username=None, password=None, refresh_token=No
             'type': 'refresh'
         })
         user_dto.add_refresh_token(new_refresh_token)
-        mongo_db_repository.update("users", {"user_key": user_dto.user_key}, user_dto.to_dict())
+        user_repo.update({"user_key": user_dto.user_key}, user_dto.to_dict())
         response = build_user_response(user_dto, access_token=access_token, refresh_token=new_refresh_token)
         logging.info("Token generation response: %s", response)
         return response, 200
@@ -258,17 +266,11 @@ def login():
 @auth_bp.route('/account/users', methods=['GET'])
 def list_account_users():
     logging.info("List account users endpoint called")
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        logging.warning("Missing or invalid token")
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
+    payload = get_auth_payload(request)
+    user_key = payload.get('user_key')
+    account_key = payload.get('account_key')
+    roles = payload.get('roles', [])
     try:
-        payload = AuthSecurity.decode_token(token)
-        logging.info("Token validated: %s", payload)
-        user_key = payload.get('user_key')
-        account_key = payload.get('account_key')
-        roles = payload.get('roles', [])
         if 'admin' in roles:
             logging.info("Admin role detected, fetching all users for account_key: %s", account_key)
             user_list = UserDTO.find_many_by_account(account_key)
@@ -289,16 +291,7 @@ def list_account_users():
 @auth_bp.route('/settings', methods=['GET', 'PUT'])
 def user_settings():
     logging.info("Settings endpoint called")
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        logging.warning("Missing or invalid token")
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
-    try:
-        payload = AuthSecurity.decode_token(token)
-    except Exception as e:
-        logging.exception("Token decode error in /settings endpoint")
-        return jsonify({'success': False, 'error': 'Invalid token or server error'}), 401
+    payload = get_auth_payload(request)
     user_key = payload.get('user_key')
     account_key = payload.get('account_key')
     try:
@@ -334,60 +327,36 @@ def get_user_permissions():
 @auth_bp.route('/validate', methods=['GET'])
 def validate_token():
     logging.info("Validate token endpoint called")
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        logging.warning("Missing or invalid token")
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
-    try:
-        payload = AuthSecurity.decode_token(token)
-        logging.info("Token validated: %s", payload)
-        # Check expiry in payload (already handled in decode_token, but log for clarity)
-        exp = payload.get('exp')
-        if exp is not None:
-            now = int(time.time())
-            if isinstance(exp, datetime.datetime):
-                exp = int(exp.timestamp())
-            elif isinstance(exp, float):
-                exp = int(exp)
-            if exp < now:
-                logging.warning("Token expired at %s", exp)
-                return jsonify({'success': False, 'error': 'Token expired'}), 401
-        user_key = payload.get('user_key')
-        account_key = payload.get('account_key')
-        user_dto = UserDTO.find_by_user_key(user_key)
-        if not user_dto or user_dto.account_key != account_key:
-            logging.warning("User not found for user_key: %s, account_key: %s", user_key, account_key)
-            return jsonify({'success': False, 'error': 'User not found'}), 404
-        user_dict = user_dto.to_dict()
-        # Remove sensitive fields
-        user_dict.pop('password', None)
-        user_dict.pop('refresh_tokens', None)
-        # Build response
-        response = {
-            'success': True,
-            'user_key': user_dto.user_key,
-            'account_key': user_dto.account_key,
-            'roles': user_dto.roles,
-            'settings': user_dto.settings,
-            'subscription': user_dto.subscription,
-            'last_active': user_dto.last_active
-        }
-        logging.info("Validate response: %s", response)
-        return jsonify(response), 200
-    except ValueError as ve:
-        logging.warning("Token validation error: %s", ve)
-        return jsonify({'success': False, 'error': str(ve)}), 401
-    except Exception as e:
-        logging.exception("Exception in validate_token endpoint")
-        return jsonify({'success': False, 'error': 'Invalid token or server error'}), 401
+    payload = get_auth_payload(request)
+    user_key = payload.get('user_key')
+    account_key = payload.get('account_key')
+    user_dto = UserDTO.find_by_user_key(user_key)
+    if not user_dto or user_dto.account_key != account_key:
+        logging.warning("User not found for user_key: %s, account_key: %s", user_key, account_key)
+        return jsonify({'success': False, 'error': 'User not found'}), 404
+    user_dict = user_dto.to_dict()
+    # Remove sensitive fields
+    user_dict.pop('password', None)
+    user_dict.pop('refresh_tokens', None)
+    # Build response
+    response = {
+        'success': True,
+        'user_key': user_dto.user_key,
+        'account_key': user_dto.account_key,
+        'roles': user_dto.roles,
+        'settings': user_dto.settings,
+        'subscription': user_dto.subscription,
+        'last_active': user_dto.last_active
+    }
+    logging.info("Validate response: %s", response)
+    return jsonify(response), 200
 
 def build_token_only_response(access_token, expires_in=None):
     response = {
         'access_token': access_token
     }
     if expires_in:
-        response['expires_in'] = expires_in
+        response['expires_in'] = str(expires_in)
     return response
 
 @auth_bp.route('/token', methods=['POST'])
@@ -417,7 +386,7 @@ def generate_token():
             if not user_dto or user_dto.account_key != account_key:
                 logging.warning("User not found for user_key: %s, account_key: %s", user_key, account_key)
                 return jsonify({'success': False, 'error': 'User not found'}), 404
-            valid = AuthSecurity.validate_refresh_token(mongo_db_repository, 'users', user_key, token)
+            valid = AuthSecurity.validate_refresh_token(user_repo, 'users', user_key, token)
             if not valid:
                 logging.warning("Invalid or expired refresh token")
                 return jsonify({'success': False, 'error': 'Invalid or expired refresh token'}), 401
@@ -473,14 +442,14 @@ def generate_token():
                 logging.warning("Invalid expires_in param: %s", expires_in)
         refresh_token_val = AuthSecurity.create_refresh_token(refresh_payload)
         user_dto.add_refresh_token(refresh_token_val)
-        mongo_db_repository.update("users", {"user_key": user_dto.user_key}, user_dto.to_dict())
+        user_repo.update({"user_key": user_dto.user_key}, user_dto.to_dict())
         # Only return refresh token and expiry
         expiry = None
         if expires_delta:
             expiry = int(time.time()) + int(expires_in)
         response = {'refresh_token': refresh_token_val}
         if expiry:
-            response['expires_in'] = expiry
+            response['expires_in'] = str(expiry)
         logging.info("Refresh token generated and response: %s", response)
         return jsonify(response), 200
     else:
@@ -497,16 +466,7 @@ def generate_token():
 @auth_bp.route('/subscriptions', methods=['GET', 'PUT'])
 def user_subscriptions():
     logging.info("Subscriptions endpoint called")
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        logging.warning("Missing or invalid token")
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
-    try:
-        payload = AuthSecurity.decode_token(token)
-    except Exception as e:
-        logging.exception("Token decode error in /subscriptions endpoint")
-        return jsonify({'success': False, 'error': 'Invalid token or server error'}), 401
+    payload = get_auth_payload(request)
     user_key = payload.get('user_key')
     account_key = payload.get('account_key')
     roles = payload.get('roles', [])
@@ -553,9 +513,8 @@ def user_subscriptions():
 
 @auth_bp.route('/account/<account_key>/company', methods=['GET'])
 def get_company_name(account_key):
-    from fin_server.repository.user_repository import mongo_db_repository
     # Find any admin user for this account_key
-    admin_doc = mongo_db_repository.get_collection('users').find_one({
+    admin_doc = user_repo.find_one({
         'account_key': account_key,
         'roles': {'$in': ['admin']}
     })

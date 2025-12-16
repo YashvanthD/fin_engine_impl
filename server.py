@@ -4,6 +4,9 @@ from fin_server.routes.auth import auth_bp
 from fin_server.routes.user import user_bp
 from fin_server.routes.task import task_bp
 from fin_server.routes.company import company_bp
+from fin_server.routes.pond import pond_bp
+from fin_server.routes.fish import fish_bp
+from fin_server.routes.pond_event import pond_event_bp
 from fin_server.security.authentication import AuthSecurity
 from fin_server.notification.scheduler import TaskScheduler
 import logging
@@ -15,10 +18,14 @@ CORS(app)
 # Set your JWT secret key here (use a secure random string in production)
 AuthSecurity.configure(secret_key="your-very-secret-key", algorithm="HS256", access_token_expire_minutes=60, refresh_token_expire_days=7)
 
+# Register blueprints with /api prefix
 app.register_blueprint(auth_bp)
 app.register_blueprint(user_bp)
 app.register_blueprint(task_bp)
 app.register_blueprint(company_bp)
+app.register_blueprint(pond_bp)
+app.register_blueprint(fish_bp)
+app.register_blueprint(pond_event_bp)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -29,4 +36,4 @@ def index():
 if __name__ == "__main__":
     scheduler = TaskScheduler(interval_seconds=60)
     scheduler.start()
-    app.run(host="0.0.0.0", port=80, debug=True)
+    app.run(host="0.0.0.0", port=os.getenv('run_port', 80), debug=True)
