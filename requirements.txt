@@ -11,10 +11,13 @@ click==8.1.8
 cryptography==46.0.3
 dnspython==2.7.0
 ecdsa==0.19.1
+eventlet==0.40.4
 exceptiongroup==1.3.1
 fastapi==0.123.0
 Flask==3.1.2
 flask-cors==6.0.1
+Flask-SocketIO==5.5.1
+greenlet==3.2.4
 h11==0.16.0
 idna==3.11
 importlib_metadata==8.7.0
