@@ -6,256 +6,543 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; background: #f8f9fa; color: #222; margin: 0; padding: 0; }
-        .container { max-width: 900px; margin: 40px auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px #0001; padding: 32px; }
+        .container { max-width: 1100px; margin: 40px auto; background: #fff; border-radius: 10px; box-shadow: 0 2px 12px #0002; padding: 36px; }
         h1, h2, h3 { color: #2a4d7c; }
-        h1 { font-size: 2.2em; margin-bottom: 0.5em; }
+        h1 { font-size: 2.3em; margin-bottom: 0.5em; }
         h2 { font-size: 1.5em; margin-top: 2em; }
         h3 { font-size: 1.2em; margin-top: 1.5em; }
-        pre, code { background: #f4f4f4; border-radius: 4px; padding: 8px; font-size: 1em; }
-        .endpoint { margin-bottom: 2em; }
-        .fields { margin: 0.5em 0 1em 1em; }
-        .curl { background: #eaf6ff; border-left: 4px solid #2a4d7c; padding: 8px; margin: 0.5em 0 1em 1em; }
+        .card { background: #f7fbff; border-radius: 8px; box-shadow: 0 1px 4px #0001; margin-bottom: 2em; padding: 24px 24px 18px 24px; border-left: 6px solid #2a4d7c; }
+        .card .endpoint { font-weight: bold; font-size: 1.1em; color: #1a355e; }
+        .card .method { display: inline-block; font-size: 0.95em; font-weight: bold; border-radius: 4px; padding: 2px 10px; margin-right: 10px; }
+        .card .method-get { background: #2e8b57; color: #fff; }
+        .card .method-post { background: #007bff; color: #fff; }
+        .card .method-put { background: #ff9800; color: #fff; }
+        .card .method-delete { background: #e53935; color: #fff; }
+        .card .desc { margin: 8px 0 12px 0; color: #444; }
+        .fields-table { width: 100%; border-collapse: collapse; margin-bottom: 1em; }
+        .fields-table th, .fields-table td { border: 1px solid #e0e6ef; padding: 6px 10px; text-align: left; }
+        .fields-table th { background: #eaf6ff; color: #2a4d7c; }
+        .fields-table td { background: #fafdff; }
+        .example, .curl { background: #f4f4f4; border-radius: 4px; padding: 10px; font-size: 1em; margin: 0.5em 0 1em 0; }
         .section { border-bottom: 1px solid #eee; margin-bottom: 2em; padding-bottom: 2em; }
         .note { background: #fffbe6; border-left: 4px solid #ffd700; padding: 8px; margin: 1em 0; }
-        @media (max-width: 600px) { .container { padding: 12px; } }
+        .tag { display: inline-block; background: #eaf6ff; color: #2a4d7c; border-radius: 4px; padding: 2px 8px; font-size: 0.95em; margin-right: 6px; }
+        @media (max-width: 700px) { .container { padding: 10px; } .card { padding: 12px; } }
     </style>
 </head>
 <body>
 <div class="container">
     <h1>TaskCircuit API Documentation</h1>
     <div class="note">
-        <strong>Date:</strong> December 5, 2025<br>
+        <strong>Date:</strong> December 16, 2025<br>
         <strong>Base URL:</strong> <code>http://localhost:5000/</code><br>
         All endpoints use JSON. Authentication is via Bearer token in <code>Authorization</code> header where required.
     </div>
-    <div class="section">
-        <h2>Authentication</h2>
-        <div class="endpoint">
-            <h3>POST /auth/signup</h3>
-            <div class="fields"><strong>Fields:</strong> master_password, company_name, username, password, email</div>
-            <div class="curl"><pre>curl -X POST http://localhost:5000/auth/signup \
+    <h2>Authentication</h2>
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /auth/signup</div>
+        <div class="desc">Register a new admin and company. Requires master password.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>master_password</td><td>string</td><td>Yes</td><td>Master password for admin registration</td></tr>
+            <tr><td>company_name</td><td>string</td><td>Yes</td><td>Name of the company</td></tr>
+            <tr><td>username</td><td>string</td><td>Yes</td><td>Admin username</td></tr>
+            <tr><td>password</td><td>string</td><td>Yes</td><td>Admin password</td></tr>
+            <tr><td>email</td><td>string</td><td>Yes</td><td>Admin email</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/auth/signup \
   -H "Content-Type: application/json" \
   -d '{ "master_password": "YOUR_MASTER_ADMIN_PASSWORD", "company_name": "TaskCircuit", "username": "adminuser", "password": "adminpassword", "email": "admin@example.com" }'</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>POST /auth/login</h3>
-            <div class="fields"><strong>Fields:</strong> username, password</div>
-            <div class="curl"><pre>curl -X POST http://localhost:5000/auth/login \
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /auth/login</div>
+        <div class="desc">Login with username and password to receive access and refresh tokens.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>username</td><td>string</td><td>Yes</td><td>User's username</td></tr>
+            <tr><td>password</td><td>string</td><td>Yes</td><td>User's password</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/auth/login \
   -H "Content-Type: application/json" \
   -d '{ "username": "adminuser", "password": "adminpassword" }'</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>POST /auth/token</h3>
-            <div class="fields"><strong>Fields:</strong> type ("refresh_token"), token (refresh_token)</div>
-            <div class="curl"><pre>curl -X POST http://localhost:5000/auth/token \
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /auth/token</div>
+        <div class="desc">Generate a new access token using a refresh token.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>type</td><td>string</td><td>Yes</td><td>"refresh_token"</td></tr>
+            <tr><td>token</td><td>string</td><td>Yes</td><td>Refresh token</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/auth/token \
   -H "Content-Type: application/json" \
   -d '{ "type": "refresh_token", "token": "REFRESH_TOKEN" }'</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>GET /auth/validate</h3>
-            <div class="fields"><strong>Fields:</strong> Authorization header (Bearer ACCESS_TOKEN or REFRESH_TOKEN)</div>
-            <div class="curl"><pre>curl -X GET http://localhost:5000/auth/validate \
-  -H "Authorization: Bearer ACCESS_TOKEN_OR_REFRESH_TOKEN"</pre></div>
-        </div>
     </div>
-    <div class="section">
-        <h2>Company</h2>
-        <div class="endpoint">
-            <h3>POST /company/register</h3>
-            <div class="fields"><strong>Fields:</strong> company_name, description, pincode, number_of_employees, owner_user_key, account_key</div>
-            <div class="curl"><pre>curl -X POST http://localhost:5000/company/register \
+    <div class="card">
+        <div class="endpoint"><span class="method method-get">GET</span> /auth/validate</div>
+        <div class="desc">Validate an access or refresh token and get user info.</div>
+        <table class="fields-table">
+            <tr><th>Header</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>Authorization</td><td>string</td><td>Yes</td><td>Bearer ACCESS_TOKEN or REFRESH_TOKEN</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/auth/validate \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+    </div>
+    <h2>Company</h2>
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /company/register</div>
+        <div class="desc">Register a new company and its admin user. Requires master password.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>company_name</td><td>string</td><td>Yes</td><td>Name of the company</td></tr>
+            <tr><td>description</td><td>string</td><td>No</td><td>Company description</td></tr>
+            <tr><td>pincode</td><td>string</td><td>No</td><td>Company pincode</td></tr>
+            <tr><td>number_of_employees</td><td>int</td><td>No</td><td>Number of employees (auto-counted)</td></tr>
+            <tr><td>owner_user_key</td><td>string</td><td>No</td><td>Admin user key (auto-generated)</td></tr>
+            <tr><td>account_key</td><td>string</td><td>No</td><td>Account key (auto-generated)</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/company/register \
   -H "Content-Type: application/json" \
-  -d '{ ...company fields... }'</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>PUT /company/update</h3>
-            <div class="fields"><strong>Fields:</strong> Any updatable company field</div>
-            <div class="curl"><pre>curl -X PUT http://localhost:5000/company/update \
+  -d '{ "company_name": "TaskCircuit", "description": "Fish farm", "pincode": "560001", "username": "adminuser", "password": "adminpassword", "email": "admin@example.com", "master_password": "YOUR_MASTER_ADMIN_PASSWORD" }'</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-put">PUT</span> /company/&lt;account_key&gt;</div>
+        <div class="desc">Update details of an existing company.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>company_name</td><td>string</td><td>No</td><td>Name of the company</td></tr>
+            <tr><td>description</td><td>string</td><td>No</td><td>Company description</td></tr>
+            <tr><td>pincode</td><td>string</td><td>No</td><td>Company pincode</td></tr>
+            <tr><td>number_of_employees</td><td>int</td><td>No</td><td>Number of employees</td></tr>
+            <tr><td>owner_user_key</td><td>string</td><td>No</td><td>Admin user key</td></tr>
+            <tr><td>account_key</td><td>string</td><td>No</td><td>Account key</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/company/&lt;account_key&gt; \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{ ...fields to update... }'</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>GET /company/&lt;account_key&gt;</h3>
-            <div class="fields"><strong>Fields Returned:</strong> company_name, created_date, owner_user_key, worker_count, account_key</div>
-            <div class="curl"><pre>curl -X GET http://localhost:5000/company/&lt;account_key&gt;</pre></div>
-        </div>
+  -d '{ "company_name": "New Company Name", "description": "Updated description" }'</pre></div>
     </div>
-    <div class="section">
-        <h2>User</h2>
-        <div class="endpoint">
-            <h3>POST /auth/account/&lt;account_key&gt;/signup</h3>
-            <div class="fields"><strong>Fields:</strong> username, password, email, role, account_key</div>
-            <div class="curl"><pre>curl -X POST http://localhost:5000/auth/account/&lt;account_key&gt;/signup \
+    <div class="card">
+        <div class="endpoint"><span class="method method-get">GET</span> /company/&lt;account_key&gt;</div>
+        <div class="desc">Retrieve details of a specific company by account key.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/company/&lt;account_key&gt; \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-get">GET</span> /company/public/&lt;account_key&gt;</div>
+        <div class="desc">Retrieve public details of a company by account key (no auth required).</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/company/public/&lt;account_key&gt;</pre></div>
+    </div>
+    <h2>User</h2>
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /auth/account/&lt;account_key&gt;/signup</div>
+        <div class="desc">Create a new user in the company account.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>username</td><td>string</td><td>Yes</td><td>New user's username</td></tr>
+            <tr><td>password</td><td>string</td><td>Yes</td><td>New user's password</td></tr>
+            <tr><td>email</td><td>string</td><td>Yes</td><td>New user's email</td></tr>
+            <tr><td>role</td><td>string</td><td>Yes</td><td>User role (e.g., "worker", "manager")</td></tr>
+            <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/auth/account/&lt;account_key&gt;/signup \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{ ...user fields... }'</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>GET /auth/account/users</h3>
-            <div class="fields"><strong>Fields Returned:</strong> users: [user objects]</div>
-            <div class="curl"><pre>curl -X GET http://localhost:5000/auth/account/users \
-  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>GET /auth/account/&lt;account_key&gt;/user/&lt;user_key&gt;</h3>
-            <div class="fields"><strong>Fields Returned:</strong> All user fields</div>
-            <div class="curl"><pre>curl -X GET http://localhost:5000/auth/account/&lt;account_key&gt;/user/&lt;user_key&gt; \
-  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>PUT /auth/account/&lt;account_key&gt;/user/&lt;user_key&gt;</h3>
-            <div class="fields"><strong>Fields:</strong> Any updatable user field</div>
-            <div class="curl"><pre>curl -X PUT http://localhost:5000/auth/account/&lt;account_key&gt;/user/&lt;user_key&gt; \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{ ...fields... }'</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>DELETE /auth/account/&lt;account_key&gt;/user/&lt;user_key&gt;</h3>
-            <div class="curl"><pre>curl -X DELETE http://localhost:5000/auth/account/&lt;account_key&gt;/user/&lt;user_key&gt; \
-  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-        </div>
+  -d '{ "username": "newuser", "password": "userpassword", "email": "user@example.com", "role": "worker", "account_key": "ACC123" }'</pre></div>
     </div>
-    <div class="section">
-        <h2>Tasks</h2>
-        <div class="endpoint">
-            <h3>POST /tasks/</h3>
-            <div class="fields"><strong>Fields:</strong> title, description, assigned_to, due_date, status, account_key</div>
-            <div class="curl"><pre>curl -X POST http://localhost:5000/tasks/ \
+    <div class="card">
+        <div class="endpoint"><span class="method method-get">GET</span> /auth/account/users</div>
+        <div class="desc">Retrieve a list of users in the company account.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/auth/account/users \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-delete">DELETE</span> /user/account/&lt;account_key&gt;/user/&lt;user_key&gt;</div>
+        <div class="desc">Delete a user from the company account.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
+            <tr><td>user_key</td><td>string</td><td>Yes</td><td>User key of the user to be deleted</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/user/account/&lt;account_key&gt;/user/&lt;user_key&gt; \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+    </div>
+    <h2>Tasks</h2>
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /task/</div>
+        <div class="desc">Create a new task.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>title</td><td>string</td><td>Yes</td><td>Title of the task</td></tr>
+            <tr><td>description</td><td>string</td><td>No</td><td>Details about the task</td></tr>
+            <tr><td>assigned_to</td><td>string</td><td>Yes</td><td>User key of the assignee</td></tr>
+            <tr><td>end_date</td><td>string</td><td>No</td><td>Due date for the task (YYYY-MM-DD)</td></tr>
+            <tr><td>status</td><td>string</td><td>No</td><td>Task status (e.g., "pending", "completed")</td></tr>
+            <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/task/ \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "title": "Task 1", "assigned_to": "USER123", "account_key": "ACC123" }'</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>GET /tasks/?account_key=xxx</h3>
-            <div class="fields"><strong>Fields Returned:</strong> tasks: [task objects]</div>
-            <div class="curl"><pre>curl -X GET "http://localhost:5000/tasks/?account_key=ACC123" \
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-get">GET</span> /task/</div>
+        <div class="desc">Retrieve a list of tasks with optional filters.</div>
+        <table class="fields-table">
+            <tr><th>Query Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>status</td><td>string</td><td>No</td><td>Filter by task status</td></tr>
+            <tr><td>priority</td><td>int</td><td>No</td><td>Filter by task priority</td></tr>
+            <tr><td>end_date</td><td>string</td><td>No</td><td>Filter by end date (YYYY-MM-DD)</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET "http://localhost:5000/task/?status=pending&priority=1" \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>GET /tasks/&lt;task_id&gt;</h3>
-            <div class="fields"><strong>Fields Returned:</strong> All task fields</div>
-            <div class="curl"><pre>curl -X GET http://localhost:5000/tasks/&lt;task_id&gt; \
-  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>PUT /tasks/&lt;task_id&gt;</h3>
-            <div class="fields"><strong>Fields:</strong> Any updatable task field</div>
-            <div class="curl"><pre>curl -X PUT http://localhost:5000/tasks/&lt;task_id&gt; \
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-put">PUT</span> /task/&lt;task_id&gt;</div>
+        <div class="desc">Update an existing task.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>title</td><td>string</td><td>No</td><td>Title of the task</td></tr>
+            <tr><td>description</td><td>string</td><td>No</td><td>Details about the task</td></tr>
+            <tr><td>assigned_to</td><td>string</td><td>No</td><td>User key of the assignee</td></tr>
+            <tr><td>end_date</td><td>string</td><td>No</td><td>Due date for the task (YYYY-MM-DD)</td></tr>
+            <tr><td>status</td><td>string</td><td>No</td><td>Task status (e.g., "pending", "completed")</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/task/&lt;task_id&gt; \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{ ...fields... }'</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>DELETE /tasks/&lt;task_id&gt;</h3>
-            <div class="curl"><pre>curl -X DELETE http://localhost:5000/tasks/&lt;task_id&gt; \
+  -d '{ "title": "Updated Task Title", "status": "completed" }'</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-delete">DELETE</span> /task/&lt;task_id&gt;</div>
+        <div class="desc">Delete a task.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>task_id</td><td>string</td><td>Yes</td><td>ID of the task to be deleted</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/task/&lt;task_id&gt; \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-        </div>
     </div>
-    <div class="section">
-        <h2>Fish</h2>
-        <div class="endpoint">
-            <h3>POST /fish/</h3>
-            <div class="fields"><strong>Fields:</strong> common_name, scientific_name, species_code, count, length, weight, account_key, [dynamic fields]</div>
-            <div class="curl"><pre>curl -X POST http://localhost:5000/fish/ \
-  -H "Content-Type: application/json" \
-  -d '{ "common_name": "Catfish", "scientific_name": "Siluriformes", "species_code": "CF001", "count": 10, "length": 25.5, "weight": 2.3, "account_key": "ACC123" }'</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>GET /fish/?account_key=xxx</h3>
-            <div class="fields"><strong>Fields Returned:</strong> fish: [fish objects]</div>
-            <div class="curl"><pre>curl -X GET "http://localhost:5000/fish/?account_key=ACC123"</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>GET /fish/&lt;fish_id&gt;</h3>
-            <div class="fields"><strong>Fields Returned:</strong> All fish fields</div>
-            <div class="curl"><pre>curl -X GET http://localhost:5000/fish/&lt;fish_id&gt;</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>PUT /fish/&lt;fish_id&gt;</h3>
-            <div class="fields"><strong>Fields:</strong> Any updatable fish field</div>
-            <div class="curl"><pre>curl -X PUT http://localhost:5000/fish/&lt;fish_id&gt; \
-  -H "Content-Type: application/json" \
-  -d '{ ...fields... }'</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>DELETE /fish/&lt;fish_id&gt;</h3>
-            <div class="curl"><pre>curl -X DELETE http://localhost:5000/fish/&lt;fish_id&gt;</pre></div>
-        </div>
+    <h2>Fish</h2>
+    <div class="note">
+        <b>Note:</b> The fish entity does <b>not</b> store <code>account_key</code> or analytics data (count, age, etc). Mapping between <code>account_key</code> and fish is maintained in a separate <b>fish_mapping</b> collection. Analytics (batches, age, etc.) are stored in <b>fish_analytics</b> and also reference <code>account_key</code>.
     </div>
-    <div class="section">
-        <h2>Pond</h2>
-        <div class="endpoint">
-            <h3>POST /pond/</h3>
-            <div class="fields"><strong>Fields:</strong> pond_name, location, size, water_type, account_key, [dynamic fields]</div>
-            <div class="curl"><pre>curl -X POST http://localhost:5000/pond/ \
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /fish/create</div>
+        <div class="desc">Create a new fish entity (static attributes only). <b>Do not</b> include <code>account_key</code>, <code>count</code>, or <code>fish_age_in_month</code> in the request body. The mapping is handled automatically. Use the <b>/fish/</b> endpoint below to add fish to the pool and record analytics.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>common_name</td><td>string</td><td>Yes</td><td>Common name of the fish</td></tr>
+            <tr><td>scientific_name</td><td>string</td><td>Yes</td><td>Scientific name of the fish</td></tr>
+            <tr><td>species_code</td><td>string</td><td>No</td><td>Unique code for the species (auto-generated if omitted)</td></tr>
+            <tr><td>[dynamic fields]</td><td></td><td>No</td><td>Any additional fish attributes</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/fish/create \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -d '{ "common_name": "Catfish", "scientific_name": "Siluriformes" }'</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /fish/</div>
+        <div class="desc">Add a batch of fish to the pool for a given fish entity. This endpoint records analytics (count, age, etc.) for a specific fish species and account.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>species_code</td><td>string</td><td>Yes</td><td>Species code of the fish (must exist)</td></tr>
+            <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish in this batch</td></tr>
+            <tr><td>fish_age_in_month</td><td>int</td><td>Yes</td><td>Age (in months) of fish in this batch</td></tr>
+            <tr><td>[other fields]</td><td></td><td>No</td><td>Any additional batch/analytics fields</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/fish/ \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -d '{ "species_code": "CF001", "count": 1000, "fish_age_in_month": 3 }'</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-get">GET</span> /fish/</div>
+        <div class="desc">Retrieve a list of fish entities mapped to the current user's <code>account_key</code>. Mapping is handled via the <b>fish_mapping</b> collection. Analytics are joined from <b>fish_analytics</b>.</div>
+        <table class="fields-table">
+            <tr><th>Query Param</th><th>Type</th><th>Description</th></tr>
+            <tr><td>from_date</td><td>string (ISO)</td><td>Filter fish added after this date (created_at)</td></tr>
+            <tr><td>to_date</td><td>string (ISO)</td><td>Filter fish added before this date (created_at)</td></tr>
+            <tr><td>min_size</td><td>float</td><td>Minimum size (cm)</td></tr>
+            <tr><td>max_size</td><td>float</td><td>Maximum size (cm)</td></tr>
+            <tr><td>min_weight</td><td>float</td><td>Minimum weight (kg)</td></tr>
+            <tr><td>max_weight</td><td>float</td><td>Maximum weight (kg)</td></tr>
+            <tr><td>min_count</td><td>int</td><td>Minimum batch count</td></tr>
+            <tr><td>max_count</td><td>int</td><td>Maximum batch count</td></tr>
+            <tr><td>common_name</td><td>string</td><td>Filter by common name</td></tr>
+            <tr><td>scientific_name</td><td>string</td><td>Filter by scientific name</td></tr>
+            <tr><td>species_code</td><td>string</td><td>Filter by species code</td></tr>
+            <tr><td>min_age</td><td>int</td><td>Minimum current age (months, across all batches, analytics)</td></tr>
+            <tr><td>max_age</td><td>int</td><td>Maximum current age (months, across all batches, analytics)</td></tr>
+        </table>
+        <div class="note">
+            <b>Response includes:</b>
+            <ul>
+                <li><b>analytics.total_fish</b>: Total number of fish (all batches, from analytics collection)</li>
+                <li><b>analytics.age_analytics</b>: Map of current age (months) to number of fish (e.g., <code>{9: 1000, 12: 500}</code>)</li>
+                <li><b>analytics.batches</b>: Array of batch records with count, fish_age_in_month, and date_added</li>
+            </ul>
+        </div>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET "http://localhost:5000/fish/?min_age=9&max_age=12&min_weight=1.0&max_weight=2.5" \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-put">PUT</span> /fish/&lt;fish_id&gt;</div>
+        <div class="desc">Update details of an existing fish. Optionally add a new batch.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+            <tr><td>count</td><td>int</td><td>Number of fish in new batch (optional)</td></tr>
+            <tr><td>fish_age_in_month</td><td>int</td><td>Age (in months) of fish in new batch (optional)</td></tr>
+            <tr><td>[other fields]</td><td></td><td>Any updatable fish fields</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/fish/&lt;fish_id&gt; \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -d '{ "count": 500, "fish_age_in_month": 12 }'</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-delete">DELETE</span> /fish/&lt;fish_id&gt;</div>
+        <div class="desc">Delete a fish record.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+            <tr><td>fish_id</td><td>string</td><td>ID of the fish to be deleted</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/fish/&lt;fish_id&gt; \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-get">GET</span> /fish/fields</div>
+        <div class="desc">Get all available fields in the fish collection (for dynamic filtering/analytics).</div>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/fish/fields \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-get">GET</span> /fish/distinct/&lt;field&gt;</div>
+        <div class="desc">Get all distinct values for a given field.</div>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/fish/distinct/common_name \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-get">GET</span> /fish/stats/&lt;field&gt;</div>
+        <div class="desc">Get min, max, avg for a numeric field (e.g., size, weight, count).</div>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/fish/stats/weight \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+    </div>
+    <h2>Pond</h2>
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /pond/</div>
+        <div class="desc">Create a new pond.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>pond_name</td><td>string</td><td>Yes</td><td>Name of the pond</td></tr>
+            <tr><td>location</td><td>string</td><td>Yes</td><td>Location description</td></tr>
+            <tr><td>size</td><td>string</td><td>Yes</td><td>Size category (e.g., "Small", "Medium", "Large")</td></tr>
+            <tr><td>water_type</td><td>string</td><td>Yes</td><td>Type of water (e.g., "Freshwater", "Saltwater")</td></tr>
+            <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
+            <tr><td>[dynamic fields]</td><td></td><td>No</td><td>Any additional pond attributes</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond/ \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "pond_name": "Main Pond", "location": "Farm 1", "size": "Large", "water_type": "Freshwater", "account_key": "ACC123" }'</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>GET /pond/?account_key=xxx</h3>
-            <div class="fields"><strong>Fields Returned:</strong> ponds: [pond objects]</div>
-            <div class="curl"><pre>curl -X GET "http://localhost:5000/pond/?account_key=ACC123" \
-  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>GET /pond/&lt;pond_id&gt;</h3>
-            <div class="fields"><strong>Fields Returned:</strong> pond (all fields), events (list), analytics (object)</div>
-            <div class="curl"><pre>curl -X GET http://localhost:5000/pond/&lt;pond_id&gt; \
-  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>PUT /pond/&lt;pond_id&gt;</h3>
-            <div class="fields"><strong>Fields:</strong> Any updatable pond field</div>
-            <div class="curl"><pre>curl -X PUT http://localhost:5000/pond/&lt;pond_id&gt; \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{ ...fields... }'</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>DELETE /pond/&lt;pond_id&gt;</h3>
-            <div class="curl"><pre>curl -X DELETE http://localhost:5000/pond/&lt;pond_id&gt; \
-  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>POST /pond/&lt;pond_id&gt;/event</h3>
-            <div class="fields"><strong>Fields:</strong> fish_id, action ("add" or "remove"), count, date</div>
-            <div class="curl"><pre>curl -X POST http://localhost:5000/pond/&lt;pond_id&gt;/event \
-  -H "Authorization: Bearer ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{ "fish_id": "FISH123", "action": "add", "count": 10, "date": "2025-12-05" }'</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>GET /pond/&lt;pond_id&gt;/events</h3>
-            <div class="fields"><strong>Fields Returned:</strong> events: [event objects]</div>
-            <div class="curl"><pre>curl -X GET http://localhost:5000/pond/&lt;pond_id&gt;/events \
-  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-        </div>
     </div>
-    <div class="section">
-        <h2>Messaging & Notification (Socket.io)</h2>
-        <div class="endpoint">
-            <h3>Connect with JWT token (access_token or refresh_token)</h3>
-            <div class="fields"><strong>Fields:</strong> Authorization header: Bearer ACCESS_TOKEN or Bearer REFRESH_TOKEN</div>
-            <div class="curl"><pre>const socket = io("http://localhost:5000", {
+    <div class="card">
+        <div class="endpoint"><span class="method method-get">GET</span> /pond/</div>
+        <div class="desc">Retrieve a list of ponds with optional filters.</div>
+        <table class="fields-table">
+            <tr><th>Query Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>pond_name</td><td>string</td><td>No</td><td>Filter by pond name</td></tr>
+            <tr><td>location</td><td>string</td><td>No</td><td>Filter by location</td></tr>
+            <tr><td>size</td><td>string</td><td>No</td><td>Filter by size</td></tr>
+            <tr><td>water_type</td><td>string</td><td>No</td><td>Filter by water type</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET "http://localhost:5000/pond/?size=Large&location=Farm%201" \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-put">PUT</span> /pond/&lt;pond_id&gt;</div>
+        <div class="desc">Update details of an existing pond.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>pond_name</td><td>string</td><td>No</td><td>Name of the pond</td></tr>
+            <tr><td>location</td><td>string</td><td>No</td><td>Location description</td></tr>
+            <tr><td>size</td><td>string</td><td>No</td><td>Size category</td></tr>
+            <tr><td>water_type</td><td>string</td><td>No</td><td>Type of water</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/pond/&lt;pond_id&gt; \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "pond_name": "Updated Pond Name", "size": "Medium" }'</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-delete">DELETE</span> /pond/&lt;pond_id&gt;</div>
+        <div class="desc">Delete a pond.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>pond_id</td><td>string</td><td>Yes</td><td>ID of the pond to be deleted</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/pond/&lt;pond_id&gt; \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+    </div>
+    <h2>Pond Events</h2>
+    <div class="note">
+        Pond events track all activities (adding, selling, sampling, removing, shifting fish). Each event updates the <b>pond_events</b> collection and also updates the <b>metadata</b> field in the related pond in the <b>ponds</b> collection:<br>
+        <code>metadata: { total_fish, fish_types, last_activity }</code><br>
+        <b>Supported event types:</b> <code>add</code>, <code>sell</code>, <code>sample</code>, <code>remove</code>, <code>shift_in</code>, <code>shift_out</code>.
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/add</div>
+        <div class="desc">Add fish to a pond. Updates metadata (total_fish, fish_types, last_activity).</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
+            <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish added</td></tr>
+            <tr><td>details</td><td>object</td><td>No</td><td>Additional event details</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/add \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "fish_id": "FISH123", "count": 500 }'</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/sell</div>
+        <div class="desc">Sell fish from a pond. Updates metadata (total_fish, fish_types, last_activity).</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
+            <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish sold</td></tr>
+            <tr><td>details</td><td>object</td><td>No</td><td>Additional event details (e.g., buyer info)</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/sell \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "fish_id": "FISH123", "count": 200, "details": { "buyer": "John" } }'</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/sample</div>
+        <div class="desc">Sample (remove for testing/analysis) fish from a pond. Updates metadata.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
+            <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish sampled</td></tr>
+            <tr><td>details</td><td>object</td><td>No</td><td>Additional event details</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/sample \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "fish_id": "FISH123", "count": 10 }'</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/remove</div>
+        <div class="desc">Remove (dead/lost) fish from a pond. Updates metadata.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
+            <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish removed</td></tr>
+            <tr><td>details</td><td>object</td><td>No</td><td>Additional event details</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/remove \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "fish_id": "FISH123", "count": 5 }'</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/shift_in</div>
+        <div class="desc">Shift fish into this pond from another pond. Updates metadata.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
+            <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish shifted in</td></tr>
+            <tr><td>details</td><td>object</td><td>No</td><td>Additional event details (e.g., from_pond_id)</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/shift_in \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "fish_id": "FISH123", "count": 100, "details": { "from_pond_id": "ACC123-002" } }'</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/shift_out</div>
+        <div class="desc">Shift fish out of this pond to another pond. Updates metadata.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
+            <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish shifted out</td></tr>
+            <tr><td>details</td><td>object</td><td>No</td><td>Additional event details (e.g., to_pond_id)</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/shift_out \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "fish_id": "FISH123", "count": 100, "details": { "to_pond_id": "ACC123-002" } }'</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-get">GET</span> /pond_event/&lt;pond_id&gt;/events</div>
+        <div class="desc">Get all events for a pond.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>pond_id</td><td>string</td><td>Yes</td><td>ID of the pond</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/pond_event/ACC123-001/events \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+    </div>
+    <div class="card">
+        <div class="endpoint"><span class="method method-delete">DELETE</span> /pond_event/&lt;pond_id&gt;/events/&lt;event_id&gt;</div>
+        <div class="desc">Delete a specific pond event.</div>
+        <table class="fields-table">
+            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>pond_id</td><td>string</td><td>Yes</td><td>ID of the pond</td></tr>
+            <tr><td>event_id</td><td>string</td><td>Yes</td><td>ID of the event</td></tr>
+        </table>
+        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/pond_event/ACC123-001/events/65a1b2c3d4e5f6a7b8c9d0e1 \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+    </div>
+    <h2>Messaging & Notification (Socket.io)</h2>
+    <div class="card">
+        <div class="endpoint">Connect with JWT token (access_token or refresh_token)</div>
+        <div class="desc">Establish a WebSocket connection for real-time messaging and notifications.</div>
+        <table class="fields-table">
+            <tr><th>Header</th><th>Type</th><th>Required</th><th>Description</th></tr>
+            <tr><td>Authorization</td><td>string</td><td>Yes</td><td>Bearer ACCESS_TOKEN or REFRESH_TOKEN</td></tr>
+        </table>
+        <div class="curl"><strong>JavaScript Example:</strong><br><pre>const socket = io("http://localhost:5000", {
   extraHeaders: {
     Authorization: "Bearer ACCESS_TOKEN_OR_REFRESH_TOKEN"
   }
 });</pre></div>
-        </div>
-        <div class="endpoint">
-            <h3>Events</h3>
-            <div class="fields"><strong>send_message:</strong> { to_user_key, message, from_user_key }<br><strong>broadcast_notification:</strong> { account_key, notification, from_user_key, user_keys? }<br><strong>receive_message, receive_notification:</strong> delivered to client</div>
-        </div>
-        <div class="note">All notifications/messages are persisted and delivered to online/offline users.</div>
     </div>
-    <div class="section">
-        <h2>Error Handling</h2>
-        <div class="note">All APIs return <code>{ success: false, error: "..." }</code> for errors.<br>Auth required for protected endpoints (401 Unauthorized if missing/invalid).</div>
+    <div class="card">
+        <div class="endpoint">Events</div>
+        <div class="desc">Available events for messaging:</div>
+        <table class="fields-table">
+            <tr><th>Event</th><th>Data</th><th>Description</th></tr>
+            <tr><td>send_message</td><td>{ to_user_key, message, from_user_key }</td><td>Send a message to a user</td></tr>
+            <tr><td>broadcast_notification</td><td>{ account_key, notification, from_user_key, user_keys? }</td><td>Broadcast a notification to users</td></tr>
+            <tr><td>receive_message</td><td>{ from_user_key, message }</td><td>Receive a message (delivered to client)</td></tr>
+            <tr><td>receive_notification</td><td>{ from_user_key, notification }</td><td>Receive a notification (delivered to client)</td></tr>
+        </table>
+    </div>
+    <div class="note">All notifications/messages are persisted and delivered to online/offline users.</div>
+    <h2>Error Handling</h2>
+    <div class="card">
+        <div class="endpoint">Error Response</div>
+        <div class="desc">All APIs return <code>{ success: false, error: "..." }</code> for errors. Auth required for protected endpoints (401 Unauthorized if missing/invalid).</div>
+        <div class="example"><strong>Example Error Response:</strong><br><pre>{
+  "success": false,
+  "error": "Missing or invalid token"
+}</pre></div>
     </div>
 </div>
 </body>
 </html>
-
