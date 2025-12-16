@@ -3,9 +3,13 @@ from fin_server.repository.pond_event_repository import PondEventRepository
 from fin_server.repository.pond_repository import PondRepository
 from fin_server.repository.fish_analytics_repository import FishAnalyticsRepository
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
-from fin_server.security.authentication import AuthSecurity, UnauthorizedError
+from fin_server.security.authentication import UnauthorizedError
+from fin_server.utils.helpers import respond_error, respond_success, get_request_payload
 from bson import ObjectId
 from datetime import datetime, timezone
+
+from fin_server.repository.fish_activity_repository import FishActivityRepository
+from fin_server.utils.validation import validate_pond_event_payload
 
 pond_event_bp = Blueprint('pond_event', __name__, url_prefix='/pond_event')
 
@@ -13,59 +17,51 @@ pond_event_repository = PondEventRepository()
 pond_repository = PondRepository()
 fish_analytics_repository = FishAnalyticsRepository()
 fish_mapping_repo = MongoRepositorySingleton.get_instance().fish_mapping
-
-def get_auth_payload():
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        raise UnauthorizedError('Missing or invalid token')
-    token = auth_header.split(' ', 1)[1]
-    return AuthSecurity.decode_token(token)
+fish_activity_repo = FishActivityRepository()
 
 def update_pond_metadata(pond_id, fish_id, count, event_type):
-    pond = pond_repository.get_pond(pond_id)
-    if not pond:
-        return
-    meta = pond.get('metadata', {})
-    fish_types = meta.get('fish_types', {})
-    total_fish = meta.get('total_fish', 0)
-    # Update fish_types and total_fish based on event_type
-    if event_type in ['add', 'shift_in']:
-        fish_types[fish_id] = fish_types.get(fish_id, 0) + count
-        total_fish += count
-    elif event_type in ['remove', 'sell', 'sample', 'shift_out']:
-        fish_types[fish_id] = max(0, fish_types.get(fish_id, 0) - count)
-        total_fish = max(0, total_fish - count)
-    # Clean up zero-count fish
-    fish_types = {k: v for k, v in fish_types.items() if v > 0}
-    meta['fish_types'] = fish_types
-    meta['total_fish'] = total_fish
-    meta['last_activity'] = {
-        'event_type': event_type,
-        'fish_id': fish_id,
-        'count': count,
-        'timestamp': datetime.now(timezone.utc).isoformat()
-    }
-    pond_repository.update({'pond_id': pond_id}, {'metadata': meta})
+    # Use repository atomic helper for clarity
+    try:
+        inc_amount = -int(count) if event_type in ['remove', 'sell', 'sample', 'shift_out'] else int(count)
+        inc_fields = { 'metadata.total_fish': inc_amount, f'metadata.fish_types.{fish_id}': inc_amount }
+        last_activity = {
+            'event_type': event_type,
+            'fish_id': fish_id,
+            'count': count,
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        }
+        pond_repository.atomic_update_metadata(pond_id, inc_fields=inc_fields, set_fields={'metadata.last_activity': last_activity})
+        # Best-effort cleanup: remove negative/zero counts
+        try:
+            pond = pond_repository.get_pond(pond_id)
+            if pond:
+                fish_types = (pond.get('metadata') or {}).get('fish_types', {})
+                to_unset = {f'metadata.fish_types.{k}': '' for k, v in fish_types.items() if v <= 0}
+                if to_unset:
+                    pond_repository.atomic_update_metadata(pond_id, unset_fields=to_unset)
+        except Exception:
+            current_app.logger.exception('Failed cleanup of zero-count fish_types')
+    except Exception:
+        current_app.logger.exception('Failed atomic update of pond metadata')
 
 def update_fish_analytics_and_mapping(account_key, fish_id, count, event_type, fish_age_in_month=None, pond_id=None):
-    # Always ensure mapping exists
-    fish_mapping_repo.update_one(
-        {'account_key': account_key},
-        {'$addToSet': {'fish_ids': fish_id}},
-        upsert=True
-    )
+    # Always ensure mapping exists (use repo helper)
+    try:
+        fish_mapping_repo.add_fish_to_account(account_key, fish_id)
+    except Exception:
+        current_app.logger.exception('Failed to ensure fish mapping')
     # For add/shift_in: add a batch; for remove/sell/sample/shift_out: add negative batch
     event_id = f"{account_key}-{fish_id}-{pond_id}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
     if event_type in ['add', 'shift_in']:
         fish_analytics_repository.add_batch(
             fish_id, int(count), int(fish_age_in_month) if fish_age_in_month is not None else 0,
-            datetime.now(timezone.utc), account_key=account_key, event_id=event_id
+            datetime.now(timezone.utc), account_key=account_key, event_id=event_id, pond_id=pond_id
         )
     elif event_type in ['remove', 'sell', 'sample', 'shift_out']:
         # Store as negative batch for analytics
         fish_analytics_repository.add_batch(
             fish_id, -int(count), int(fish_age_in_month) if fish_age_in_month is not None else 0,
-            datetime.now(timezone.utc), account_key=account_key, event_id=event_id
+            datetime.now(timezone.utc), account_key=account_key, event_id=event_id, pond_id=pond_id
         )
 
 @pond_event_bp.route('/<pond_id>/event/<event_type>', methods=['POST'])
@@ -75,13 +71,19 @@ def pond_event_action(pond_id, event_type):
     """
     current_app.logger.debug(f'POST /pond_event/{pond_id}/event/{event_type} called')
     try:
-        payload = get_auth_payload()
+        payload = get_request_payload(request)
         data = request.get_json(force=True)
+        # validate payload
+        ok, verrors = validate_pond_event_payload(data, event_type)
+        if not ok:
+            return respond_error(verrors, status=400)
         fish_id = data.get('fish_id')
         count = int(data.get('count', 0))
         fish_age_in_month = data.get('fish_age_in_month')
         if not fish_id or count <= 0:
-            return jsonify({'success': False, 'error': 'fish_id and positive count required'}), 400
+            return respond_error(verrors, status=400)
+        # log sanitized event info
+        current_app.logger.info(f'PondEvent: account={payload.get("account_key")}, user={payload.get("user_key")}, pond={pond_id}, event={event_type}, fish={fish_id}, count={count}')
         # Log event
         event_doc = {
             'pond_id': pond_id,
@@ -95,40 +97,144 @@ def pond_event_action(pond_id, event_type):
         if fish_age_in_month is not None:
             event_doc['fish_age_in_month'] = fish_age_in_month
         result = pond_event_repository.create(event_doc)
+        current_app.logger.info(f'PondEvent created id={result.inserted_id} for pond={pond_id} event={event_type}')
         # Update pond metadata
         update_pond_metadata(pond_id, fish_id, count, event_type)
         # Update fish analytics and mapping
         account_key = payload.get('account_key')
         update_fish_analytics_and_mapping(account_key, fish_id, count, event_type, fish_age_in_month, pond_id)
-        return jsonify({'success': True, 'event_id': str(result.inserted_id)}), 201
+        # Record fish activity details for sample/add events
+        try:
+            if event_type in ['sample', 'add']:
+                samples = data.get('samples') if isinstance(data.get('samples'), list) else None
+                activity_doc = {
+                    'account_key': account_key,
+                    'pond_id': pond_id,
+                    'fish_id': fish_id,
+                    'event_type': event_type,
+                    'count': count,
+                    'user_key': payload.get('user_key'),
+                    'details': data.get('details', {}),
+                    'samples': samples
+                }
+                fish_activity_repo.create(activity_doc)
+        except Exception:
+            current_app.logger.exception('Failed to record fish activity')
+        return respond_success({'event_id': str(result.inserted_id)}, status=201)
     except UnauthorizedError as e:
-        return jsonify({'success': False, 'error': str(e)}), 401
+        return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception(f'Exception in pond_event_action: {e}')
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 @pond_event_bp.route('/<pond_id>/events', methods=['GET'])
 def get_pond_events(pond_id):
     current_app.logger.debug('GET /pond_event/%s/events called', pond_id)
     try:
-        payload = get_auth_payload()
+        _ = get_request_payload(request)
         events = pond_event_repository.get_events_by_pond(pond_id)
-        return jsonify({'success': True, 'events': events}), 200
+        return respond_success({'events': events})
     except UnauthorizedError as e:
-        return jsonify({'success': False, 'error': str(e)}), 401
+        return respond_error(str(e), status=401)
     except Exception as e:
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        current_app.logger.exception('Exception in get_pond_events')
+        return respond_error('Server error', status=500)
 
 @pond_event_bp.route('/<pond_id>/events/<event_id>', methods=['DELETE'])
 def delete_pond_event(pond_id, event_id):
     current_app.logger.debug('DELETE /pond_event/%s/events/%s called', pond_id, event_id)
     try:
-        payload = get_auth_payload()
+        _ = get_request_payload(request)
         result = pond_event_repository.delete(ObjectId(event_id))
         if result.deleted_count == 0:
-            return jsonify({'success': False, 'error': 'Event not found'}), 404
-        return jsonify({'success': True, 'deleted': True}), 200
+            return respond_error('Event not found', status=404)
+        return respond_success({'deleted': True})
     except UnauthorizedError as e:
-        return jsonify({'success': False, 'error': str(e)}), 401
+        return respond_error(str(e), status=401)
     except Exception as e:
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        current_app.logger.exception('Exception in delete_pond_event')
+        return respond_error('Server error', status=500)
+
+# PUT: update an existing pond event and reconcile pond metadata + analytics
+@pond_event_bp.route('/<pond_id>/events/<event_id>', methods=['PUT'])
+def update_pond_event(pond_id, event_id):
+    current_app.logger.debug('PUT /pond_event/%s/events/%s called', pond_id, event_id)
+    try:
+        payload = get_request_payload(request)
+        data = request.get_json(force=True)
+        # Find existing event
+        try:
+            oid = ObjectId(event_id)
+        except Exception:
+            return jsonify({'success': False, 'error': 'Invalid event_id'}), 400
+        old = pond_event_repository.find_one({'_id': oid})
+        if not old:
+            return jsonify({'success': False, 'error': 'Event not found'}), 404
+
+        # Ensure the pond_id matches
+        if str(old.get('pond_id')) != str(pond_id):
+            return jsonify({'success': False, 'error': 'Pond ID mismatch for event'}), 400
+
+        account_key = payload.get('account_key')
+
+        # Compute reversal of old event to undo its effects
+        old_type = old.get('event_type')
+        old_count = int(old.get('count', 0) or 0)
+        old_fish_id = old.get('fish_id')
+        old_age = old.get('fish_age_in_month')
+
+        # Determine inverse event type to revert effects
+        inverse_old = 'remove' if old_type in ['add', 'shift_in'] else 'add'
+        if old_count and old_fish_id:
+            try:
+                # revert old event atomically
+                update_pond_metadata(pond_id, old_fish_id, old_count, inverse_old)
+                update_fish_analytics_and_mapping(account_key, old_fish_id, old_count, inverse_old, old_age, pond_id)
+            except Exception:
+                current_app.logger.exception('Failed to revert old event effects')
+
+        # Prepare new event fields (only allow specific fields to be updated)
+        allowed = ['fish_id', 'count', 'event_type', 'details', 'fish_age_in_month', 'samples']
+        update_fields = {k: v for k, v in data.items() if k in allowed}
+        if not update_fields:
+            return jsonify({'success': False, 'error': 'No updatable fields provided'}), 400
+
+        # Update event document
+        pond_event_repository.update({'_id': oid}, update_fields)
+
+        # Apply new event effects
+        new_type = update_fields.get('event_type', old_type)
+        new_count = int(update_fields.get('count', old_count) or 0)
+        new_fish_id = update_fields.get('fish_id', old_fish_id)
+        new_age = update_fields.get('fish_age_in_month', old_age)
+
+        try:
+            update_pond_metadata(pond_id, new_fish_id, new_count, new_type)
+            update_fish_analytics_and_mapping(account_key, new_fish_id, new_count, new_type, new_age, pond_id)
+        except Exception:
+            current_app.logger.exception('Failed to apply new event effects')
+
+        # If samples or details provided and event is sample/add, record activity
+        try:
+            if new_type in ['sample', 'add']:
+                samples = update_fields.get('samples') if isinstance(update_fields.get('samples'), list) else None
+                activity_doc = {
+                    'account_key': account_key,
+                    'pond_id': pond_id,
+                    'fish_id': new_fish_id,
+                    'event_type': new_type,
+                    'count': new_count,
+                    'user_key': payload.get('user_key'),
+                    'details': update_fields.get('details', {}),
+                    'samples': samples
+                }
+                fish_activity_repo.create(activity_doc)
+        except Exception:
+            current_app.logger.exception('Failed to record activity for updated event')
+
+        return respond_success({'event_id': event_id})
+    except UnauthorizedError as e:
+        return respond_error(str(e), status=401)
+    except Exception as e:
+        current_app.logger.exception(f'Exception in update_pond_event: {e}')
+        return respond_error('Server error', status=500)

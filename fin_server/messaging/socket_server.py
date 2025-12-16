@@ -1,122 +1,83 @@
-import socketio
-from flask import Flask
-from fin_server.security.authentication import AuthSecurity
-from fin_server.exception.UnauthorizedError import UnauthorizedError
+from flask_socketio import SocketIO, emit, join_room, leave_room, disconnect
+from flask import request
+from threading import Thread
+from fin_server.repository.mongo_helper import MongoRepositorySingleton
+from fin_server.security.authentication import AuthSecurity, UnauthorizedError
 import logging
-from pymongo import MongoClient
-from fin_server.repository.message_repository import MessageRepository
-from fin_server.repository.notification_repository import NotificationRepository
 
-sio = socketio.Server(async_mode='threading', cors_allowed_origins='*')
-app = Flask(__name__)
+# Flask app should be passed in from server.py
+socketio = SocketIO(async_mode='threading', cors_allowed_origins="*")
 
-message_repository = MessageRepository()
-notification_repository = NotificationRepository()
+notification_queue_repo = MongoRepositorySingleton.get_instance().notification_queue
+user_repo = MongoRepositorySingleton.get_instance().user
 
-connected_users = {}  # user_key: sid
-
-@sio.event
-def connect(sid, environ):
-    token = environ.get('HTTP_AUTHORIZATION')
-    if not token or not token.startswith('Bearer '):
-        return False
-    token = token.split(' ', 1)[1]
+def authenticate_socket(token):
     try:
-        payload = AuthSecurity.decode_any_token(token)
-        user_key = payload.get('user_key')
-        connected_users[user_key] = sid
-        sio.emit('user_connected', {'user_key': user_key}, room=sid)
-        logging.info(f"User {user_key} connected via socket {sid}")
-        # Deliver undelivered messages
-        undelivered_msgs = message_repository.get_undelivered_messages(user_key)
-        for msg in undelivered_msgs:
-            sio.emit('receive_message', {'from_user_key': msg['from_user_key'], 'message': msg['message']}, room=sid)
-            message_repository.mark_as_delivered(msg['_id'])
-        # Deliver undelivered notifications
-        undelivered_notifs = notification_repository.get_undelivered_notifications(user_key)
-        for notif in undelivered_notifs:
-            sio.emit('receive_notification', {'from_user_key': notif.get('from_user_key'), 'notification': notif['notification']}, room=sid)
-            notification_repository.mark_as_delivered(notif['_id'])
-    except UnauthorizedError as e:
-        logging.warning(f"Socket connect failed: {str(e)}")
-        return False
+        payload = AuthSecurity.decode_token(token)
+        return payload
+    except Exception as e:
+        logging.warning(f"Socket authentication failed: {e}")
+        return None
 
-@sio.event
-def disconnect(sid):
-    for user_key, user_sid in list(connected_users.items()):
-        if user_sid == sid:
-            del connected_users[user_key]
-            sio.emit('user_disconnected', {'user_key': user_key}, room=sid)
-            logging.info(f"User {user_key} disconnected from socket {sid}")
-            break
+@socketio.on('connect')
+def handle_connect():
+    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    payload = authenticate_socket(token)
+    if not payload:
+        emit('error', {'error': 'Unauthorized'})
+        disconnect()
+        return
+    user_key = payload.get('user_key')
+    account_key = payload.get('account_key')
+    join_room(user_key)
+    join_room(account_key)
+    emit('connected', {'message': 'Connected to notification service.'})
+    # Send pending notifications
+    pending = notification_queue_repo.get_pending(user_key=user_key)
+    for n in pending:
+        emit('notification', n, room=user_key)
+        notification_queue_repo.mark_sent(n['_id'])
 
-@sio.event
-def send_message(sid, data):
-    # data: {to_user_key, message, from_user_key}
+@socketio.on('send_notification')
+def handle_send_notification(data):
+    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+    payload = authenticate_socket(token)
+    if not payload:
+        emit('error', {'error': 'Unauthorized'})
+        disconnect()
+        return
+    user_key = payload.get('user_key')
+    # Accepts: {to_user_key, message, type}
     to_user_key = data.get('to_user_key')
     message = data.get('message')
-    from_user_key = data.get('from_user_key')
-    if to_user_key in connected_users:
-        sio.emit('receive_message', {'from_user_key': from_user_key, 'message': message}, room=connected_users[to_user_key])
-        # Optionally, mark as delivered in DB if you want to keep history
-        message_repository.save_message(from_user_key, to_user_key, message, delivered=True)
-    else:
-        # Store message for offline delivery
-        message_repository.save_message(from_user_key, to_user_key, message, delivered=False)
-        logging.info(f"User {to_user_key} offline, message queued")
+    notif_type = data.get('type', 'info')
+    notification = {
+        'user_key': to_user_key,
+        'from_user_key': user_key,
+        'message': message,
+        'type': notif_type
+    }
+    notification_queue_repo.enqueue(notification)
+    emit('notification', notification, room=to_user_key)
 
-@sio.event
-def broadcast_notification(sid, data):
-    # data: {account_key, notification, from_user_key, user_keys (optional)}
-    account_key = data.get('account_key')
-    notification = data.get('notification')
-    from_user_key = data.get('from_user_key')
-    user_keys = data.get('user_keys')  # Optional: list of user_keys to notify
-    notified_users = set()
-    # If user_keys provided, use them; else, broadcast to all connected users
-    if user_keys:
-        for user_key in user_keys:
-            if user_key in connected_users:
-                sio.emit('receive_notification', {'from_user_key': from_user_key, 'notification': notification}, room=connected_users[user_key])
-                notification_repository.save_notification({
-                    'account_key': account_key,
-                    'user_key': user_key,
-                    'notification': notification,
-                    'from_user_key': from_user_key,
-                    'delivered': True
-                })
-                notified_users.add(user_key)
-            else:
-                notification_repository.save_notification({
-                    'account_key': account_key,
-                    'user_key': user_key,
-                    'notification': notification,
-                    'from_user_key': from_user_key,
-                    'delivered': False
-                })
-    else:
-        for user_key, user_sid in connected_users.items():
-            sio.emit('receive_notification', {'from_user_key': from_user_key, 'notification': notification}, room=user_sid)
-            notification_repository.save_notification({
-                'account_key': account_key,
-                'user_key': user_key,
-                'notification': notification,
-                'from_user_key': from_user_key,
-                'delivered': True
-            })
-            notified_users.add(user_key)
-        # For offline users, store notification for later delivery
-        # You would need to fetch all user_keys for the account_key from your user repository
-        # Example: offline_user_keys = ...
-        # for user_key in offline_user_keys:
-        #     if user_key not in notified_users:
-        #         notification_repository.save_notification({
-        #             'account_key': account_key,
-        #             'user_key': user_key,
-        #             'notification': notification,
-        #             'from_user_key': from_user_key,
-        #             'delivered': False
-        #         })
+@socketio.on('disconnect')
+def handle_disconnect():
+    pass
 
-# Flask app wrapper for socketio
-application = socketio.WSGIApp(sio, app)
+# Background worker to deliver pending notifications (for offline users)
+def notification_worker():
+    import time
+    while True:
+        # For all users with pending notifications, try to deliver
+        pending = notification_queue_repo.get_pending()
+        for n in pending:
+            user_key = n.get('user_key')
+            if user_key:
+                socketio.emit('notification', n, room=user_key)
+                notification_queue_repo.mark_sent(n['_id'])
+        time.sleep(10)
+
+def start_notification_worker():
+    t = Thread(target=notification_worker, daemon=True)
+    t.start()
+

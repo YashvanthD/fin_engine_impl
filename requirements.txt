@@ -11,12 +11,12 @@ click==8.1.8
 cryptography==46.0.3
 dnspython==2.7.0
 ecdsa==0.19.1
-eventlet==0.40.4
+eventlet
 exceptiongroup==1.3.1
 fastapi==0.123.0
 Flask==3.1.2
 flask-cors==6.0.1
-Flask-SocketIO==5.5.1
+Flask-SocketIO
 greenlet==3.2.4
 h11==0.16.0
 idna==3.11
@@ -30,9 +30,9 @@ pycparser==2.23
 pydantic==2.12.5
 pydantic_core==2.41.5
 pymongo==4.15.4
-python-engineio==4.12.3
+python-engineio
 python-jose==3.5.0
-python-socketio==5.15.0
+python-socketio
 pytz==2025.2
 PyYAML==6.0.3
 requests==2.32.5

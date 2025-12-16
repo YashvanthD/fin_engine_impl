@@ -29,3 +29,20 @@ class PondRepository(BaseRepository):
 
     def get_pond(self, pond_id):
         return self.find_one({'pond_id': pond_id})
+
+    def atomic_update_metadata(self, pond_id, inc_fields=None, set_fields=None, unset_fields=None):
+        """Perform an atomic update on pond metadata using $inc/$set/$unset.
+        inc_fields: dict of fields to increment
+        set_fields: dict of fields to set
+        unset_fields: dict of fields to unset
+        """
+        update = {}
+        if inc_fields:
+            update['$inc'] = inc_fields
+        if set_fields:
+            update['$set'] = set_fields
+        if unset_fields:
+            update['$unset'] = unset_fields
+        if not update:
+            return None
+        return self.collection.update_one({'pond_id': pond_id}, update, upsert=False)

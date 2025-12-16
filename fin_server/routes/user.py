@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 from fin_server.dto.user_dto import UserDTO
+from fin_server.exception import UnauthorizedError
 from fin_server.repository.user_repository import UserRepository
 from fin_server.routes.task import user_repo
 from fin_server.security.authentication import AuthSecurity, get_auth_payload
@@ -241,12 +242,8 @@ def update_help_support():
 @user_bp.route('/list', methods=['GET'])
 def list_users():
     current_app.logger.debug('GET /api/v1/user/list called')
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = get_auth_payload(request)
         account_key = payload.get('account_key')
         if not account_key:
             return jsonify({'success': False, 'error': 'Missing account_key'}), 400
@@ -272,12 +269,8 @@ def list_users():
 @user_bp.route('/account/<account_key>/user/<user_key>', methods=['DELETE'])
 def delete_user(account_key, user_key):
     current_app.logger.debug('DELETE /api/v1/user/account/%s/user/%s called', account_key, user_key)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = get_auth_payload(request)
         roles = payload.get('roles', [])
         if 'admin' not in roles or payload.get('account_key') != account_key:
             return jsonify({'success': False, 'error': 'Unauthorized'}), 403
@@ -286,6 +279,8 @@ def delete_user(account_key, user_key):
             return jsonify({'success': True, 'message': 'User deleted'}), 200
         else:
             return jsonify({'success': False, 'error': 'User not found'}), 404
+    except UnauthorizedError as ue:
+        return jsonify({'success': False, 'error': str(ue)}), 401
     except Exception as e:
         logging.exception('Error in delete_user')
         return jsonify({'success': False, 'error': 'Server error'}), 500

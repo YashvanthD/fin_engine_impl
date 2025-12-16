@@ -375,9 +375,9 @@
         </div>
         <div id="fish-section" class="section-content">
             <div class="note">
-                <b>Note:</b> <b>All fish additions/removals must be performed via a <code>pond_event</code> (see Pond Events section).</b><br>
-                The fish entity does <b>not</b> store <code>account_key</code> or analytics data (count, age, etc). Mapping between <code>account_key</code> and fish is maintained in a separate <b>fish_mapping</b> collection. Analytics (batches, age, etc.) are stored in <b>fish_analytics</b> and also reference <code>account_key</code> and <code>pond_id</code>.<br>
-                <b>To add or remove fish, always use the <code>/pond_event/&lt;pond_id&gt;/event/&lt;event_type&gt;</code> endpoint.</b>
+                <b>Note:</b> You can add analytics batches either using the general <code>/fish/</code> endpoint (POST) or via pond-specific events using <code>/pond_event/&lt;pond_id&gt;/event/&lt;event_type&gt;</code> (both update <b>fish_analytics</b> and <b>fish_mapping</b> where applicable).<br>
+                The fish entity stores static attributes only; mapping between <code>account_key</code> and fish is maintained in the <b>fish_mapping</b> collection. Analytics (batches, age, etc.) are stored in <b>fish_analytics</b> and also reference <code>account_key</code> and <code>pond_id</code> if applicable.<br>
+                <b>Recommendation:</b> Use pond events when the action is tied to a specific pond lifecycle change (add/sell/remove/shift), and use <code>/fish/</code> for quick batch analytics updates not tied to a pond.
             </div>
             <div class="card">
                 <div class="endpoint" onclick="toggleCard('fish-create-card')">
@@ -604,6 +604,43 @@
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
                 </div>
             </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-fish-options-card')">
+                    <button class="collapse-btn" id="pond-fish-options-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /pond/&lt;pond_id&gt;/fish_options
+                </div>
+                <div class="card-content" id="pond-fish-options-card">
+                    <div class="desc">Return fish dropdown options for the given pond/account (mapped fish entities).</div>
+                    <table class="fields-table">
+                        <tr><th>Query Param</th><th>Type</th><th>Description</th></tr>
+                        <tr><td>none</td><td></td><td>Authentication required; returns fish mapped to user's account_key.</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/pond/ACC123-001/fish_options \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-history-card')">
+                    <button class="collapse-btn" id="pond-history-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /pond/&lt;pond_id&gt;/history
+                </div>
+                <div class="card-content" id="pond-history-card">
+                    <div class="desc">Consolidated history for the pond: returns pond events, sample activities and related analytics. Supports filtering and pagination.</div>
+                    <table class="fields-table">
+                        <tr><th>Query Param</th><th>Type</th><th>Description</th></tr>
+                        <tr><td>start_date</td><td>string (ISO)</td><td>Start of time range filter</td></tr>
+                        <tr><td>end_date</td><td>string (ISO)</td><td>End of time range filter</td></tr>
+                        <tr><td>species_code</td><td>string</td><td>Filter to a single species</td></tr>
+                        <tr><td>include_events</td><td>bool</td><td>Include pond events (default true)</td></tr>
+                        <tr><td>include_activities</td><td>bool</td><td>Include fish activity/sample records (default true)</td></tr>
+                        <tr><td>include_analytics</td><td>bool</td><td>Include batch analytics for species (default true)</td></tr>
+                        <tr><td>limit</td><td>int</td><td>Page size (default 100)</td></tr>
+                        <tr><td>skip</td><td>int</td><td>Offset for pagination (default 0)</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET "http://localhost:5000/pond/ACC123-001/history?start_date=2025-01-01T00:00:00&end_date=2025-12-31T23:59:59&limit=50" \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
         </div>
     </div>
     <div class="section">
@@ -760,6 +797,29 @@
                     </table>
                     <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/pond_event/ACC123-001/events/65a1b2c3d4e5f6a7b8c9d0e1 \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-event-update-card')">
+                    <button class="collapse-btn" id="pond-event-update-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-put">PUT</span> /pond_event/&lt;pond_id&gt;/events/&lt;event_id&gt;
+                </div>
+                <div class="card-content" id="pond-event-update-card">
+                    <div class="desc">Update an existing pond event. The API will reconcile pond metadata and analytics by reversing the old event then applying the new values. Useful for correcting mistakes (e.g., changed count, moved fish to another species, changed event type such as 'sell' -> 'remove').</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>fish_id</td><td>string</td><td>No</td><td>New fish species code (if changing)</td></tr>
+                        <tr><td>count</td><td>int</td><td>No</td><td>New count for the event</td></tr>
+                        <tr><td>event_type</td><td>string</td><td>No</td><td>New event type (add, sell, sample, remove, shift_in, shift_out)</td></tr>
+                        <tr><td>fish_age_in_month</td><td>int</td><td>No</td><td>Age in months for analytics</td></tr>
+                        <tr><td>details</td><td>object</td><td>No</td><td>Updated details object</td></tr>
+                        <tr><td>samples</td><td>array</td><td>No</td><td>Updated samples array (will be stored in fish_activity if relevant)</td></tr>
+                    </table>
+                    <div class="note">Behavior: the server attempts to revert the old event's effects (metadata and analytics) and then applies the new event. If samples are provided for 'sample' or 'add' events they'll be recorded in <b>fish_activity</b>.</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/pond_event/ACC123-001/events/65a1b2c3d4e5f6a7b8c9d0e1 \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "count": 20, "event_type": "sell", "details": {"buyer":"FarmTrader"} }'</pre></div>
                 </div>
             </div>
         </div>

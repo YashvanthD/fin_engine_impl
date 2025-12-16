@@ -2,8 +2,6 @@ from pymongo import MongoClient
 import os
 import logging
 
-from fin_server.repository.fish_mapping_repository import FishMappingRepository
-
 
 class MongoRepositorySingleton:
     _instance = None
@@ -61,6 +59,7 @@ class MongoRepositorySingleton:
         from fin_server.repository.task_repository import TaskRepository
         from fin_server.repository.message_repository import MessageRepository
         from fin_server.repository.notification_repository import NotificationRepository
+        from fin_server.repository.notification_queue_repository import NotificationQueueRepository
         from .fish_mapping_repository import FishMappingRepository
 
         db = self.get_db()
@@ -71,4 +70,31 @@ class MongoRepositorySingleton:
         self.task = TaskRepository(db)
         self.message = MessageRepository(db)
         self.notification = NotificationRepository(db)
+        # fish_mapping repository expects an already-created collection
         self.fish_mapping = FishMappingRepository(self.get_collection('fish_mapping', db))
+        # NotificationQueueRepository expects a db instance (it will fetch/create its collection)
+        self.notification_queue = NotificationQueueRepository(db)
+        current_app_logger = logging.getLogger('fin_server.mongo_helper')
+        current_app_logger.debug('Initialized notification_queue repository with DB instance')
+        # Ensure recommended indexes for performance
+        try:
+            self._ensure_indexes(db)
+        except Exception as e:
+            logging.exception(f'Failed to ensure DB indexes: {e}')
+
+    def _ensure_indexes(self, db):
+        """Create recommended indexes used by query paths (idempotent)."""
+        try:
+            # pond_events: quick lookup by pond_id and created_at
+            db['pond_events'].create_index([('pond_id', 1), ('created_at', -1)], name='pond_events_pond_created_at')
+            # fish_activity: pond + fish + created_at
+            db['fish_activity'].create_index([('pond_id', 1), ('fish_id', 1), ('created_at', -1)], name='fish_activity_pond_fish_created_at')
+            # fish_analytics: species and account + date
+            db['fish_analytics'].create_index([('species_id', 1), ('account_key', 1), ('date_added', -1)], name='fish_analytics_species_account_date')
+            # fish_mapping: account_key
+            db['fish_mapping'].create_index([('account_key', 1)], unique=True, name='fish_mapping_account_key')
+            # ponds: pond_id
+            db['ponds'].create_index([('pond_id', 1)], unique=True, name='ponds_pond_id')
+            logging.info('Ensured recommended DB indexes')
+        except Exception as e:
+            logging.exception(f'Error creating indexes: {e}')

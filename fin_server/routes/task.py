@@ -1,29 +1,24 @@
-from flask import Blueprint, request, jsonify, current_app
-
+from flask import Blueprint, request, current_app
 from fin_server.repository.task_repository import TaskRepository
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
-from fin_server.security.authentication import AuthSecurity, UnauthorizedError, get_auth_payload
+from fin_server.security.authentication import UnauthorizedError
 from fin_server.utils.generator import resolve_user, get_default_task_date, get_default_end_date
+from fin_server.utils.helpers import get_request_payload, respond_error, respond_success
 from pytz import timezone
-import logging
 import time
+import logging
 from datetime import datetime
 
+task_repo = TaskRepository()
 repo = MongoRepositorySingleton.get_instance()
 user_repo = repo.user
-task_repo = TaskRepository()
-
 
 task_bp = Blueprint('task', __name__, url_prefix='/task')
 
 @task_bp.route('/', methods=['POST'])
 def create_task():
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = get_request_payload(request)
         user_key = payload.get('user_key')
         account_key = payload.get('account_key')
         roles = payload.get('roles', [])
@@ -39,11 +34,11 @@ def create_task():
         else:
             assigned_user = resolve_user(assigned_to_input, account_key)
         if not assigned_user:
-            return jsonify({'success': False, 'error': 'Assigned user does not exist'}), 404
+            return respond_error('Assigned user does not exist', status=404)
         assigned_to = assigned_user['user_key']
         # Allow self-assignment for any user
         if assigned_to != user_key and 'admin' not in roles:
-            return jsonify({'success': False, 'error': 'Only admin can assign tasks to other users'}), 403
+            return respond_error('Only admin can assign tasks to other users', status=403)
         # Set default task_date as current date if not provided
         task_date = data.get('task_date')
         if not task_date:
@@ -122,21 +117,17 @@ def create_task():
         except Exception:
             pass
         task_id = task_repo.create_task(task_data)
-        current_app.logger.info(f'Task created with id: {task_id}')
-        return jsonify({'success': True, 'task_id': task_id}), 201
+        current_app.logger.info(f'Task created with id: {task_id}, account={account_key}, user={user_key}')
+        return respond_success({'task_id': task_id}, status=201)
     except Exception as e:
         logging.exception("Error in create_task")
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 @task_bp.route('/', methods=['GET'])
 def get_tasks():
     current_app.logger.debug('GET /task/ called with args: %s', request.args)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = get_request_payload(request)
         user_key = payload.get('user_key')
         query = request.args.to_dict()
         query['user_key'] = user_key
@@ -180,21 +171,17 @@ def get_tasks():
             else:
                 meta['unread'] += 1
             task_objs.append(t)
-        return jsonify({'success': True, 'meta': meta, 'tasks': task_objs}), 200
+        return respond_success({'meta': meta, 'tasks': task_objs})
     except UnauthorizedError as e:
-        return jsonify({'success': False, 'error': str(e)}), 401
+        return respond_error(str(e), status=401)
     except Exception as e:
         logging.exception("Error in get_tasks")
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 @task_bp.route('/<task_id>', methods=['PUT'])
 def update_task(task_id):
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = get_request_payload(request)
         user_key = payload.get('user_key')
         account_key = payload.get('account_key')
         roles = payload.get('roles', [])
@@ -203,19 +190,19 @@ def update_task(task_id):
         update_fields.pop('_id', None)  # Remove immutable _id field before update
         task = task_repo.get_task(task_id)
         if not task:
-            return jsonify({'success': False, 'error': 'Task not found'}), 404
+            return respond_error('Task not found', status=404)
         new_assignee_input = update_fields.get('assignee') or update_fields.get('assigned_to')
         if new_assignee_input and new_assignee_input != task.get('assignee', task.get('assigned_to')):
             assigned_user = resolve_user(new_assignee_input, account_key)
             if not assigned_user:
-                return jsonify({'success': False, 'error': 'Assigned user does not exist'}), 404
+                return respond_error('Assigned user does not exist', status=404)
             new_assignee = assigned_user['user_key']
             # Allow self-assignment for any user
             if new_assignee != user_key:
                 if 'admin' not in roles:
                     admin_user = user_repo.find_one('users', {'roles': {'$in': ['admin']}, 'account_key': account_key})
                     if not admin_user or new_assignee != admin_user['user_key'] or task.get('assignee', task.get('assigned_to')) != user_key:
-                        return jsonify({'success': False, 'error': 'Only admin can assign to other users, or user can reassign their own task to admin'}), 403
+                        return respond_error('Only admin can assign to other users, or user can reassign their own task to admin', status=403)
             history = task.get('history', [])
             history.append({
                 'from': task.get('assignee', task.get('assigned_to')),
@@ -229,52 +216,46 @@ def update_task(task_id):
         updated = task_repo.update_task(task_id, update_fields)
         if not updated:
             logging.error(f"Task update failed for task_id={task_id}, user_key={user_key}, update_fields={update_fields}")
-            return jsonify({'success': False, 'error': 'Task update failed'}), 400
+            return respond_error('Task update failed', status=400)
         logging.info(f"Task updated successfully for task_id={task_id}, user_key={user_key}")
-        return jsonify({'success': True, 'updated': True}), 200
+        return respond_success({'updated': True})
     except Exception as e:
         logging.exception("Error in update_task")
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 @task_bp.route('/<task_id>', methods=['DELETE'])
 def delete_task(task_id):
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = get_request_payload(request)
         user_key = payload.get('user_key')
-        deleted = task_repo.delete_task(task_id)
-        return jsonify({'success': True, 'deleted': bool(deleted)}), 200
+        deleted = task_repo.delete(task_id)
+        return respond_success({'deleted': bool(deleted)})
+    except UnauthorizedError as e:
+        return respond_error(str(e), status=401)
     except Exception as e:
         logging.exception("Error in delete_task")
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 @task_bp.route('/<task_id>/move', methods=['POST'])
 def move_task(task_id):
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return jsonify({'success': False, 'error': 'Missing or invalid token'}), 401
-    token = auth_header.split(' ', 1)[1]
     try:
-        payload = AuthSecurity.decode_token(token)
+        payload = get_request_payload(request)
         user_key = payload.get('user_key')
         account_key = payload.get('account_key')
         roles = payload.get('roles', [])
         data = request.get_json(force=True)
         new_assignee_input = data.get('new_assignee')
         if not new_assignee_input:
-            return jsonify({'success': False, 'error': 'Missing new_assignee'}), 400
+            return respond_error('Missing new_assignee', status=400)
         task = task_repo.get_task(task_id)
         if not task:
-            return jsonify({'success': False, 'error': 'Task not found'}), 404
+            return respond_error('Task not found', status=404)
         assigned_user = resolve_user(new_assignee_input, account_key)
         if not assigned_user:
-            return jsonify({'success': False, 'error': 'New assignee does not exist'}), 404
+            return respond_error('New assignee does not exist', status=404)
         new_assignee = assigned_user['user_key']
         if 'admin' not in roles and user_key != task.get('assignee', task.get('assigned_to')):
-            return jsonify({'success': False, 'error': 'Permission denied'}), 403
+            return respond_error('Permission denied', status=403)
         history = task.get('history', [])
         history.append({
             'from': task.get('assignee', task.get('assigned_to')),
@@ -288,7 +269,7 @@ def move_task(task_id):
             'history': history
         }
         updated = task_repo.update_task(task_id, update_fields)
-        return jsonify({'success': True, 'updated': bool(updated)}), 200
+        return respond_success({'updated': bool(updated)})
     except Exception as e:
         logging.exception("Error in move_task")
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
