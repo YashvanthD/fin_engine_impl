@@ -32,7 +32,7 @@ class TaskScheduler:
         next_seconds = now_seconds + self.interval
         today_str = now.strftime('%Y-%m-%d')
         # Find tasks with reminders due in the next interval (seconds), or overdue
-        tasks = task_repository.collection.find({
+        tasks = self.task_repository.collection.find({
             '$or': [
                 {
                     'reminder': True,
