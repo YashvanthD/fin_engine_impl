@@ -11,6 +11,10 @@
         h1 { font-size: 2.3em; margin-bottom: 0.5em; }
         h2 { font-size: 1.5em; margin-top: 2em; }
         h3 { font-size: 1.2em; margin-top: 1.5em; }
+        .section { border-bottom: 1px solid #eee; margin-bottom: 2em; padding-bottom: 2em; }
+        .section-header { display: flex; align-items: center; cursor: pointer; }
+        .collapse-btn { background: #eaf6ff; color: #2a4d7c; border: none; border-radius: 4px; margin-right: 12px; font-size: 1.1em; padding: 2px 10px; cursor: pointer; transition: background 0.2s; }
+        .collapse-btn:focus { outline: 2px solid #2a4d7c; }
         .card { background: #f7fbff; border-radius: 8px; box-shadow: 0 1px 4px #0001; margin-bottom: 2em; padding: 24px 24px 18px 24px; border-left: 6px solid #2a4d7c; }
         .card .endpoint { font-weight: bold; font-size: 1.1em; color: #1a355e; }
         .card .method { display: inline-block; font-size: 0.95em; font-weight: bold; border-radius: 4px; padding: 2px 10px; margin-right: 10px; }
@@ -24,11 +28,36 @@
         .fields-table th { background: #eaf6ff; color: #2a4d7c; }
         .fields-table td { background: #fafdff; }
         .example, .curl { background: #f4f4f4; border-radius: 4px; padding: 10px; font-size: 1em; margin: 0.5em 0 1em 0; }
-        .section { border-bottom: 1px solid #eee; margin-bottom: 2em; padding-bottom: 2em; }
         .note { background: #fffbe6; border-left: 4px solid #ffd700; padding: 8px; margin: 1em 0; }
         .tag { display: inline-block; background: #eaf6ff; color: #2a4d7c; border-radius: 4px; padding: 2px 8px; font-size: 0.95em; margin-right: 6px; }
+        .card-content { display: block; }
+        .collapsed { display: none !important; }
         @media (max-width: 700px) { .container { padding: 10px; } .card { padding: 12px; } }
     </style>
+    <script>
+        function toggleSection(sectionId) {
+            var content = document.getElementById(sectionId);
+            var btn = document.getElementById(sectionId + '-btn');
+            if (content.classList.contains('collapsed')) {
+                content.classList.remove('collapsed');
+                btn.innerText = '−';
+            } else {
+                content.classList.add('collapsed');
+                btn.innerText = '+';
+            }
+        }
+        function toggleCard(cardId) {
+            var content = document.getElementById(cardId);
+            var btn = document.getElementById(cardId + '-btn');
+            if (content.classList.contains('collapsed')) {
+                content.classList.remove('collapsed');
+                btn.innerText = '−';
+            } else {
+                content.classList.add('collapsed');
+                btn.innerText = '+';
+            }
+        }
+    </script>
 </head>
 <body>
 <div class="container">
@@ -38,510 +67,748 @@
         <strong>Base URL:</strong> <code>http://localhost:5000/</code><br>
         All endpoints use JSON. Authentication is via Bearer token in <code>Authorization</code> header where required.
     </div>
-    <h2>Authentication</h2>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /auth/signup</div>
-        <div class="desc">Register a new admin and company. Requires master password.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>master_password</td><td>string</td><td>Yes</td><td>Master password for admin registration</td></tr>
-            <tr><td>company_name</td><td>string</td><td>Yes</td><td>Name of the company</td></tr>
-            <tr><td>username</td><td>string</td><td>Yes</td><td>Admin username</td></tr>
-            <tr><td>password</td><td>string</td><td>Yes</td><td>Admin password</td></tr>
-            <tr><td>email</td><td>string</td><td>Yes</td><td>Admin email</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/auth/signup \
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('auth-section')">
+            <button class="collapse-btn" id="auth-section-btn" aria-expanded="true">−</button>
+            <h2 style="margin:0;">Authentication</h2>
+        </div>
+        <div id="auth-section" class="section-content">
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('auth-signup-card')">
+                    <button class="collapse-btn" id="auth-signup-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /auth/signup
+                </div>
+                <div class="card-content" id="auth-signup-card">
+                    <div class="desc">Register a new admin and company. Requires master password.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>master_password</td><td>string</td><td>Yes</td><td>Master password for admin registration</td></tr>
+                        <tr><td>company_name</td><td>string</td><td>Yes</td><td>Name of the company</td></tr>
+                        <tr><td>username</td><td>string</td><td>Yes</td><td>Admin username</td></tr>
+                        <tr><td>password</td><td>string</td><td>Yes</td><td>Admin password</td></tr>
+                        <tr><td>email</td><td>string</td><td>Yes</td><td>Admin email</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/auth/signup \
   -H "Content-Type: application/json" \
   -d '{ "master_password": "YOUR_MASTER_ADMIN_PASSWORD", "company_name": "TaskCircuit", "username": "adminuser", "password": "adminpassword", "email": "admin@example.com" }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /auth/login</div>
-        <div class="desc">Login with username and password to receive access and refresh tokens.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>username</td><td>string</td><td>Yes</td><td>User's username</td></tr>
-            <tr><td>password</td><td>string</td><td>Yes</td><td>User's password</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/auth/login \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('auth-login-card')">
+                    <button class="collapse-btn" id="auth-login-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /auth/login
+                </div>
+                <div class="card-content" id="auth-login-card">
+                    <div class="desc">Login with username and password to receive access and refresh tokens.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>username</td><td>string</td><td>Yes</td><td>User's username</td></tr>
+                        <tr><td>password</td><td>string</td><td>Yes</td><td>User's password</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/auth/login \
   -H "Content-Type: application/json" \
   -d '{ "username": "adminuser", "password": "adminpassword" }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /auth/token</div>
-        <div class="desc">Generate a new access token using a refresh token.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>type</td><td>string</td><td>Yes</td><td>"refresh_token"</td></tr>
-            <tr><td>token</td><td>string</td><td>Yes</td><td>Refresh token</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/auth/token \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('auth-token-card')">
+                    <button class="collapse-btn" id="auth-token-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /auth/token
+                </div>
+                <div class="card-content" id="auth-token-card">
+                    <div class="desc">Generate a new access token using a refresh token.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>type</td><td>string</td><td>Yes</td><td>"refresh_token"</td></tr>
+                        <tr><td>token</td><td>string</td><td>Yes</td><td>Refresh token</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/auth/token \
   -H "Content-Type: application/json" \
   -d '{ "type": "refresh_token", "token": "REFRESH_TOKEN" }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-get">GET</span> /auth/validate</div>
-        <div class="desc">Validate an access or refresh token and get user info.</div>
-        <table class="fields-table">
-            <tr><th>Header</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>Authorization</td><td>string</td><td>Yes</td><td>Bearer ACCESS_TOKEN or REFRESH_TOKEN</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/auth/validate \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('auth-validate-card')">
+                    <button class="collapse-btn" id="auth-validate-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /auth/validate
+                </div>
+                <div class="card-content" id="auth-validate-card">
+                    <div class="desc">Validate an access or refresh token and get user info.</div>
+                    <table class="fields-table">
+                        <tr><th>Header</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>Authorization</td><td>string</td><td>Yes</td><td>Bearer ACCESS_TOKEN or REFRESH_TOKEN</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/auth/validate \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
+        </div>
     </div>
-    <h2>Company</h2>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /company/register</div>
-        <div class="desc">Register a new company and its admin user. Requires master password.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>company_name</td><td>string</td><td>Yes</td><td>Name of the company</td></tr>
-            <tr><td>description</td><td>string</td><td>No</td><td>Company description</td></tr>
-            <tr><td>pincode</td><td>string</td><td>No</td><td>Company pincode</td></tr>
-            <tr><td>number_of_employees</td><td>int</td><td>No</td><td>Number of employees (auto-counted)</td></tr>
-            <tr><td>owner_user_key</td><td>string</td><td>No</td><td>Admin user key (auto-generated)</td></tr>
-            <tr><td>account_key</td><td>string</td><td>No</td><td>Account key (auto-generated)</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/company/register \
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('company-section')">
+            <button class="collapse-btn" id="company-section-btn" aria-expanded="true">−</button>
+            <h2 style="margin:0;">Company</h2>
+        </div>
+        <div id="company-section" class="section-content">
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('company-register-card')">
+                    <button class="collapse-btn" id="company-register-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /company/register
+                </div>
+                <div class="card-content" id="company-register-card">
+                    <div class="desc">Register a new company and its admin user. Requires master password.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>company_name</td><td>string</td><td>Yes</td><td>Name of the company</td></tr>
+                        <tr><td>description</td><td>string</td><td>No</td><td>Company description</td></tr>
+                        <tr><td>pincode</td><td>string</td><td>No</td><td>Company pincode</td></tr>
+                        <tr><td>number_of_employees</td><td>int</td><td>No</td><td>Number of employees (auto-counted)</td></tr>
+                        <tr><td>owner_user_key</td><td>string</td><td>No</td><td>Admin user key (auto-generated)</td></tr>
+                        <tr><td>account_key</td><td>string</td><td>No</td><td>Account key (auto-generated)</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/company/register \
   -H "Content-Type: application/json" \
   -d '{ "company_name": "TaskCircuit", "description": "Fish farm", "pincode": "560001", "username": "adminuser", "password": "adminpassword", "email": "admin@example.com", "master_password": "YOUR_MASTER_ADMIN_PASSWORD" }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-put">PUT</span> /company/&lt;account_key&gt;</div>
-        <div class="desc">Update details of an existing company.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>company_name</td><td>string</td><td>No</td><td>Name of the company</td></tr>
-            <tr><td>description</td><td>string</td><td>No</td><td>Company description</td></tr>
-            <tr><td>pincode</td><td>string</td><td>No</td><td>Company pincode</td></tr>
-            <tr><td>number_of_employees</td><td>int</td><td>No</td><td>Number of employees</td></tr>
-            <tr><td>owner_user_key</td><td>string</td><td>No</td><td>Admin user key</td></tr>
-            <tr><td>account_key</td><td>string</td><td>No</td><td>Account key</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/company/&lt;account_key&gt; \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('company-update-card')">
+                    <button class="collapse-btn" id="company-update-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-put">PUT</span> /company/&lt;account_key&gt;
+                </div>
+                <div class="card-content" id="company-update-card">
+                    <div class="desc">Update details of an existing company.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>company_name</td><td>string</td><td>No</td><td>Name of the company</td></tr>
+                        <tr><td>description</td><td>string</td><td>No</td><td>Company description</td></tr>
+                        <tr><td>pincode</td><td>string</td><td>No</td><td>Company pincode</td></tr>
+                        <tr><td>number_of_employees</td><td>int</td><td>No</td><td>Number of employees</td></tr>
+                        <tr><td>owner_user_key</td><td>string</td><td>No</td><td>Admin user key</td></tr>
+                        <tr><td>account_key</td><td>string</td><td>No</td><td>Account key</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/company/&lt;account_key&gt; \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "company_name": "New Company Name", "description": "Updated description" }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-get">GET</span> /company/&lt;account_key&gt;</div>
-        <div class="desc">Retrieve details of a specific company by account key.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/company/&lt;account_key&gt; \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('company-details-card')">
+                    <button class="collapse-btn" id="company-details-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /company/&lt;account_key&gt;
+                </div>
+                <div class="card-content" id="company-details-card">
+                    <div class="desc">Retrieve details of a specific company by account key.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/company/&lt;account_key&gt; \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('company-public-details-card')">
+                    <button class="collapse-btn" id="company-public-details-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /company/public/&lt;account_key&gt;
+                </div>
+                <div class="card-content" id="company-public-details-card">
+                    <div class="desc">Retrieve public details of a company by account key (no auth required).</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/company/public/&lt;account_key&gt;</pre></div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-get">GET</span> /company/public/&lt;account_key&gt;</div>
-        <div class="desc">Retrieve public details of a company by account key (no auth required).</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/company/public/&lt;account_key&gt;</pre></div>
-    </div>
-    <h2>User</h2>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /auth/account/&lt;account_key&gt;/signup</div>
-        <div class="desc">Create a new user in the company account.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>username</td><td>string</td><td>Yes</td><td>New user's username</td></tr>
-            <tr><td>password</td><td>string</td><td>Yes</td><td>New user's password</td></tr>
-            <tr><td>email</td><td>string</td><td>Yes</td><td>New user's email</td></tr>
-            <tr><td>role</td><td>string</td><td>Yes</td><td>User role (e.g., "worker", "manager")</td></tr>
-            <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/auth/account/&lt;account_key&gt;/signup \
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('user-section')">
+            <button class="collapse-btn" id="user-section-btn" aria-expanded="true">−</button>
+            <h2 style="margin:0;">User</h2>
+        </div>
+        <div id="user-section" class="section-content">
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('user-signup-card')">
+                    <button class="collapse-btn" id="user-signup-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /auth/account/&lt;account_key&gt;/signup
+                </div>
+                <div class="card-content" id="user-signup-card">
+                    <div class="desc">Create a new user in the company account.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>username</td><td>string</td><td>Yes</td><td>New user's username</td></tr>
+                        <tr><td>password</td><td>string</td><td>Yes</td><td>New user's password</td></tr>
+                        <tr><td>email</td><td>string</td><td>Yes</td><td>New user's email</td></tr>
+                        <tr><td>role</td><td>string</td><td>Yes</td><td>User role (e.g., "worker", "manager")</td></tr>
+                        <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/auth/account/&lt;account_key&gt;/signup \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "username": "newuser", "password": "userpassword", "email": "user@example.com", "role": "worker", "account_key": "ACC123" }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-get">GET</span> /auth/account/users</div>
-        <div class="desc">Retrieve a list of users in the company account.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/auth/account/users \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('user-list-card')">
+                    <button class="collapse-btn" id="user-list-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /auth/account/users
+                </div>
+                <div class="card-content" id="user-list-card">
+                    <div class="desc">Retrieve a list of users in the company account.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/auth/account/users \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-delete">DELETE</span> /user/account/&lt;account_key&gt;/user/&lt;user_key&gt;</div>
-        <div class="desc">Delete a user from the company account.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
-            <tr><td>user_key</td><td>string</td><td>Yes</td><td>User key of the user to be deleted</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/user/account/&lt;account_key&gt;/user/&lt;user_key&gt; \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('user-delete-card')">
+                    <button class="collapse-btn" id="user-delete-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-delete">DELETE</span> /user/account/&lt;account_key&gt;/user/&lt;user_key&gt;
+                </div>
+                <div class="card-content" id="user-delete-card">
+                    <div class="desc">Delete a user from the company account.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
+                        <tr><td>user_key</td><td>string</td><td>Yes</td><td>User key of the user to be deleted</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/user/account/&lt;account_key&gt;/user/&lt;user_key&gt; \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
+        </div>
     </div>
-    <h2>Tasks</h2>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /task/</div>
-        <div class="desc">Create a new task.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>title</td><td>string</td><td>Yes</td><td>Title of the task</td></tr>
-            <tr><td>description</td><td>string</td><td>No</td><td>Details about the task</td></tr>
-            <tr><td>assigned_to</td><td>string</td><td>Yes</td><td>User key of the assignee</td></tr>
-            <tr><td>end_date</td><td>string</td><td>No</td><td>Due date for the task (YYYY-MM-DD)</td></tr>
-            <tr><td>status</td><td>string</td><td>No</td><td>Task status (e.g., "pending", "completed")</td></tr>
-            <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/task/ \
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('tasks-section')">
+            <button class="collapse-btn" id="tasks-section-btn" aria-expanded="true">−</button>
+            <h2 style="margin:0;">Tasks</h2>
+        </div>
+        <div id="tasks-section" class="section-content">
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('task-create-card')">
+                    <button class="collapse-btn" id="task-create-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /task/
+                </div>
+                <div class="card-content" id="task-create-card">
+                    <div class="desc">Create a new task.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>title</td><td>string</td><td>Yes</td><td>Title of the task</td></tr>
+                        <tr><td>description</td><td>string</td><td>No</td><td>Details about the task</td></tr>
+                        <tr><td>assigned_to</td><td>string</td><td>Yes</td><td>User key of the assignee</td></tr>
+                        <tr><td>end_date</td><td>string</td><td>No</td><td>Due date for the task (YYYY-MM-DD)</td></tr>
+                        <tr><td>status</td><td>string</td><td>No</td><td>Task status (e.g., "pending", "completed")</td></tr>
+                        <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/task/ \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "title": "Task 1", "assigned_to": "USER123", "account_key": "ACC123" }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-get">GET</span> /task/</div>
-        <div class="desc">Retrieve a list of tasks with optional filters.</div>
-        <table class="fields-table">
-            <tr><th>Query Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>status</td><td>string</td><td>No</td><td>Filter by task status</td></tr>
-            <tr><td>priority</td><td>int</td><td>No</td><td>Filter by task priority</td></tr>
-            <tr><td>end_date</td><td>string</td><td>No</td><td>Filter by end date (YYYY-MM-DD)</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET "http://localhost:5000/task/?status=pending&priority=1" \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('task-list-card')">
+                    <button class="collapse-btn" id="task-list-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /task/
+                </div>
+                <div class="card-content" id="task-list-card">
+                    <div class="desc">Retrieve a list of tasks with optional filters.</div>
+                    <table class="fields-table">
+                        <tr><th>Query Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>status</td><td>string</td><td>No</td><td>Filter by task status</td></tr>
+                        <tr><td>priority</td><td>int</td><td>No</td><td>Filter by task priority</td></tr>
+                        <tr><td>end_date</td><td>string</td><td>No</td><td>Filter by end date (YYYY-MM-DD)</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET "http://localhost:5000/task/?status=pending&priority=1" \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-put">PUT</span> /task/&lt;task_id&gt;</div>
-        <div class="desc">Update an existing task.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>title</td><td>string</td><td>No</td><td>Title of the task</td></tr>
-            <tr><td>description</td><td>string</td><td>No</td><td>Details about the task</td></tr>
-            <tr><td>assigned_to</td><td>string</td><td>No</td><td>User key of the assignee</td></tr>
-            <tr><td>end_date</td><td>string</td><td>No</td><td>Due date for the task (YYYY-MM-DD)</td></tr>
-            <tr><td>status</td><td>string</td><td>No</td><td>Task status (e.g., "pending", "completed")</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/task/&lt;task_id&gt; \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('task-update-card')">
+                    <button class="collapse-btn" id="task-update-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-put">PUT</span> /task/&lt;task_id&gt;
+                </div>
+                <div class="card-content" id="task-update-card">
+                    <div class="desc">Update an existing task.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>title</td><td>string</td><td>No</td><td>Title of the task</td></tr>
+                        <tr><td>description</td><td>string</td><td>No</td><td>Details about the task</td></tr>
+                        <tr><td>assigned_to</td><td>string</td><td>No</td><td>User key of the assignee</td></tr>
+                        <tr><td>end_date</td><td>string</td><td>No</td><td>Due date for the task (YYYY-MM-DD)</td></tr>
+                        <tr><td>status</td><td>string</td><td>No</td><td>Task status (e.g., "pending", "completed")</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/task/&lt;task_id&gt; \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "title": "Updated Task Title", "status": "completed" }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-delete">DELETE</span> /task/&lt;task_id&gt;</div>
-        <div class="desc">Delete a task.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>task_id</td><td>string</td><td>Yes</td><td>ID of the task to be deleted</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/task/&lt;task_id&gt; \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('task-delete-card')">
+                    <button class="collapse-btn" id="task-delete-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-delete">DELETE</span> /task/&lt;task_id&gt;
+                </div>
+                <div class="card-content" id="task-delete-card">
+                    <div class="desc">Delete a task.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>task_id</td><td>string</td><td>Yes</td><td>ID of the task to be deleted</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/task/&lt;task_id&gt; \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
+        </div>
     </div>
-    <h2>Fish</h2>
-    <div class="note">
-        <b>Note:</b> The fish entity does <b>not</b> store <code>account_key</code> or analytics data (count, age, etc). Mapping between <code>account_key</code> and fish is maintained in a separate <b>fish_mapping</b> collection. Analytics (batches, age, etc.) are stored in <b>fish_analytics</b> and also reference <code>account_key</code>.
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /fish/create</div>
-        <div class="desc">Create a new fish entity (static attributes only). <b>Do not</b> include <code>account_key</code>, <code>count</code>, or <code>fish_age_in_month</code> in the request body. The mapping is handled automatically. Use the <b>/fish/</b> endpoint below to add fish to the pool and record analytics.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>common_name</td><td>string</td><td>Yes</td><td>Common name of the fish</td></tr>
-            <tr><td>scientific_name</td><td>string</td><td>Yes</td><td>Scientific name of the fish</td></tr>
-            <tr><td>species_code</td><td>string</td><td>No</td><td>Unique code for the species (auto-generated if omitted)</td></tr>
-            <tr><td>[dynamic fields]</td><td></td><td>No</td><td>Any additional fish attributes</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/fish/create \
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('fish-section')">
+            <button class="collapse-btn" id="fish-section-btn" aria-expanded="true">−</button>
+            <h2 style="margin:0;">Fish</h2>
+        </div>
+        <div id="fish-section" class="section-content">
+            <div class="note">
+                <b>Note:</b> The fish entity does <b>not</b> store <code>account_key</code> or analytics data (count, age, etc). Mapping between <code>account_key</code> and fish is maintained in a separate <b>fish_mapping</b> collection. Analytics (batches, age, etc.) are stored in <b>fish_analytics</b> and also reference <code>account_key</code>.
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('fish-create-card')">
+                    <button class="collapse-btn" id="fish-create-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /fish/create
+                </div>
+                <div class="card-content" id="fish-create-card">
+                    <div class="desc">Create a new fish entity (static attributes only). <b>Do not</b> include <code>account_key</code>, <code>count</code>, or <code>fish_age_in_month</code> in the request body. The mapping is handled automatically. Use the <b>/fish/</b> endpoint below to add fish to the pool and record analytics.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>common_name</td><td>string</td><td>Yes</td><td>Common name of the fish</td></tr>
+                        <tr><td>scientific_name</td><td>string</td><td>Yes</td><td>Scientific name of the fish</td></tr>
+                        <tr><td>species_code</td><td>string</td><td>No</td><td>Unique code for the species (auto-generated if omitted)</td></tr>
+                        <tr><td>[dynamic fields]</td><td></td><td>No</td><td>Any additional fish attributes</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/fish/create \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -d '{ "common_name": "Catfish", "scientific_name": "Siluriformes" }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /fish/</div>
-        <div class="desc">Add a batch of fish to the pool for a given fish entity. This endpoint records analytics (count, age, etc.) for a specific fish species and account.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>species_code</td><td>string</td><td>Yes</td><td>Species code of the fish (must exist)</td></tr>
-            <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish in this batch</td></tr>
-            <tr><td>fish_age_in_month</td><td>int</td><td>Yes</td><td>Age (in months) of fish in this batch</td></tr>
-            <tr><td>[other fields]</td><td></td><td>No</td><td>Any additional batch/analytics fields</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/fish/ \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('fish-add-card')">
+                    <button class="collapse-btn" id="fish-add-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /fish/
+                </div>
+                <div class="card-content" id="fish-add-card">
+                    <div class="desc">Add a batch of fish to the pool for a given fish entity. This endpoint records analytics (count, age, etc.) for a specific fish species and account.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>species_code</td><td>string</td><td>Yes</td><td>Species code of the fish (must exist)</td></tr>
+                        <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish in this batch</td></tr>
+                        <tr><td>fish_age_in_month</td><td>int</td><td>Yes</td><td>Age (in months) of fish in this batch</td></tr>
+                        <tr><td>[other fields]</td><td></td><td>No</td><td>Any additional batch/analytics fields</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/fish/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -d '{ "species_code": "CF001", "count": 1000, "fish_age_in_month": 3 }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-get">GET</span> /fish/</div>
-        <div class="desc">Retrieve a list of fish entities mapped to the current user's <code>account_key</code>. Mapping is handled via the <b>fish_mapping</b> collection. Analytics are joined from <b>fish_analytics</b>.</div>
-        <table class="fields-table">
-            <tr><th>Query Param</th><th>Type</th><th>Description</th></tr>
-            <tr><td>from_date</td><td>string (ISO)</td><td>Filter fish added after this date (created_at)</td></tr>
-            <tr><td>to_date</td><td>string (ISO)</td><td>Filter fish added before this date (created_at)</td></tr>
-            <tr><td>min_size</td><td>float</td><td>Minimum size (cm)</td></tr>
-            <tr><td>max_size</td><td>float</td><td>Maximum size (cm)</td></tr>
-            <tr><td>min_weight</td><td>float</td><td>Minimum weight (kg)</td></tr>
-            <tr><td>max_weight</td><td>float</td><td>Maximum weight (kg)</td></tr>
-            <tr><td>min_count</td><td>int</td><td>Minimum batch count</td></tr>
-            <tr><td>max_count</td><td>int</td><td>Maximum batch count</td></tr>
-            <tr><td>common_name</td><td>string</td><td>Filter by common name</td></tr>
-            <tr><td>scientific_name</td><td>string</td><td>Filter by scientific name</td></tr>
-            <tr><td>species_code</td><td>string</td><td>Filter by species code</td></tr>
-            <tr><td>min_age</td><td>int</td><td>Minimum current age (months, across all batches, analytics)</td></tr>
-            <tr><td>max_age</td><td>int</td><td>Maximum current age (months, across all batches, analytics)</td></tr>
-        </table>
-        <div class="note">
-            <b>Response includes:</b>
-            <ul>
-                <li><b>analytics.total_fish</b>: Total number of fish (all batches, from analytics collection)</li>
-                <li><b>analytics.age_analytics</b>: Map of current age (months) to number of fish (e.g., <code>{9: 1000, 12: 500}</code>)</li>
-                <li><b>analytics.batches</b>: Array of batch records with count, fish_age_in_month, and date_added</li>
-            </ul>
-        </div>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET "http://localhost:5000/fish/?min_age=9&max_age=12&min_weight=1.0&max_weight=2.5" \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('fish-list-card')">
+                    <button class="collapse-btn" id="fish-list-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /fish/
+                </div>
+                <div class="card-content" id="fish-list-card">
+                    <div class="desc">Retrieve a list of fish entities mapped to the current user's <code>account_key</code>. Mapping is handled via the <b>fish_mapping</b> collection. Analytics are joined from <b>fish_analytics</b>.</div>
+                    <table class="fields-table">
+                        <tr><th>Query Param</th><th>Type</th><th>Description</th></tr>
+                        <tr><td>from_date</td><td>string (ISO)</td><td>Filter fish added after this date (created_at)</td></tr>
+                        <tr><td>to_date</td><td>string (ISO)</td><td>Filter fish added before this date (created_at)</td></tr>
+                        <tr><td>min_size</td><td>float</td><td>Minimum size (cm)</td></tr>
+                        <tr><td>max_size</td><td>float</td><td>Maximum size (cm)</td></tr>
+                        <tr><td>min_weight</td><td>float</td><td>Minimum weight (kg)</td></tr>
+                        <tr><td>max_weight</td><td>float</td><td>Maximum weight (kg)</td></tr>
+                        <tr><td>min_count</td><td>int</td><td>Minimum batch count</td></tr>
+                        <tr><td>max_count</td><td>int</td><td>Maximum batch count</td></tr>
+                        <tr><td>common_name</td><td>string</td><td>Filter by common name</td></tr>
+                        <tr><td>scientific_name</td><td>string</td><td>Filter by scientific name</td></tr>
+                        <tr><td>species_code</td><td>string</td><td>Filter by species code</td></tr>
+                        <tr><td>min_age</td><td>int</td><td>Minimum current age (months, across all batches, analytics)</td></tr>
+                        <tr><td>max_age</td><td>int</td><td>Maximum current age (months, across all batches, analytics)</td></tr>
+                    </table>
+                    <div class="note">
+                        <b>Response includes:</b>
+                        <ul>
+                            <li><b>analytics.total_fish</b>: Total number of fish (all batches, from analytics collection)</li>
+                            <li><b>analytics.age_analytics</b>: Map of current age (months) to number of fish (e.g., <code>{9: 1000, 12: 500}</code>)</li>
+                            <li><b>analytics.batches</b>: Array of batch records with count, fish_age_in_month, and date_added</li>
+                        </ul>
+                    </div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET "http://localhost:5000/fish/?min_age=9&max_age=12&min_weight=1.0&max_weight=2.5" \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-put">PUT</span> /fish/&lt;fish_id&gt;</div>
-        <div class="desc">Update details of an existing fish. Optionally add a new batch.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-            <tr><td>count</td><td>int</td><td>Number of fish in new batch (optional)</td></tr>
-            <tr><td>fish_age_in_month</td><td>int</td><td>Age (in months) of fish in new batch (optional)</td></tr>
-            <tr><td>[other fields]</td><td></td><td>Any updatable fish fields</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/fish/&lt;fish_id&gt; \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('fish-update-card')">
+                    <button class="collapse-btn" id="fish-update-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-put">PUT</span> /fish/&lt;fish_id&gt;
+                </div>
+                <div class="card-content" id="fish-update-card">
+                    <div class="desc">Update details of an existing fish. Optionally add a new batch.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+                        <tr><td>count</td><td>int</td><td>Number of fish in new batch (optional)</td></tr>
+                        <tr><td>fish_age_in_month</td><td>int</td><td>Age (in months) of fish in new batch (optional)</td></tr>
+                        <tr><td>[other fields]</td><td></td><td>Any updatable fish fields</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/fish/&lt;fish_id&gt; \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -d '{ "count": 500, "fish_age_in_month": 12 }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-delete">DELETE</span> /fish/&lt;fish_id&gt;</div>
-        <div class="desc">Delete a fish record.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-            <tr><td>fish_id</td><td>string</td><td>ID of the fish to be deleted</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/fish/&lt;fish_id&gt; \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('fish-delete-card')">
+                    <button class="collapse-btn" id="fish-delete-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-delete">DELETE</span> /fish/&lt;fish_id&gt;
+                </div>
+                <div class="card-content" id="fish-delete-card">
+                    <div class="desc">Delete a fish record.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+                        <tr><td>fish_id</td><td>string</td><td>ID of the fish to be deleted</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/fish/&lt;fish_id&gt; \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-get">GET</span> /fish/fields</div>
-        <div class="desc">Get all available fields in the fish collection (for dynamic filtering/analytics).</div>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/fish/fields \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('fish-fields-card')">
+                    <button class="collapse-btn" id="fish-fields-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /fish/fields
+                </div>
+                <div class="card-content" id="fish-fields-card">
+                    <div class="desc">Get all available fields in the fish collection (for dynamic filtering/analytics).</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/fish/fields \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-get">GET</span> /fish/distinct/&lt;field&gt;</div>
-        <div class="desc">Get all distinct values for a given field.</div>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/fish/distinct/common_name \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('fish-distinct-card')">
+                    <button class="collapse-btn" id="fish-distinct-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /fish/distinct/&lt;field&gt;
+                </div>
+                <div class="card-content" id="fish-distinct-card">
+                    <div class="desc">Get all distinct values for a given field.</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/fish/distinct/common_name \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-get">GET</span> /fish/stats/&lt;field&gt;</div>
-        <div class="desc">Get min, max, avg for a numeric field (e.g., size, weight, count).</div>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/fish/stats/weight \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('fish-stats-card')">
+                    <button class="collapse-btn" id="fish-stats-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /fish/stats/&lt;field&gt;
+                </div>
+                <div class="card-content" id="fish-stats-card">
+                    <div class="desc">Get min, max, avg for a numeric field (e.g., size, weight, count).</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/fish/stats/weight \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
+        </div>
     </div>
-    <h2>Pond</h2>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /pond/</div>
-        <div class="desc">Create a new pond.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>pond_name</td><td>string</td><td>Yes</td><td>Name of the pond</td></tr>
-            <tr><td>location</td><td>string</td><td>Yes</td><td>Location description</td></tr>
-            <tr><td>size</td><td>string</td><td>Yes</td><td>Size category (e.g., "Small", "Medium", "Large")</td></tr>
-            <tr><td>water_type</td><td>string</td><td>Yes</td><td>Type of water (e.g., "Freshwater", "Saltwater")</td></tr>
-            <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
-            <tr><td>[dynamic fields]</td><td></td><td>No</td><td>Any additional pond attributes</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond/ \
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('pond-section')">
+            <button class="collapse-btn" id="pond-section-btn" aria-expanded="true">−</button>
+            <h2 style="margin:0;">Pond</h2>
+        </div>
+        <div id="pond-section" class="section-content">
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-create-card')">
+                    <button class="collapse-btn" id="pond-create-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /pond/
+                </div>
+                <div class="card-content" id="pond-create-card">
+                    <div class="desc">Create a new pond.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>pond_name</td><td>string</td><td>Yes</td><td>Name of the pond</td></tr>
+                        <tr><td>location</td><td>string</td><td>Yes</td><td>Location description</td></tr>
+                        <tr><td>size</td><td>string</td><td>Yes</td><td>Size category (e.g., "Small", "Medium", "Large")</td></tr>
+                        <tr><td>water_type</td><td>string</td><td>Yes</td><td>Type of water (e.g., "Freshwater", "Saltwater")</td></tr>
+                        <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
+                        <tr><td>[dynamic fields]</td><td></td><td>No</td><td>Any additional pond attributes</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond/ \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "pond_name": "Main Pond", "location": "Farm 1", "size": "Large", "water_type": "Freshwater", "account_key": "ACC123" }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-get">GET</span> /pond/</div>
-        <div class="desc">Retrieve a list of ponds with optional filters.</div>
-        <table class="fields-table">
-            <tr><th>Query Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>pond_name</td><td>string</td><td>No</td><td>Filter by pond name</td></tr>
-            <tr><td>location</td><td>string</td><td>No</td><td>Filter by location</td></tr>
-            <tr><td>size</td><td>string</td><td>No</td><td>Filter by size</td></tr>
-            <tr><td>water_type</td><td>string</td><td>No</td><td>Filter by water type</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET "http://localhost:5000/pond/?size=Large&location=Farm%201" \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-list-card')">
+                    <button class="collapse-btn" id="pond-list-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /pond/
+                </div>
+                <div class="card-content" id="pond-list-card">
+                    <div class="desc">Retrieve a list of ponds with optional filters.</div>
+                    <table class="fields-table">
+                        <tr><th>Query Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>pond_name</td><td>string</td><td>No</td><td>Filter by pond name</td></tr>
+                        <tr><td>location</td><td>string</td><td>No</td><td>Filter by location</td></tr>
+                        <tr><td>size</td><td>string</td><td>No</td><td>Filter by size</td></tr>
+                        <tr><td>water_type</td><td>string</td><td>No</td><td>Filter by water type</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET "http://localhost:5000/pond/?size=Large&location=Farm%201" \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-put">PUT</span> /pond/&lt;pond_id&gt;</div>
-        <div class="desc">Update details of an existing pond.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>pond_name</td><td>string</td><td>No</td><td>Name of the pond</td></tr>
-            <tr><td>location</td><td>string</td><td>No</td><td>Location description</td></tr>
-            <tr><td>size</td><td>string</td><td>No</td><td>Size category</td></tr>
-            <tr><td>water_type</td><td>string</td><td>No</td><td>Type of water</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/pond/&lt;pond_id&gt; \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-update-card')">
+                    <button class="collapse-btn" id="pond-update-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-put">PUT</span> /pond/&lt;pond_id&gt;
+                </div>
+                <div class="card-content" id="pond-update-card">
+                    <div class="desc">Update details of an existing pond.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>pond_name</td><td>string</td><td>No</td><td>Name of the pond</td></tr>
+                        <tr><td>location</td><td>string</td><td>No</td><td>Location description</td></tr>
+                        <tr><td>size</td><td>string</td><td>No</td><td>Size category</td></tr>
+                        <tr><td>water_type</td><td>string</td><td>No</td><td>Type of water</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/pond/&lt;pond_id&gt; \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "pond_name": "Updated Pond Name", "size": "Medium" }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-delete">DELETE</span> /pond/&lt;pond_id&gt;</div>
-        <div class="desc">Delete a pond.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>pond_id</td><td>string</td><td>Yes</td><td>ID of the pond to be deleted</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/pond/&lt;pond_id&gt; \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-delete-card')">
+                    <button class="collapse-btn" id="pond-delete-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-delete">DELETE</span> /pond/&lt;pond_id&gt;
+                </div>
+                <div class="card-content" id="pond-delete-card">
+                    <div class="desc">Delete a pond.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>pond_id</td><td>string</td><td>Yes</td><td>ID of the pond to be deleted</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/pond/&lt;pond_id&gt; \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
+        </div>
     </div>
-    <h2>Pond Events</h2>
-    <div class="note">
-        Pond events track all activities (adding, selling, sampling, removing, shifting fish). Each event updates the <b>pond_events</b> collection and also updates the <b>metadata</b> field in the related pond in the <b>ponds</b> collection:<br>
-        <code>metadata: { total_fish, fish_types, last_activity }</code><br>
-        <b>Supported event types:</b> <code>add</code>, <code>sell</code>, <code>sample</code>, <code>remove</code>, <code>shift_in</code>, <code>shift_out</code>.
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/add</div>
-        <div class="desc">Add fish to a pond. Updates metadata (total_fish, fish_types, last_activity).</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
-            <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish added</td></tr>
-            <tr><td>details</td><td>object</td><td>No</td><td>Additional event details</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/add \
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('pond-events-section')">
+            <button class="collapse-btn" id="pond-events-section-btn" aria-expanded="true">−</button>
+            <h2 style="margin:0;">Pond Events</h2>
+        </div>
+        <div id="pond-events-section" class="section-content">
+            <div class="note">
+                Pond events track all activities (adding, selling, sampling, removing, shifting fish). Each event updates the <b>pond_events</b> collection and also updates the <b>metadata</b> field in the related pond in the <b>ponds</b> collection:<br>
+                <code>metadata: { total_fish, fish_types, last_activity }</code><br>
+                <b>Supported event types:</b> <code>add</code>, <code>sell</code>, <code>sample</code>, <code>remove</code>, <code>shift_in</code>, <code>shift_out</code>.
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-event-add-card')">
+                    <button class="collapse-btn" id="pond-event-add-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/add
+                </div>
+                <div class="card-content" id="pond-event-add-card">
+                    <div class="desc">Add fish to a pond. Updates metadata (total_fish, fish_types, last_activity).</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
+                        <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish added</td></tr>
+                        <tr><td>details</td><td>object</td><td>No</td><td>Additional event details</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/add \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "fish_id": "FISH123", "count": 500 }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/sell</div>
-        <div class="desc">Sell fish from a pond. Updates metadata (total_fish, fish_types, last_activity).</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
-            <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish sold</td></tr>
-            <tr><td>details</td><td>object</td><td>No</td><td>Additional event details (e.g., buyer info)</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/sell \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-event-sell-card')">
+                    <button class="collapse-btn" id="pond-event-sell-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/sell
+                </div>
+                <div class="card-content" id="pond-event-sell-card">
+                    <div class="desc">Sell fish from a pond. Updates metadata (total_fish, fish_types, last_activity).</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
+                        <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish sold</td></tr>
+                        <tr><td>details</td><td>object</td><td>No</td><td>Additional event details (e.g., buyer info)</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/sell \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "fish_id": "FISH123", "count": 200, "details": { "buyer": "John" } }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/sample</div>
-        <div class="desc">Sample (remove for testing/analysis) fish from a pond. Updates metadata.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
-            <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish sampled</td></tr>
-            <tr><td>details</td><td>object</td><td>No</td><td>Additional event details</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/sample \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-event-sample-card')">
+                    <button class="collapse-btn" id="pond-event-sample-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/sample
+                </div>
+                <div class="card-content" id="pond-event-sample-card">
+                    <div class="desc">Sample (remove for testing/analysis) fish from a pond. Updates metadata.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
+                        <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish sampled</td></tr>
+                        <tr><td>details</td><td>object</td><td>No</td><td>Additional event details</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/sample \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "fish_id": "FISH123", "count": 10 }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/remove</div>
-        <div class="desc">Remove (dead/lost) fish from a pond. Updates metadata.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
-            <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish removed</td></tr>
-            <tr><td>details</td><td>object</td><td>No</td><td>Additional event details</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/remove \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-event-remove-card')">
+                    <button class="collapse-btn" id="pond-event-remove-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/remove
+                </div>
+                <div class="card-content" id="pond-event-remove-card">
+                    <div class="desc">Remove (dead/lost) fish from a pond. Updates metadata.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
+                        <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish removed</td></tr>
+                        <tr><td>details</td><td>object</td><td>No</td><td>Additional event details</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/remove \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "fish_id": "FISH123", "count": 5 }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/shift_in</div>
-        <div class="desc">Shift fish into this pond from another pond. Updates metadata.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
-            <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish shifted in</td></tr>
-            <tr><td>details</td><td>object</td><td>No</td><td>Additional event details (e.g., from_pond_id)</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/shift_in \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-event-shift-in-card')">
+                    <button class="collapse-btn" id="pond-event-shift-in-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/shift_in
+                </div>
+                <div class="card-content" id="pond-event-shift-in-card">
+                    <div class="desc">Shift fish into this pond from another pond. Updates metadata.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
+                        <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish shifted in</td></tr>
+                        <tr><td>details</td><td>object</td><td>No</td><td>Additional event details (e.g., from_pond_id)</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/shift_in \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "fish_id": "FISH123", "count": 100, "details": { "from_pond_id": "ACC123-002" } }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/shift_out</div>
-        <div class="desc">Shift fish out of this pond to another pond. Updates metadata.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
-            <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish shifted out</td></tr>
-            <tr><td>details</td><td>object</td><td>No</td><td>Additional event details (e.g., to_pond_id)</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/shift_out \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-event-shift-out-card')">
+                    <button class="collapse-btn" id="pond-event-shift-out-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/shift_out
+                </div>
+                <div class="card-content" id="pond-event-shift-out-card">
+                    <div class="desc">Shift fish out of this pond to another pond. Updates metadata.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>fish_id</td><td>string</td><td>Yes</td><td>ID of the fish</td></tr>
+                        <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish shifted out</td></tr>
+                        <tr><td>details</td><td>object</td><td>No</td><td>Additional event details (e.g., to_pond_id)</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond_event/ACC123-001/event/shift_out \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{ "fish_id": "FISH123", "count": 100, "details": { "to_pond_id": "ACC123-002" } }'</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-get">GET</span> /pond_event/&lt;pond_id&gt;/events</div>
-        <div class="desc">Get all events for a pond.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>pond_id</td><td>string</td><td>Yes</td><td>ID of the pond</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/pond_event/ACC123-001/events \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-event-list-card')">
+                    <button class="collapse-btn" id="pond-event-list-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /pond_event/&lt;pond_id&gt;/events
+                </div>
+                <div class="card-content" id="pond-event-list-card">
+                    <div class="desc">Get all events for a pond.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>pond_id</td><td>string</td><td>Yes</td><td>ID of the pond</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/pond_event/ACC123-001/events \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-    </div>
-    <div class="card">
-        <div class="endpoint"><span class="method method-delete">DELETE</span> /pond_event/&lt;pond_id&gt;/events/&lt;event_id&gt;</div>
-        <div class="desc">Delete a specific pond event.</div>
-        <table class="fields-table">
-            <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>pond_id</td><td>string</td><td>Yes</td><td>ID of the pond</td></tr>
-            <tr><td>event_id</td><td>string</td><td>Yes</td><td>ID of the event</td></tr>
-        </table>
-        <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/pond_event/ACC123-001/events/65a1b2c3d4e5f6a7b8c9d0e1 \
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-event-delete-card')">
+                    <button class="collapse-btn" id="pond-event-delete-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-delete">DELETE</span> /pond_event/&lt;pond_id&gt;/events/&lt;event_id&gt;
+                </div>
+                <div class="card-content" id="pond-event-delete-card">
+                    <div class="desc">Delete a specific pond event.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        <tr><td>pond_id</td><td>string</td><td>Yes</td><td>ID of the pond</td></tr>
+                        <tr><td>event_id</td><td>string</td><td>Yes</td><td>ID of the event</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/pond_event/ACC123-001/events/65a1b2c3d4e5f6a7b8c9d0e1 \
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
+        </div>
     </div>
-    <h2>Messaging & Notification (Socket.io)</h2>
-    <div class="card">
-        <div class="endpoint">Connect with JWT token (access_token or refresh_token)</div>
-        <div class="desc">Establish a WebSocket connection for real-time messaging and notifications.</div>
-        <table class="fields-table">
-            <tr><th>Header</th><th>Type</th><th>Required</th><th>Description</th></tr>
-            <tr><td>Authorization</td><td>string</td><td>Yes</td><td>Bearer ACCESS_TOKEN or REFRESH_TOKEN</td></tr>
-        </table>
-        <div class="curl"><strong>JavaScript Example:</strong><br><pre>const socket = io("http://localhost:5000", {
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('messaging-section')">
+            <button class="collapse-btn" id="messaging-section-btn" aria-expanded="true">−</button>
+            <h2 style="margin:0;">Messaging & Notification (Socket.io)</h2>
+        </div>
+        <div id="messaging-section" class="section-content">
+            <div class="card">
+                <div class="endpoint">Connect with JWT token (access_token or refresh_token)</div>
+                <div class="desc">Establish a WebSocket connection for real-time messaging and notifications.</div>
+                <table class="fields-table">
+                    <tr><th>Header</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                    <tr><td>Authorization</td><td>string</td><td>Yes</td><td>Bearer ACCESS_TOKEN or REFRESH_TOKEN</td></tr>
+                </table>
+                <div class="curl"><strong>JavaScript Example:</strong><br><pre>const socket = io("http://localhost:5000", {
   extraHeaders: {
     Authorization: "Bearer ACCESS_TOKEN_OR_REFRESH_TOKEN"
   }
 });</pre></div>
+            </div>
+            <div class="card">
+                <div class="endpoint">Events</div>
+                <div class="desc">Available events for messaging:</div>
+                <table class="fields-table">
+                    <tr><th>Event</th><th>Data</th><th>Description</th></tr>
+                    <tr><td>send_message</td><td>{ to_user_key, message, from_user_key }</td><td>Send a message to a user</td></tr>
+                    <tr><td>broadcast_notification</td><td>{ account_key, notification, from_user_key, user_keys? }</td><td>Broadcast a notification to users</td></tr>
+                    <tr><td>receive_message</td><td>{ from_user_key, message }</td><td>Receive a message (delivered to client)</td></tr>
+                    <tr><td>receive_notification</td><td>{ from_user_key, notification }</td><td>Receive a notification (delivered to client)</td></tr>
+                </table>
+            </div>
+            <div class="note">All notifications/messages are persisted and delivered to online/offline users.</div>
+        </div>
     </div>
-    <div class="card">
-        <div class="endpoint">Events</div>
-        <div class="desc">Available events for messaging:</div>
-        <table class="fields-table">
-            <tr><th>Event</th><th>Data</th><th>Description</th></tr>
-            <tr><td>send_message</td><td>{ to_user_key, message, from_user_key }</td><td>Send a message to a user</td></tr>
-            <tr><td>broadcast_notification</td><td>{ account_key, notification, from_user_key, user_keys? }</td><td>Broadcast a notification to users</td></tr>
-            <tr><td>receive_message</td><td>{ from_user_key, message }</td><td>Receive a message (delivered to client)</td></tr>
-            <tr><td>receive_notification</td><td>{ from_user_key, notification }</td><td>Receive a notification (delivered to client)</td></tr>
-        </table>
-    </div>
-    <div class="note">All notifications/messages are persisted and delivered to online/offline users.</div>
-    <h2>Error Handling</h2>
-    <div class="card">
-        <div class="endpoint">Error Response</div>
-        <div class="desc">All APIs return <code>{ success: false, error: "..." }</code> for errors. Auth required for protected endpoints (401 Unauthorized if missing/invalid).</div>
-        <div class="example"><strong>Example Error Response:</strong><br><pre>{
+    <div class="section">
+        <div class="section-header" onclick="toggleSection('error-handling-section')">
+            <button class="collapse-btn" id="error-handling-section-btn" aria-expanded="true">−</button>
+            <h2 style="margin:0;">Error Handling</h2>
+        </div>
+        <div id="error-handling-section" class="section-content">
+            <div class="card">
+                <div class="endpoint">Error Response</div>
+                <div class="desc">All APIs return <code>{ success: false, error: "..." }</code> for errors. Auth required for protected endpoints (401 Unauthorized if missing/invalid).</div>
+                <div class="example"><strong>Example Error Response:</strong><br><pre>{
   "success": false,
   "error": "Missing or invalid token"
 }</pre></div>
+            </div>
+        </div>
     </div>
 </div>
 </body>
