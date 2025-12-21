@@ -117,15 +117,59 @@
                     <span class="method method-post">POST</span> /auth/token
                 </div>
                 <div class="card-content" id="auth-token-card">
-                    <div class="desc">Generate a new access token using a refresh token.</div>
+                    <div class="desc">Generate tokens. Supported flows:
+                        <ul>
+                            <li><b>Access token</b> (type omitted or type="access_token") — provide username/password or refresh_token to issue an access token. Optional <code>expires_in</code> seconds to override default lifetime.</li>
+                            <li><b>Refresh token creation</b> (type="refresh_token") — provide username/password and request a refresh token.</li>
+                            <li><b>Exchange refresh token for access token</b> (type="refresh_token" and <code>token</code> param) — provide existing refresh token to get a new access token.</li>
+                        </ul>
+                    </div>
                     <table class="fields-table">
                         <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-                        <tr><td>type</td><td>string</td><td>Yes</td><td>"refresh_token"</td></tr>
-                        <tr><td>token</td><td>string</td><td>Yes</td><td>Refresh token</td></tr>
+                        <tr><td>type</td><td>string</td><td>No</td><td>"access_token" or "refresh_token" (controls the flow)</td></tr>
+                        <tr><td>token</td><td>string</td><td>No</td><td>Use when exchanging a refresh token for an access token</td></tr>
+                        <tr><td>username / email / phone</td><td>string</td><td>Conditionally</td><td>Identifier for password-based login or refresh token creation</td></tr>
+                        <tr><td>password</td><td>string</td><td>Conditionally</td><td>Required for password-based flows</td></tr>
+                        <tr><td>expires_in</td><td>int</td><td>No</td><td>Optional override (seconds) for issued access/refresh token expiry</td></tr>
                     </table>
-                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/auth/token \
+                    <div class="note">Token lifetimes (configured on server): <b>Access token</b> default = 7 days; <b>Refresh token</b> default ≈ 90 days (3 months). Clients should store refresh tokens securely.</div>
+                    <div class="curl"><strong>Curl Example (exchange refresh token):</strong><br><pre>curl -X POST http://localhost:5000/auth/token \
   -H "Content-Type: application/json" \
   -d '{ "type": "refresh_token", "token": "REFRESH_TOKEN" }'</pre></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('auth-subscriptions-card')">
+                    <button class="collapse-btn" id="auth-subscriptions-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /auth/subscriptions
+                </div>
+                <div class="card-content" id="auth-subscriptions-card">
+                    <div class="desc">Get current user's subscription details. Requires authentication.</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/auth/subscriptions \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('auth-subscriptions-put-card')">
+                    <button class="collapse-btn" id="auth-subscriptions-put-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-put">PUT</span> /auth/subscriptions
+                </div>
+                <div class="card-content" id="auth-subscriptions-put-card">
+                    <div class="desc">Update account subscription (admin only). Body: { "subscription": { ... } }.</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/auth/subscriptions \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "subscription": { "subscription_type": "pro", "expiry": "2026-12-31" } }'</pre></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('auth-company-card')">
+                    <button class="collapse-btn" id="auth-company-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /auth/account/&lt;account_key&gt;/company
+                </div>
+                <div class="card-content" id="auth-company-card">
+                    <div class="desc">Return company_name for an account_key. This endpoint is implemented as a lightweight lookup (no authentication required in code).</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/auth/account/ACC123/company</pre></div>
                 </div>
             </div>
             <div class="card">
@@ -283,6 +327,104 @@
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
                 </div>
             </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('user-profile-get-card')">
+                    <button class="collapse-btn" id="user-profile-get-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /user/profile
+                </div>
+                <div class="card-content" id="user-profile-get-card">
+                    <div class="desc">Return the authenticated user's profile. Requires Authorization header (Bearer token).</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/user/profile \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('user-profile-put-card')">
+                    <button class="collapse-btn" id="user-profile-put-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-put">PUT</span> /user/profile
+                </div>
+                <div class="card-content" id="user-profile-put-card">
+                    <div class="desc">Update allowed profile fields. Allowed fields: <code>first_name</code>, <code>last_name</code>, <code>dob</code>, <code>address1</code>, <code>address2</code>, <code>pincode</code>, <code>timezone</code>.</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/user/profile \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "first_name": "John", "last_name": "Doe", "timezone": "Asia/Kolkata" }'</pre></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('user-password-card')">
+                    <button class="collapse-btn" id="user-password-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-put">PUT</span> /user/password
+                </div>
+                <div class="card-content" id="user-password-card">
+                    <div class="desc">Change password for authenticated user. Body: { "old_password": "...", "new_password": "..." }.</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/user/password \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "old_password": "oldpass", "new_password": "newpass" }'</pre></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('user-logout-card')">
+                    <button class="collapse-btn" id="user-logout-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-post">POST</span> /user/logout
+                </div>
+                <div class="card-content" id="user-logout-card">
+                    <div class="desc">Logout current user by clearing refresh tokens. Requires Authorization header.</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/user/logout \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('user-settings-card')">
+                    <button class="collapse-btn" id="user-settings-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-put">PUT</span> /user/settings
+                </div>
+                <div class="card-content" id="user-settings-card">
+                    <div class="desc">Update user settings. Body: { "settings": { ... } }.</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/user/settings \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "settings": { "timezone": "Asia/Kolkata", "notifications": { "email": true } } }'</pre></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('user-settings-notif-card')">
+                    <button class="collapse-btn" id="user-settings-notif-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-put">PUT</span> /user/settings/notifications
+                </div>
+                <div class="card-content" id="user-settings-notif-card">
+                    <div class="desc">Update notification settings. Body: { "notifications": { ... } }.</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/user/settings/notifications \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "notifications": { "email": true, "sms": false } }'</pre></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('user-settings-help-card')">
+                    <button class="collapse-btn" id="user-settings-help-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-put">PUT</span> /user/settings/help_support
+                </div>
+                <div class="card-content" id="user-settings-help-card">
+                    <div class="desc">Update help & support preferences. Body: { "help_support": { ... } }.</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X PUT http://localhost:5000/user/settings/help_support \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "help_support": { "preferred_contact": "email" } }'</pre></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('user-list-card')">
+                    <button class="collapse-btn" id="user-list-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /user/list
+                </div>
+                <div class="card-content" id="user-list-card">
+                    <div class="desc">List users in account (requires auth). Optional query <code>?phone=true</code> to include phone numbers.</div>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET "http://localhost:5000/user/list" \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
         </div>
     </div>
     <div class="section">
@@ -374,11 +516,6 @@
             <h2 style="margin:0;">Fish</h2>
         </div>
         <div id="fish-section" class="section-content">
-            <div class="note">
-                <b>Note:</b> You can add analytics batches either using the general <code>/fish/</code> endpoint (POST) or via pond-specific events using <code>/pond_event/&lt;pond_id&gt;/event/&lt;event_type&gt;</code> (both update <b>fish_analytics</b> and <b>fish_mapping</b> where applicable).<br>
-                The fish entity stores static attributes only; mapping between <code>account_key</code> and fish is maintained in the <b>fish_mapping</b> collection. Analytics (batches, age, etc.) are stored in <b>fish_analytics</b> and also reference <code>account_key</code> and <code>pond_id</code> if applicable.<br>
-                <b>Recommendation:</b> Use pond events when the action is tied to a specific pond lifecycle change (add/sell/remove/shift), and use <code>/fish/</code> for quick batch analytics updates not tied to a pond.
-            </div>
             <div class="card">
                 <div class="endpoint" onclick="toggleCard('fish-create-card')">
                     <button class="collapse-btn" id="fish-create-card-btn" aria-expanded="true">−</button>
@@ -474,21 +611,6 @@
                 </div>
             </div>
             <div class="card">
-                <div class="endpoint" onclick="toggleCard('fish-delete-card')">
-                    <button class="collapse-btn" id="fish-delete-card-btn" aria-expanded="true">−</button>
-                    <span class="method method-delete">DELETE</span> /fish/&lt;fish_id&gt;
-                </div>
-                <div class="card-content" id="fish-delete-card">
-                    <div class="desc">Delete a fish record.</div>
-                    <table class="fields-table">
-                        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-                        <tr><td>fish_id</td><td>string</td><td>ID of the fish to be deleted</td></tr>
-                    </table>
-                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/fish/&lt;fish_id&gt; \
-  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-                </div>
-            </div>
-            <div class="card">
                 <div class="endpoint" onclick="toggleCard('fish-fields-card')">
                     <button class="collapse-btn" id="fish-fields-card-btn" aria-expanded="true">−</button>
                     <span class="method method-get">GET</span> /fish/fields
@@ -532,23 +654,21 @@
             <div class="card">
                 <div class="endpoint" onclick="toggleCard('pond-create-card')">
                     <button class="collapse-btn" id="pond-create-card-btn" aria-expanded="true">−</button>
-                    <span class="method method-post">POST</span> /pond/
+                    <span class="method method-post">POST</span> /pond/create
                 </div>
                 <div class="card-content" id="pond-create-card">
-                    <div class="desc">Create a new pond.</div>
+                    <div class="desc">Create a new pond. Note: code implements <code>/pond/create</code> (not <code>/pond/</code>). If <code>pond_id</code> is omitted the server generates an id like <code>&lt;account_key&gt;-001</code>.</div>
                     <table class="fields-table">
                         <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
                         <tr><td>pond_name</td><td>string</td><td>Yes</td><td>Name of the pond</td></tr>
                         <tr><td>location</td><td>string</td><td>Yes</td><td>Location description</td></tr>
                         <tr><td>size</td><td>string</td><td>Yes</td><td>Size category (e.g., "Small", "Medium", "Large")</td></tr>
                         <tr><td>water_type</td><td>string</td><td>Yes</td><td>Type of water (e.g., "Freshwater", "Saltwater")</td></tr>
-                        <tr><td>account_key</td><td>string</td><td>Yes</td><td>Account key of the company</td></tr>
-                        <tr><td>[dynamic fields]</td><td></td><td>No</td><td>Any additional pond attributes</td></tr>
                     </table>
-                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond/ \
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X POST http://localhost:5000/pond/create \
   -H "Authorization: Bearer ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{ "pond_name": "Main Pond", "location": "Farm 1", "size": "Large", "water_type": "Freshwater", "account_key": "ACC123" }'</pre></div>
+  -d '{ "pond_name": "Main Pond", "location": "Farm 1", "size": "Large", "water_type": "Freshwater" }'</pre></div>
                 </div>
             </div>
             <div class="card">
@@ -590,36 +710,6 @@
                 </div>
             </div>
             <div class="card">
-                <div class="endpoint" onclick="toggleCard('pond-delete-card')">
-                    <button class="collapse-btn" id="pond-delete-card-btn" aria-expanded="true">−</button>
-                    <span class="method method-delete">DELETE</span> /pond/&lt;pond_id&gt;
-                </div>
-                <div class="card-content" id="pond-delete-card">
-                    <div class="desc">Delete a pond.</div>
-                    <table class="fields-table">
-                        <tr><th>Field</th><th>Type</th><th>Required</th><th>Description</th></tr>
-                        <tr><td>pond_id</td><td>string</td><td>Yes</td><td>ID of the pond to be deleted</td></tr>
-                    </table>
-                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X DELETE http://localhost:5000/pond/&lt;pond_id&gt; \
-  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-                </div>
-            </div>
-            <div class="card">
-                <div class="endpoint" onclick="toggleCard('pond-fish-options-card')">
-                    <button class="collapse-btn" id="pond-fish-options-card-btn" aria-expanded="true">−</button>
-                    <span class="method method-get">GET</span> /pond/&lt;pond_id&gt;/fish_options
-                </div>
-                <div class="card-content" id="pond-fish-options-card">
-                    <div class="desc">Return fish dropdown options for the given pond/account (mapped fish entities).</div>
-                    <table class="fields-table">
-                        <tr><th>Query Param</th><th>Type</th><th>Description</th></tr>
-                        <tr><td>none</td><td></td><td>Authentication required; returns fish mapped to user's account_key.</td></tr>
-                    </table>
-                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET http://localhost:5000/pond/ACC123-001/fish_options \
-  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
-                </div>
-            </div>
-            <div class="card">
                 <div class="endpoint" onclick="toggleCard('pond-history-card')">
                     <button class="collapse-btn" id="pond-history-card-btn" aria-expanded="true">−</button>
                     <span class="method method-get">GET</span> /pond/&lt;pond_id&gt;/history
@@ -641,6 +731,25 @@
   -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
                 </div>
             </div>
+            <div class="card">
+                <div class="endpoint" onclick="toggleCard('pond-activity-card')">
+                    <button class="collapse-btn" id="pond-activity-card-btn" aria-expanded="true">−</button>
+                    <span class="method method-get">GET</span> /pond/&lt;pond_id&gt;/activity
+                </div>
+                <div class="card-content" id="pond-activity-card">
+                    <div class="desc">Paginated list of fish activity/sample records for a pond. Requires Authorization header.</div>
+                    <table class="fields-table">
+                        <tr><th>Query Param</th><th>Type</th><th>Description</th></tr>
+                        <tr><td>fish_id</td><td>string</td><td>Optional, filter by species_code</td></tr>
+                        <tr><td>limit</td><td>int</td><td>Optional, default 50</td></tr>
+                        <tr><td>skip</td><td>int</td><td>Optional, default 0</td></tr>
+                        <tr><td>start_date / end_date</td><td>string (ISO or epoch)</td><td>Optional date range filter</td></tr>
+                    </table>
+                    <div class="curl"><strong>Curl Example:</strong><br><pre>curl -X GET "http://localhost:5000/pond/ACC123-001/activity?limit=20&skip=0" \
+  -H "Authorization: Bearer ACCESS_TOKEN"</pre></div>
+                </div>
+            </div>
+            <div class="note">Note: responses that include MongoDB types (ObjectId) and datetimes are normalized by the server: <b>ObjectId</b> values are returned as strings and <b>datetime</b> values are returned as ISO-formatted strings.</div>
         </div>
     </div>
     <div class="section">
