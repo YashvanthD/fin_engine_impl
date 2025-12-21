@@ -18,7 +18,7 @@ from fin_server.dto.user_dto import UserDTO
 import time
 import base64
 
-MASTER_ADMIN_PASSWORD = os.getenv('MASTER_ADMIN_PASSWORD')  # Set this in deployment environment
+MASTER_ADMIN_PASSWORD = os.getenv('MASTER_ADMIN_PASSWORD', 'password')  # Set this in deployment environment
 
 # Blueprint for auth routes
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
