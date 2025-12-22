@@ -7,6 +7,7 @@ from fin_server.repository.pond_repository import PondRepository
 from fin_server.security.authentication import get_auth_payload
 from fin_server.utils.helpers import get_request_payload, parse_pagination
 from fin_server.utils.helpers import normalize_doc, respond_success, respond_error
+from fin_server.utils.time_utils import get_time_date_dt
 from fin_server.dto.pond_dto import PondDTO
 
 pond_bp = Blueprint('pond', __name__, url_prefix='/pond')
@@ -67,7 +68,7 @@ def create_pond_entity():
         data = request.get_json(force=True)
         account_key = payload.get('account_key')
         data.pop('account_key', None)
-        data['created_at'] = datetime.now(IST_TZ)
+        data['created_at'] = get_time_date_dt(include_time=True)
         # Generate pond_id if not provided, using auto-increment
         pond_id = data.get('pond_id')
         if not pond_id:
@@ -146,7 +147,7 @@ def get_pond(pond_id):
 
 @pond_bp.route('/<pond_id>', methods=['PUT'])
 def update_pond(pond_id):
-    current_app.logger.debug('PUT /pond/%s called with data: %s', pond_id, request.json)
+    current_app.logger.debug('PUT /pond/%s called', pond_id)
     try:
         payload = get_auth_payload(request)
         data = request.get_json(force=True)
@@ -178,28 +179,18 @@ def delete_pond(pond_id):
 
 @pond_bp.route('/', methods=['GET'])
 def list_ponds():
+    """Simple pond list for legacy UI, delegating to api_list_ponds."""
     current_app.logger.debug('GET /pond/ called')
-    try:
-        payload = get_auth_payload(request)
-        account_key = payload.get('account_key')
-        query = {'account_key': account_key}
-        # You may already have an existing list implementation further
-        # down in this file; if so, this definition should just delegate
-        # to that logic instead of duplicating it.
-        ponds = pond_repository.find(query)
-        out = []
-        for p in ponds:
-            try:
-                dto = PondDTO.from_doc(p)
-                out.append(dto.to_dict())
-            except Exception:
-                out.append(pond_to_dict(p))
-        return respond_success({'ponds': out})
-    except UnauthorizedError as e:
-        return respond_error(str(e), status=401)
-    except Exception as e:
-        current_app.logger.exception('Exception in list_ponds: %s', e)
-        return respond_error('Server error', status=500)
+    # Reuse the canonical API helper for listing ponds
+    api_resp = api_list_ponds()
+    # api_resp is a Flask response tuple from respond_success/respond_error
+    resp_obj, status = api_resp
+    if status != 200:
+        return resp_obj, status
+    body = resp_obj.get_json() or {}
+    data = body.get('data') or {}
+    ponds = data.get('data') or data.get('ponds') or []
+    return respond_success({'ponds': ponds})
 
 
 # GET fish options (for dropdown) for a pond - list fish entities mapped to the account
@@ -489,7 +480,7 @@ def api_create_pond():
         data = request.get_json(force=True)
         account_key = payload.get('account_key')
         data.pop('account_key', None)
-        data['created_at'] = datetime.now(IST_TZ)
+        data['created_at'] = get_time_date_dt(include_time=True)
         pond_id = data.get('pond_id')
         if not pond_id:
             next_num = get_next_pond_number(account_key)

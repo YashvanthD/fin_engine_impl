@@ -1,7 +1,6 @@
 from flask import Blueprint, request, current_app
 from datetime import datetime
 import zoneinfo
-import logging
 
 from fin_server.exception.UnauthorizedError import UnauthorizedError
 from fin_server.repository.fish_repository import FishRepository
@@ -13,6 +12,7 @@ from fin_server.security.authentication import get_auth_payload
 from fin_server.utils import validation
 from fin_server.utils.helpers import respond_error, respond_success, get_request_payload
 from fin_server.utils.generator import generate_key
+from fin_server.utils.time_utils import get_time_date_dt
 
 fish_bp = Blueprint('fish', __name__, url_prefix='/fish')
 IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
@@ -32,7 +32,7 @@ def create_fish_entity():
 			return respond_error(errors, status=400)
 		account_key = payload.get('account_key')
 		data.pop('account_key', None)
-		data['created_at'] = datetime.now(IST_TZ)
+		data['created_at'] = get_time_date_dt(include_time=True)
 		overwrite = str(request.args.get('overwrite', 'false')).lower() == 'true'
 		# Generate species_code if not provided
 		species_code = data.get('species_code')
@@ -121,8 +121,9 @@ def add_fish_batch():
 		# Add analytics event (always, even if mapping was missing before)
 		event_id = f"{account_key}-{species_code}-{generate_key(9)}"
 		fish_weight = data.get('fish_weight') if isinstance(data, dict) else None
+		base_dt = get_time_date_dt(include_time=True)
 		fish_analytics_repository.add_batch(
-			species_code, int(count), int(fish_age_in_month), datetime.now(IST_TZ), account_key=account_key, event_id=event_id, fish_weight=fish_weight
+			species_code, int(count), int(fish_age_in_month), base_dt, account_key=account_key, event_id=event_id, fish_weight=fish_weight
 		)
 		return respond_success({'species_id': species_code, 'event_id': event_id}, status=201)
 	except UnauthorizedError as e:
@@ -178,13 +179,14 @@ def get_fish_by_id(species_id):
 def get_fish():
 	"""Get all fish for the current account_key, with analytics."""
 	try:
-		current_app.logger.debug('GET /fish/ called with args: %s', request.args)
+		current_app.logger.debug('GET /fish/ called')
 		payload = get_auth_payload(request)
 		current_app.logger.debug('GET /fish/ auth payload: %s', payload)
 		query = request.args.to_dict()
 		account_key = payload.get('account_key')
 		current_app.logger.debug('GET /fish/ using account_key=%s, raw query=%s', account_key, query)
 		mapping = fish_mapping_repo.find_one({'account_key': account_key})
+		# mapping doc may contain internal details; avoid logging full object
 		current_app.logger.debug('GET /fish/ mapping doc: %s', mapping)
 		fish_ids = mapping.get('fish_ids', []) if mapping else []
 		current_app.logger.debug('GET /fish/ resolved fish_ids: %s', fish_ids)
@@ -244,7 +246,7 @@ def get_fish():
 		current_app.logger.debug('GET /fish/ analytics filters: min_age=%s max_age=%s avg_n=%s min_weight=%s max_weight=%s', min_age, max_age, avg_n, min_weight, max_weight)
 		for f in fish_list:
 			species_id = f.get('_id')
-			current_app.logger.debug('GET /fish/ processing fish_id=%s raw_doc=%s', species_id, f)
+			current_app.logger.debug('GET /fish/ processing fish_id=%s', species_id)
 			analytics = fish_analytics_repository.get_analytics(species_id, account_key=account_key, min_age=min_age, max_age=max_age, avg_n=avg_n, min_weight=min_weight, max_weight=max_weight)
 			# Post-filter by age_analytics if needed (kept for compatibility)
 			if min_age or max_age:
@@ -375,7 +377,8 @@ def update_fish(species_id):
 				upsert=True
 			)
 			event_id = f"{account_key}-{species_id}-{generate_key(9)}"
-			fish_analytics_repository.add_batch(species_id, int(count), int(fish_age_in_month), datetime.now(IST_TZ), account_key=account_key, event_id=event_id, fish_weight=fish_weight)
+			base_dt = get_time_date_dt(include_time=True)
+			fish_analytics_repository.add_batch(species_id, int(count), int(fish_age_in_month), base_dt, account_key=account_key, event_id=event_id, fish_weight=fish_weight)
 			return respond_success({'species_id': species_id, 'event_id': event_id})
 
 		return respond_success({'species_id': species_id})

@@ -5,8 +5,9 @@ from fin_server.routes.task import user_repo
 from fin_server.security.authentication import get_auth_payload
 from fin_server.utils.generator import build_user
 from fin_server.utils.helpers import respond_success, respond_error, normalize_doc, get_request_payload
+from fin_server.utils.security import hash_password
+from fin_server.routes.auth import _check_password_migrating
 import logging
-import base64
 
 # Add debug logging to all endpoints and update route prefixes to /api/v1/
 user_bp = Blueprint('user', __name__, url_prefix='/user')
@@ -130,20 +131,15 @@ def update_password():
         new_password = data.get('new_password')
         if not old_password or not new_password:
             return respond_error('Missing password fields', status=400)
-        db_password = ''
-        try:
-            if user_dto.password:
-                decoded = base64.b64decode(user_dto.password.encode('utf-8'))
-                if isinstance(decoded, (bytes, bytearray)):
-                    db_password = decoded.decode('utf-8')
-                else:
-                    db_password = str(decoded)
-        except Exception:
-            current_app.logger.exception('Failed to decode stored password')
-            db_password = ''
-        if db_password != old_password:
-            return respond_error('Old password incorrect', status=403)
-        user_dto.password = base64.b64encode(new_password.encode('utf-8')).decode('utf-8')
+        # Verify old password, supporting migration from legacy base64
+        stored_pwd = user_dto.to_dict().get('password') or ''
+        ok, new_hash = _check_password_migrating(old_password, stored_pwd)
+        if not ok:
+            return respond_error('Old password is incorrect', status=400)
+        if new_hash:
+            user_dto.password = new_hash
+        # Set new password (bcrypt)
+        user_dto.password = hash_password(new_password)
         user_dto.save()
         return respond_success({'message': 'Password updated'})
     except ValueError as ve:

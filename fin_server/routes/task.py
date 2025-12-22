@@ -257,7 +257,7 @@ def update_task(task_id):
         account_key = payload.get('account_key')
         roles = payload.get('roles', [])
         data = request.get_json(force=True)
-        current_app.logger.debug('PUT /task/%s raw payload: %s', task_id, data)
+        current_app.logger.debug('PUT /task/%s called', task_id)
         # Normalize common camelCase fields coming from UI into backend field names
         if isinstance(data, dict):
             # id/taskId -> task_id (query still uses URL param task_id)

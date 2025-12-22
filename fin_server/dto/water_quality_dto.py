@@ -1,5 +1,7 @@
 from typing import Optional, Dict, Any, List
 from fin_server.utils.helpers import _to_iso_if_epoch, normalize_doc
+import zoneinfo
+from fin_server.utils.time_utils import get_time_date_dt, now_std
 
 
 class WaterQualityRecordDTO:
@@ -69,11 +71,9 @@ class WaterQualityRecordDTO:
 
     def save(self, collection=None, repo=None, collection_name: Optional[str] = 'water_quality', upsert: bool = False):
         doc = self.to_db_doc()
-        from datetime import datetime
-        import zoneinfo
         if 'created_at' not in doc:
             ist = zoneinfo.ZoneInfo('Asia/Kolkata')
-            doc['created_at'] = datetime.now(ist)
+            doc['created_at'] = now_std(include_time=True)
         if repo is not None:
             try:
                 if hasattr(repo, 'create'):

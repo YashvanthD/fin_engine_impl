@@ -46,6 +46,21 @@ def validate_signup_user(data, account_key):
     return (len(errors) == 0, errors)
 
 
+def build_signup_login_response(success, message, user_id, account_key, user_key):
+    """Standardize signup/login response shape across auth/company routes.
+
+    This lives in validation so that multiple routes can reuse it without
+    re-implementing the response structure.
+    """
+    return {
+        'success': success,
+        'message': message,
+        'user_id': str(user_id),
+        'account_key': account_key,
+        'user_key': user_key,
+    }
+
+
 def _is_int(v):
     try:
         int(v)

@@ -12,6 +12,7 @@ import zoneinfo
 from fin_server.repository.fish_activity_repository import FishActivityRepository
 from fin_server.utils.validation import validate_pond_event_payload
 from fin_server.dto.pond_event_dto import PondEventDTO
+from fin_server.utils.time_utils import get_time_date_dt
 
 pond_event_bp = Blueprint('pond_event', __name__, url_prefix='/pond_event')
 
@@ -32,7 +33,7 @@ def update_pond_metadata(pond_id, fish_id, count, event_type):
             'event_type': event_type,
             'fish_id': fish_id,
             'count': count,
-            'timestamp': datetime.now(IST_TZ).isoformat()
+            'timestamp': get_time_date_dt(include_time=True).isoformat()
         }
         pond_repository.atomic_update_metadata(pond_id, inc_fields=inc_fields, set_fields={'metadata.last_activity': last_activity})
         # Best-effort cleanup: remove negative/zero counts
@@ -56,16 +57,17 @@ def update_fish_analytics_and_mapping(account_key, fish_id, count, event_type, f
         current_app.logger.exception('Failed to ensure fish mapping')
     # For add/shift_in: add a batch; for remove/sell/sample/shift_out: add negative batch
     event_id = f"{account_key}-{fish_id}-{pond_id}-{datetime.now(IST_TZ).strftime('%Y%m%d%H%M%S%f')}"
+    base_dt = get_time_date_dt(include_time=True)
     if event_type in ['add', 'shift_in']:
         fish_analytics_repository.add_batch(
             fish_id, int(count), int(fish_age_in_month) if fish_age_in_month is not None else 0,
-            datetime.now(IST_TZ), account_key=account_key, event_id=event_id, pond_id=pond_id
+            base_dt, account_key=account_key, event_id=event_id, pond_id=pond_id
         )
     elif event_type in ['remove', 'sell', 'sample', 'shift_out']:
         # Store as negative batch for analytics
         fish_analytics_repository.add_batch(
             fish_id, -int(count), int(fish_age_in_month) if fish_age_in_month is not None else 0,
-            datetime.now(IST_TZ), account_key=account_key, event_id=event_id, pond_id=pond_id
+            base_dt, account_key=account_key, event_id=event_id, pond_id=pond_id
         )
 
 @pond_event_bp.route('/<pond_id>/event/<event_type>', methods=['POST'])
@@ -90,14 +92,15 @@ def pond_event_action(pond_id, event_type):
         current_app.logger.info(f'PondEvent: account={payload.get("account_key")}, user={payload.get("user_key")}, pond={pond_id}, event={event_type}, fish={fish_id}, count={count}')
         # Build DTO from request for canonical shape
         try:
-            dto = PondEventDTO.from_request({
+            dto_payload = {
                 'pondId': pond_id,
                 'eventType': event_type,
                 'species': fish_id,
                 'count': count,
                 'details': data.get('details', {}),
                 'timestamp': data.get('timestamp') or data.get('created_at')
-            })
+            }
+            dto = PondEventDTO.from_request(dto_payload)
             dto.recordedBy = payload.get('user_key')
             if fish_age_in_month is not None:
                 dto.extra['fish_age_in_month'] = fish_age_in_month
@@ -111,7 +114,7 @@ def pond_event_action(pond_id, event_type):
                 event_inserted_id = getattr(res, 'inserted_id', res)
             event_doc_db = dto.to_db_doc()
             # ensure created_at and user_key
-            event_doc_db['created_at'] = event_doc_db.get('created_at') or datetime.now(IST_TZ)
+            event_doc_db['created_at'] = event_doc_db.get('created_at') or get_time_date_dt(include_time=True)
             event_doc_db['user_key'] = dto.recordedBy
         except Exception:
             # fallback to previous behavior
@@ -121,7 +124,7 @@ def pond_event_action(pond_id, event_type):
                 'count': count,
                 'event_type': event_type,
                 'details': data.get('details', {}),
-                'created_at': datetime.now(IST_TZ),
+                'created_at': get_time_date_dt(include_time=True),
                 'user_key': payload.get('user_key')
             }
             if fish_age_in_month is not None:
@@ -155,7 +158,7 @@ def pond_event_action(pond_id, event_type):
                     'user_key': payload.get('user_key'),
                     'details': data.get('details', {}),
                     'samples': samples,
-                    'created_at': datetime.now(IST_TZ)
+                    'created_at': get_time_date_dt(include_time=True)
                 }
                 fish_activity_repo.create(activity_doc)
         except Exception:

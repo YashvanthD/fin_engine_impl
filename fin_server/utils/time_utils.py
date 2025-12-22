@@ -59,3 +59,13 @@ def get_time_date_dt(zone: str = 'IST', dt: datetime = None, include_time: bool 
     s = get_time_date(zone=zone, dt=dt, include_time=include_time, settings=settings)
     fmt = '%Y-%m-%d %H:%M' if include_time else '%Y-%m-%d'
     return datetime.strptime(s, fmt)
+
+
+def now_std(include_time: bool = True) -> datetime:
+    """Return current datetime in the application's standard timezone (IST).
+
+    This helper is intended for storage and internal logic. For user-facing
+    formatting or parsing that should respect user/account settings, continue
+    to use get_time_date / get_time_date_dt with a settings map.
+    """
+    return get_time_date_dt(zone='IST', include_time=include_time, settings=None)
