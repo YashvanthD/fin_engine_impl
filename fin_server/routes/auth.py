@@ -312,26 +312,35 @@ def list_account_users():
 
 @auth_bp.route('/settings', methods=['GET', 'PUT'])
 def user_settings():
-    logging.info("Settings endpoint called")
+    """Deprecated: use GET/PUT /user/settings instead.
+
+    This endpoint is kept temporarily for backward compatibility. It
+    simply proxies to the same data model as /user/settings so that
+    clients can be migrated gradually.
+    """
+    logging.info("/auth/settings is deprecated; prefer /user/settings")
     payload = get_auth_payload(request)
     user_key = payload.get('user_key')
     account_key = payload.get('account_key')
     try:
-        logging.info("Fetching userDTO for user_key: %s", user_key)
-        user_dto = UserDTO.find_by_user_key(user_key)
-        if not user_dto or user_dto.account_key != account_key:
+        user_dto = UserDTO.find_by_user_key(user_key, account_key)
+        if not user_dto:
             logging.warning("User not found for user_key: %s, account_key: %s", user_key, account_key)
             return respond_error('User not found', status=404)
         if request.method == 'PUT':
-            updated_settings = request.get_json(force=True).get('settings', {})
-            logging.info("Updating settings for user_key: %s", user_key)
+            body = request.get_json(force=True) or {}
+            updated_settings = body.get('settings') or body
+            logging.info("Updating settings via /auth/settings shim for user_key: %s", user_key)
             user_dto.settings = updated_settings
             user_dto.save()
-            logging.info("Settings updated and saved for user_key: %s", user_key)
-        logging.info("Returning settings and subscription for user_key: %s", user_key)
-        return respond_success({'user_key': user_key, 'account_key': account_key, 'settings': user_dto.settings, 'subscription': user_dto.subscription})
-    except Exception as e:
-        logging.exception("Exception in /settings endpoint")
+        return respond_success({
+            'user_key': user_dto.user_key,
+            'account_key': user_dto.account_key,
+            'settings': user_dto.settings,
+            'subscription': user_dto.subscription
+        })
+    except Exception:
+        logging.exception("Exception in deprecated /auth/settings endpoint")
         return respond_error('Server error', status=500)
 
 
@@ -364,6 +373,37 @@ def validate_token():
         'user': user_dict
     }
     logging.info("Validate response: %s", response)
+    return respond_success(response)
+
+@auth_bp.route('/me', methods=['GET'])
+def auth_me():
+    """Return the current authenticated user's core info.
+
+    This endpoint is optimized for SPA clients that want a quick
+    "who am I" check: it returns user_key, account_key, roles,
+    settings, subscription, last_active, and a sanitized user object.
+    """
+    logging.info("/auth/me endpoint called")
+    payload = get_auth_payload(request)
+    user_key = payload.get('user_key')
+    account_key = payload.get('account_key')
+    user_dto = UserDTO.find_by_user_key(user_key)
+    if not user_dto or user_dto.account_key != account_key:
+        logging.warning("User not found for user_key: %s, account_key: %s", user_key, account_key)
+        return respond_error('User not found', status=404)
+    user_dict = user_dto.to_dict()
+    user_dict.pop('password', None)
+    user_dict.pop('refresh_tokens', None)
+    response = {
+        'user_key': user_dto.user_key,
+        'account_key': user_dto.account_key,
+        'roles': user_dto.roles,
+        'settings': user_dto.settings,
+        'subscription': user_dto.subscription,
+        'last_active': user_dto.last_active,
+        'user': user_dict
+    }
+    logging.info("/auth/me response: %s", response)
     return respond_success(response)
 
 def build_token_only_response(access_token, expires_in=None):

@@ -128,8 +128,9 @@ def pond_event_action(pond_id, event_type):
                 event_doc_db['fish_age_in_month'] = fish_age_in_month
 
         # If we used event_doc_db directly, ensure it's persisted
+        event_inserted_id = locals().get('event_inserted_id', None)
         try:
-            if 'event_inserted_id' not in locals():
+            if event_inserted_id is None:
                 res = pond_event_repository.create(event_doc_db)
                 event_inserted_id = getattr(res, 'inserted_id', res)
         except Exception:

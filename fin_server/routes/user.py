@@ -220,6 +220,33 @@ def update_settings():
         logging.exception("Error in update_settings")
         return respond_error('Server error', status=500)
 
+@user_bp.route('/settings', methods=['GET'])
+def get_settings():
+    """Return the current user's settings and subscription.
+
+    This is a simple, UX-friendly API so the frontend can hydrate
+    preferences without parsing the full profile object.
+    """
+    current_app.logger.debug('GET /user/settings called')
+    try:
+        payload = get_auth_payload(request)
+        user_key = payload.get('user_key')
+        account_key = payload.get('account_key')
+        user_dto = UserDTO.find_by_user_key(user_key, account_key)
+        if not user_dto:
+            return respond_error('User not found', status=404)
+        if not user_dto.refresh_tokens:
+            return respond_error('User is logged out', status=401)
+        return respond_success({
+            'user_key': user_dto.user_key,
+            'account_key': user_dto.account_key,
+            'settings': user_dto.settings,
+            'subscription': user_dto.subscription
+        })
+    except Exception:
+        logging.exception('Error in get_settings')
+        return respond_error('Server error', status=500)
+
 @user_bp.route('/settings/notifications', methods=['PUT'])
 def update_notification_settings():
     current_app.logger.debug('PUT /api/v1/user/settings/notifications called with data: %s', request.json)
@@ -335,6 +362,39 @@ def delete_user(account_key, user_key):
         return respond_error(str(ue), status=401)
     except Exception as e:
         logging.exception('Error in delete_user')
+        return respond_error('Server error', status=500)
+
+@user_bp.route('/me', methods=['GET'])
+def get_me():
+    """Lightweight "who am I" endpoint.
+
+    Returns the current authenticated user's basic info and settings,
+    using the same normalization as /user/profile but in a compact shape.
+    """
+    current_app.logger.debug('GET /user/me called')
+    try:
+        payload = get_auth_payload(request)
+        user_key = payload.get('user_key')
+        account_key = payload.get('account_key')
+        user_dto = UserDTO.find_by_user_key(user_key, account_key)
+        if not user_dto:
+            return respond_error('User not found', status=404)
+        if not user_dto.refresh_tokens:
+            return respond_error('User is logged out', status=401)
+        doc = user_dto.to_dict()
+        doc.pop('password', None)
+        doc.pop('refresh_tokens', None)
+        me = {
+            'user_key': user_dto.user_key,
+            'account_key': user_dto.account_key,
+            'roles': user_dto.roles,
+            'settings': user_dto.settings,
+            'subscription': user_dto.subscription,
+            'user': doc
+        }
+        return respond_success(me)
+    except Exception:
+        logging.exception('Error in get_me')
         return respond_error('Server error', status=500)
 
 @user_api_bp.route('/users', methods=['GET'])

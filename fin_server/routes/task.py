@@ -51,10 +51,9 @@ def create_task():
         end_date = data.get('end_date')
         if not end_date:
             end_date = get_time_date(include_time=True)
-        # Get user's timezone from settings, default to IST
-        user_tz = 'Asia/Kolkata'
-        if hasattr(assigned_user, 'settings') and assigned_user.settings.get('timezone'):
-            user_tz = assigned_user.settings['timezone']
+        # Get user's timezone from settings, default to IST (Asia/Kolkata)
+        user_settings = assigned_user.get('settings') if isinstance(assigned_user, dict) else None
+        user_tz = (user_settings or {}).get('timezone', 'Asia/Kolkata')
         tz = timezone(user_tz)
         # Convert end_date and task_date to user's timezone if possible
         try:
@@ -473,10 +472,15 @@ def api_create_schedule():
 def api_update_schedule(sched_id):
     try:
         data = request.get_json(force=True)
-        updated = task_repo.update({'task_id': sched_id}, data)
-        if not updated:
-            updated = task_repo.update({'_id': sched_id}, data)
-        updated_task = task_repo.find_one({'task_id': sched_id}) or task_repo.find_one({'_id': sched_id})
+        # Use the same flexible id resolution logic as other task routes
+        task = task_repo.find_by_any_id(sched_id)
+        if not task:
+            return respond_error('Task not found', status=404)
+        key = task.get('task_id') or task.get('_id')
+        updated = task_repo.update({'task_id': key}, data)
+        if not updated and task.get('_id'):
+            updated = task_repo.update({'_id': task.get('_id')}, data)
+        updated_task = task_repo.find_by_any_id(key)
         try:
             td = TaskDTO.from_doc(updated_task)
             return respond_success({'data': td.to_dict()})
@@ -489,9 +493,13 @@ def api_update_schedule(sched_id):
 @task_api_bp.route('/schedules/<sched_id>', methods=['DELETE'])
 def api_delete_schedule(sched_id):
     try:
-        deleted = task_repo.delete({'task_id': sched_id})
-        if not deleted:
-            deleted = task_repo.delete({'_id': sched_id})
+        task = task_repo.find_by_any_id(sched_id)
+        deleted = 0
+        if task:
+            if task.get('task_id'):
+                deleted = task_repo.delete({'task_id': task.get('task_id')})
+            if not deleted and task.get('_id'):
+                deleted = task_repo.delete({'_id': task.get('_id')})
         return respond_success({'data': {'deleted': bool(deleted)}})
     except Exception:
         current_app.logger.exception('Error in api_delete_schedule')
