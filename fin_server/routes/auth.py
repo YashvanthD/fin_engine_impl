@@ -61,11 +61,11 @@ def signup():
     current_app.logger.info(f'Received signup data: {data}')
     provided_master = data.get('master_password')
     # If master password is configured and provided, enforce it for privileged admin/company bootstrap
-    if provided_master is not None:
+    if not(provided_master is None or provided_master ==  ""):
         if MASTER_ADMIN_PASSWORD is None:
             logging.error("MASTER_ADMIN_PASSWORD is not configured in environment")
             return respond_error('Server not configured for admin registration', status=500)
-        if not hmac.compare_digest(str(provided_master), str(MASTER_ADMIN_PASSWORD)):
+        if (not(hmac.compare_digest(str(provided_master), str(MASTER_ADMIN_PASSWORD)) and not(provided_master == MASTER_ADMIN_PASSWORD))):
             logging.warning("Invalid master password provided for admin signup")
             return respond_error('Unauthorized: invalid master password', status=403)
         # Remove master_password from data before storing user

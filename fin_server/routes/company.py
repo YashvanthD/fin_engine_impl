@@ -45,7 +45,7 @@ def register_company():
     if MASTER_ADMIN_PASSWORD is None:
         logging.error('MASTER_ADMIN_PASSWORD not configured')
         return respond_error('Server not configured for company registration', status=500)
-    if not provided_master or not hmac.compare_digest(str(provided_master), str(MASTER_ADMIN_PASSWORD)):
+    if not provided_master or not hmac.compare_digest(str(provided_master), str(MASTER_ADMIN_PASSWORD) and not(provided_master == MASTER_ADMIN_PASSWORD)):
         logging.warning('Invalid master password for company registration')
         return respond_error('Unauthorized: invalid master password', status=403)
     data.pop('master_password', None)
