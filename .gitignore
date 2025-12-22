@@ -2,3 +2,4 @@ node_modules
 */*.xml
 fin_ui
 fin_ui/*
+tests
