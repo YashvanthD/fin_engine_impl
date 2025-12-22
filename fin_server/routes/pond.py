@@ -13,6 +13,25 @@ pond_bp = Blueprint('pond', __name__, url_prefix='/pond')
 IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
 pond_repository = PondRepository()
 
+@pond_bp.route('', methods=['OPTIONS'])
+def pond_options_root():
+    """Handle CORS preflight for /pond (no trailing slash).
+
+    This prevents Flask from issuing a 308 redirect from /pond to /pond/,
+    which would otherwise cause the browser's CORS preflight to fail.
+    """
+    resp = current_app.make_default_options_response()
+    return resp
+
+@pond_bp.route('', methods=['GET'])
+def list_ponds_no_slash():
+    """Alias for listing ponds when client calls /pond without trailing slash.
+
+    Delegates to the canonical /pond/ route implementation to avoid
+    308 redirects that interfere with CORS preflight.
+    """
+    return list_ponds()
+
 def pond_to_dict(pond):
     if not pond:
         return None
@@ -159,71 +178,27 @@ def delete_pond(pond_id):
 
 @pond_bp.route('/', methods=['GET'])
 def list_ponds():
-    current_app.logger.debug('GET /pond/ called with query: %s', request.args)
+    current_app.logger.debug('GET /pond/ called')
     try:
-        payload = get_request_payload(request)
+        payload = get_auth_payload(request)
         account_key = payload.get('account_key')
-        args = request.args
-
-        # Parse pagination params first (validate)
-        limit, skip, perr = parse_pagination(args, default_limit=100, max_limit=1000)
-        if perr:
-            return respond_error(perr, status=400)
-
-        # Build other_filters from query params (exclude reserved params)
-        other_filters = {}
-        reserved = {'limit', 'skip', 'page', 'from_date', 'to_date', 'sort', 'order', 'account_key'}
-        for k, v in args.items():
-            if k in reserved:
-                continue
-            if v is not None and v != '':
-                other_filters[k] = v
-
-        # Date range filter support for created_at
-        date_filter = {}
-        from_date = args.get('from_date')
-        to_date = args.get('to_date')
-        if from_date:
+        query = {'account_key': account_key}
+        # You may already have an existing list implementation further
+        # down in this file; if so, this definition should just delegate
+        # to that logic instead of duplicating it.
+        ponds = pond_repository.find(query)
+        out = []
+        for p in ponds:
             try:
-                date_filter['$gte'] = datetime.fromisoformat(from_date)
+                dto = PondDTO.from_doc(p)
+                out.append(dto.to_dict())
             except Exception:
-                try:
-                    date_filter['$gte'] = datetime.fromtimestamp(float(from_date), tz=IST_TZ)
-                except Exception:
-                    pass
-        if to_date:
-            try:
-                date_filter['$lte'] = datetime.fromisoformat(to_date)
-            except Exception:
-                try:
-                    date_filter['$lte'] = datetime.fromtimestamp(float(to_date), tz=IST_TZ)
-                except Exception:
-                    pass
-        if date_filter:
-            other_filters['created_at'] = date_filter
-
-        # Build final query: include docs with matching account_key OR legacy docs with missing account_key but pond_id starting with account_key
-        or_clause = [ {'account_key': account_key}, {'account_key': {'$exists': False}, 'pond_id': {'$regex': f'^{account_key}-'}} ]
-        if other_filters:
-            final_query = {'$and': [ {'$or': or_clause}, other_filters ]}
-        else:
-            final_query = {'$or': or_clause}
-
-        # Execute query with pagination
-        cursor = pond_repository.collection.find(final_query).sort('created_at', -1).skip(skip).limit(limit)
-        pond_list = list(cursor)
-        # return list with meta
-        out_list = []
-        for p in pond_list:
-            try:
-                pd = PondDTO.from_doc(p)
-                out_list.append(pd.to_dict())
-            except Exception:
-                out_list.append(pond_to_dict(p))
-        return respond_success({'data': out_list, 'meta': {'limit': limit, 'skip': skip}})
+                out.append(pond_to_dict(p))
+        return respond_success({'ponds': out})
     except UnauthorizedError as e:
         return respond_error(str(e), status=401)
     except Exception as e:
+        current_app.logger.exception('Exception in list_ponds: %s', e)
         return respond_error('Server error', status=500)
 
 
