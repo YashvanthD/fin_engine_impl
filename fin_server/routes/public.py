@@ -6,6 +6,25 @@ from fin_server.dto.fish_dto import FishDTO
 public_bp = Blueprint('public', __name__, url_prefix='/public')
 repo = MongoRepositorySingleton.get_instance()
 
+@public_bp.route('/health', methods=['GET'])
+def health_check():
+    """Simple health endpoint for load balancers and uptime checks.
+
+    Returns HTTP 200 if the application is up. Optionally touches the
+    database to verify connectivity but does not expose internal details
+    in the response body.
+    """
+    try:
+        db = repo.get_db()
+        # Perform a very lightweight ping by listing collections once.
+        # Any connectivity/timeout issues will raise and be logged.
+        _ = db.list_collection_names()
+        return respond_success({'status': 'ok', 'db': 'reachable'})
+    except Exception as e:
+        current_app.logger.exception(f'Health check DB error: {e}')
+        # Still return 503 with a minimal payload (no internal details).
+        return respond_error({'status': 'degraded'}, status=503)
+
 @public_bp.route('/company/<account_key>', methods=['GET'])
 def get_company_public(account_key):
     """Public endpoint: return minimal company info for given account_key (no auth required)."""

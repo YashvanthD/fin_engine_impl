@@ -9,16 +9,17 @@ class MongoRepositorySingleton:
 
     @classmethod
     def get_db(cls):
-        """
-        Singleton utility to get the MongoDB database object using the MONGO_URI env variable.
-        Returns the same database instance for use in any repository or route.
-        Logs the URI being used for debugging.
+        """Singleton utility to get the MongoDB database object.
+
+        Uses the MONGO_URI and MONGO_DB environment variables. For local
+        development, defaults to mongodb://localhost:27017 and database
+        'user_db' if not explicitly set. In production you should always
+        set MONGO_URI and MONGO_DB securely via environment.
         """
         if cls._db_instance is not None:
             return cls._db_instance
-        mongo_uri = os.getenv('MONGO_URI', 'mongodb+srv://finuser:finpass@yashmongo1.pdwb1iv.mongodb.net/?appName=yashmongo1')
+        mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017')
         db_name = os.getenv('MONGO_DB', 'user_db')
-        print(f"[MongoRepositorySingleton] Connecting to MongoDB URI: {mongo_uri}, DB: {db_name}")
         logging.info(f"[MongoRepositorySingleton] Connecting to MongoDB URI: {mongo_uri}, DB: {db_name}")
         client = MongoClient(mongo_uri)
         cls._db_instance = client[db_name]

@@ -10,34 +10,40 @@ import logging
 from fin_server.security.authentication import AuthSecurity, get_auth_payload
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
 from fin_server.dto.user_dto import UserDTO
-from fin_server.utils.helpers import respond_success, respond_error, get_request_payload, normalize_doc
+from fin_server.utils.helpers import respond_success, respond_error, normalize_doc
 from fin_server.utils.generator import build_user
 from fin_server.utils.validation import validate_signup, validate_signup_user, build_signup_login_response
 
-MASTER_ADMIN_PASSWORD = os.getenv('MASTER_ADMIN_PASSWORD', 'password')  # Set this in deployment environment
+# In production, MASTER_ADMIN_PASSWORD must be provided via environment variables.
+# In development (FLASK_DEBUG=true), a weak default is allowed for convenience.
+_FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'false').lower() in ('1', 'true', 'yes')
+MASTER_ADMIN_PASSWORD = os.getenv('MASTER_ADMIN_PASSWORD')
+if not MASTER_ADMIN_PASSWORD and _FLASK_DEBUG:
+    MASTER_ADMIN_PASSWORD = 'password'
+
 
 def _encode_password_legacy(pwd: str) -> str:
-	"""Legacy base64 encoding for passwords (for migration only)."""
-	return base64.b64encode(pwd.encode('utf-8')).decode('utf-8')
+    """Legacy base64 encoding for passwords (for migration only)."""
+    return base64.b64encode(pwd.encode('utf-8')).decode('utf-8')
 
 
 def _check_password_migrating(plain: str, stored: str):
-	"""Check password against stored hash, supporting legacy base64.
+    """Check password against stored hash, supporting legacy base64.
 
-	Returns (ok, new_hash_or_none). If ok is True and new_hash_or_none is not
-	None, caller may choose to upgrade the stored password to a stronger hash.
-	This helper does not perform the DB update itself.
-	"""
-	# bcrypt hashes are not handled here anymore; higher-level code should
-	# treat non-base64 values as final and just compare directly if needed.
-	try:
-		if _encode_password_legacy(plain) == stored:
-			# In this project we historically stored base64(password). To keep
-			# behaviour compatible, a match is enough; no new hash is produced.
-			return True, None
-	except Exception:
-		pass
-	return False, None
+    Returns (ok, new_hash_or_none). If ok is True and new_hash_or_none is not
+    None, caller may choose to upgrade the stored password to a stronger hash.
+    This helper does not perform the DB update itself.
+    """
+    # bcrypt hashes are not handled here anymore; higher-level code should
+    # treat non-base64 values as final and just compare directly if needed.
+    try:
+        if _encode_password_legacy(plain) == stored:
+            # In this project we historically stored base64(password). To keep
+            # behaviour compatible, a match is enough; no new hash is produced.
+            return True, None
+    except Exception:
+        pass
+    return False, None
 
 # Blueprint for auth routes
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
