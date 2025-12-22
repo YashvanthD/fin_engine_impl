@@ -1,0 +1,25 @@
+now lets go to pond so there actually adding fish and events will make some data
+user will open our web site
+if ponds are already created then
+user will chose sampling means
+user go to those ponds
+which do select the pond to add fish
+and he get the fish dropdown there we will be listed all the fish entities (already in the database if not he have api to create)
+now he choose pond
+he choose which fish he will going to add
+he choose some random n fish to add (say for 10) he take a test on it weight age color and fish specification after taking n fish samples form the bunch
+he add those m count of fish to the pond
+now we will store the data based on the account_key
+fish_mapping (it means this says which are the fishes in the form)
+fish_activity (it says which fish when added how it was and all those info)
+pond_events (it says which pod when it got fishes how many what is the pond current stats all those )
+so now after seeing all these requirement update the pond api properly
+
+
+
+
+
+
+
+
+
