@@ -1,14 +1,17 @@
 import warnings
 from flask import Flask, render_template
 from flask_cors import CORS
-from fin_server.routes.auth import auth_bp
-from fin_server.routes.user import user_bp
-from fin_server.routes.task import task_bp
+# Register canonical blueprints and their API blueprints from route modules
+from fin_server.routes.auth import auth_bp, auth_api_bp
+from fin_server.routes.user import user_bp, user_api_bp
+from fin_server.routes.task import task_bp, task_api_bp
 from fin_server.routes.company import company_bp
-from fin_server.routes.pond import pond_bp
+from fin_server.routes.pond import pond_bp, pond_api_bp
 from fin_server.routes.fish import fish_bp
 from fin_server.routes.pond_event import pond_event_bp
 from fin_server.routes.public import public_bp
+from fin_server.routes.feeding import feeding_bp, feeding_api_bp
+from fin_server.routes.sampling import sampling_bp, sampling_api_bp
 from fin_server.security.authentication import AuthSecurity
 from fin_server.notification.scheduler import TaskScheduler
 from fin_server.messaging.socket_server import socketio, start_notification_worker
@@ -41,7 +44,7 @@ APP_DEBUG = debug_env in ('1', 'true', 'yes')
 app = Flask(__name__, template_folder='templates')
 CORS(app)
 
-# Register blueprints with /api prefix
+# Register canonical blueprints (keep resource endpoints grouped)
 app.register_blueprint(auth_bp)
 app.register_blueprint(user_bp)
 app.register_blueprint(task_bp)
@@ -50,6 +53,16 @@ app.register_blueprint(pond_bp)
 app.register_blueprint(fish_bp)
 app.register_blueprint(pond_event_bp)
 app.register_blueprint(public_bp)
+app.register_blueprint(feeding_bp)
+app.register_blueprint(sampling_bp)
+
+# Register API blueprints provided by modules (no ad-hoc app.add_url_rule)
+app.register_blueprint(auth_api_bp)
+app.register_blueprint(user_api_bp)
+app.register_blueprint(task_api_bp)
+app.register_blueprint(pond_api_bp)
+app.register_blueprint(feeding_api_bp)
+app.register_blueprint(sampling_api_bp)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -62,4 +75,13 @@ if __name__ == "__main__":
     scheduler.start()
     start_notification_worker()
     # Use APP_DEBUG flag to enable/disable Werkzeug debugger
-    socketio.run(app, host="0.0.0.0", port=5000, debug=APP_DEBUG)
+    # Attempt to run with Socket.IO; if initialization fails (e.g. server attribute missing
+    # due to environment or library mismatch), fall back to the plain Flask development server
+    # so the service still starts and serves HTTP endpoints.
+    try:
+        logging.info('Starting server with Socket.IO')
+        socketio.run(app, host="0.0.0.0", port=5000, debug=APP_DEBUG)
+    except Exception as exc:
+        logging.exception('Socket.IO server failed to start (falling back to Flask.run): %s', exc)
+        # Fallback to Flask's built-in server - not for production, but keeps the app running
+        app.run(host="0.0.0.0", port=5000, debug=APP_DEBUG)

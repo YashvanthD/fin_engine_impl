@@ -1,10 +1,12 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, current_app
 from datetime import datetime, timezone
+import logging
 
 from fin_server.exception.UnauthorizedError import UnauthorizedError
 from fin_server.repository.fish_repository import FishRepository
 from fin_server.repository.fish_analytics_repository import FishAnalyticsRepository
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
+from fin_server.dto.fish_dto import FishDTO
 
 from fin_server.security.authentication import get_auth_payload
 from fin_server.utils import validation
@@ -45,7 +47,7 @@ def create_fish_entity():
 		if duplicate_query["$or"]:
 			existing = fish_repository.find_one(duplicate_query)
 			if existing and not overwrite:
-				return jsonify({'success': False, 'error': 'Fish with the same scientific_name, common_name, or species_code already exists. Use overwrite=true to force.'}), 409
+				return respond_error('Fish with the same scientific_name, common_name, or species_code already exists. Use overwrite=true to force.', status=409)
 		if not species_code:
 			base = ''
 			if sci:
@@ -57,12 +59,25 @@ def create_fish_entity():
 			species_code = f"{base}{generate_key(3)}"
 			data['species_code'] = species_code
 		species_id = species_code
-		# Insert or update fish entity by species_id
+		# Build DTO and DB entity
 		fish_entity = data.copy()
 		fish_entity['_id'] = species_id
-		if hasattr(fish_repository, 'create_or_update'):
-			fish_repository.create_or_update(fish_entity)
-		else:
+		fish_entity['account_key'] = account_key if account_key else fish_entity.get('account_key')
+		try:
+			fish_dto = FishDTO.from_request(fish_entity)
+			# persist using DTO helper (upsert)
+			try:
+				res = fish_dto.save(repo=fish_repository, collection_name='fish', upsert=True)
+				# normalize inserted id
+				inserted = getattr(res, 'inserted_id', res)
+			except Exception:
+				# fallback to repository create
+				if hasattr(fish_repository, 'create_or_update'):
+					fish_repository.create_or_update(fish_dto.to_db_doc())
+				else:
+					fish_repository.create(fish_dto.to_db_doc())
+		except Exception:
+			# fallback to old behavior if dto mapping fails
 			fish_repository.create(fish_entity)
 		# Store mapping in fish_mapping (use helper)
 		try:
@@ -71,10 +86,10 @@ def create_fish_entity():
 			current_app.logger.exception('Failed to add fish to mapping')
 		return respond_success({'species_id': species_id, 'species_code': species_code}, status=201)
 	except UnauthorizedError as e:
-		return jsonify({'success': False, 'error': str(e)}), 401
+		return respond_error(str(e), status=401)
 	except Exception as e:
 		current_app.logger.exception(f'Exception in create_fish_entity: {e}')
-		return jsonify({'success': False, 'error': 'Server error'}), 500
+		return respond_error('Server error', status=500)
 
 @fish_bp.route('/', methods=['POST', 'PUT'], strict_slashes=False)
 def add_fish_batch():
@@ -91,7 +106,7 @@ def add_fish_batch():
 		count = int(data.get('count'))
 		fish_age_in_month = int(data.get('fish_age_in_month'))
 		if not species_code or not count or not fish_age_in_month:
-			return jsonify({'success': False, 'error': 'species_code, count, and fish_age_in_month are required.'}), 400
+			return respond_error('species_code, count, and fish_age_in_month are required.', status=400)
 		# Check if fish entity exists
 		fish_entity = fish_repository.find_one({'_id': species_code})
 		if not fish_entity:
@@ -109,10 +124,10 @@ def add_fish_batch():
 		)
 		return respond_success({'species_id': species_code, 'event_id': event_id}, status=201)
 	except UnauthorizedError as e:
-		return jsonify({'success': False, 'error': str(e)}), 401
+		return respond_error(str(e), status=401)
 	except Exception as e:
 		current_app.logger.exception(f'Exception in add_fish_batch: {e}')
-		return jsonify({'success': False, 'error': 'Server error'}), 500
+		return respond_error('Server error', status=500)
 
 @fish_bp.route('/<species_id>', methods=['GET'])
 def get_fish_by_id(species_id):
@@ -150,23 +165,29 @@ def get_fish_by_id(species_id):
 			pond_events = list(pond_event_repo.find({'account_key': account_key, 'species_code': species_id}))
 		pond_ids = list(set([event.get('pond_id') for event in pond_events if event.get('pond_id')]))
 		fish.update({'analytics': analytics, 'ponds': pond_ids})
-		return respond_success({'fish': fish_to_dict(fish)})
+		return respond_success({'fish': _prepare_fish_ui(fish, analytics, pond_ids)})
 	except UnauthorizedError as e:
-		return jsonify({'success': False, 'error': str(e)}), 401
+		return respond_error(str(e), status=401)
 	except Exception as e:
 		current_app.logger.exception(f'Exception in get_fish_by_id: {e}')
-		return jsonify({'success': False, 'error': 'Server error'}), 500
+		return respond_error('Server error', status=500)
 
 @fish_bp.route('/', methods=['GET'])
 def get_fish():
 	"""Get all fish for the current account_key, with analytics."""
 	try:
+		current_app.logger.debug('GET /fish/ called with args: %s', request.args)
 		payload = get_auth_payload(request)
+		current_app.logger.debug('GET /fish/ auth payload: %s', payload)
 		query = request.args.to_dict()
 		account_key = payload.get('account_key')
+		current_app.logger.debug('GET /fish/ using account_key=%s, raw query=%s', account_key, query)
 		mapping = fish_mapping_repo.find_one({'account_key': account_key})
+		current_app.logger.debug('GET /fish/ mapping doc: %s', mapping)
 		fish_ids = mapping.get('fish_ids', []) if mapping else []
+		current_app.logger.debug('GET /fish/ resolved fish_ids: %s', fish_ids)
 		if not fish_ids:
+			current_app.logger.info('GET /fish/ no mapped fish_ids for account_key=%s, returning empty list', account_key)
 			return respond_success({'fish': []})
 		mongo_query = {'_id': {'$in': fish_ids}}
 		# Date range filter (created_at)
@@ -174,29 +195,43 @@ def get_fish():
 		to_date = query.get('to_date')
 		if from_date or to_date:
 			date_filter = {}
-			if from_date:
-				from datetime import datetime
-				date_filter['$gte'] = datetime.fromisoformat(from_date)
-			if to_date:
-				from datetime import datetime
-				date_filter['$lte'] = datetime.fromisoformat(to_date)
+			try:
+				if from_date:
+					current_app.logger.debug('GET /fish/ parsing from_date=%s', from_date)
+					date_filter['$gte'] = datetime.fromisoformat(from_date)
+				if to_date:
+					current_app.logger.debug('GET /fish/ parsing to_date=%s', to_date)
+					date_filter['$lte'] = datetime.fromisoformat(to_date)
+			except Exception as dt_ex:
+				current_app.logger.exception('GET /fish/ failed to parse date range from_date=%s to_date=%s', from_date, to_date)
+				return respond_error(f'Invalid date format for from_date/to_date: {dt_ex}', status=400)
 			mongo_query['created_at'] = date_filter
 		# Numeric filters (size, weight, count)
 		for field in ['size', 'weight', 'count']:
-			min_val = query.get(f'min_{field}')
-			max_val = query.get(f'max_{field}')
+			min_key = f'min_{field}'
+			max_key = f'max_{field}'
+			min_val = query.get(min_key)
+			max_val = query.get(max_key)
 			if min_val or max_val:
-				num_filter = {}
-				if min_val:
-					num_filter['$gte'] = float(min_val)
-				if max_val:
-					num_filter['$lte'] = float(max_val)
-				mongo_query[field] = num_filter
+				try:
+					num_filter = {}
+					if min_val:
+						num_filter['$gte'] = float(min_val)
+					if max_val:
+						num_filter['$lte'] = float(max_val)
+					mongo_query[field] = num_filter
+					current_app.logger.debug('GET /fish/ numeric filter on %s: %s', field, num_filter)
+				except Exception as num_ex:
+					current_app.logger.exception('GET /fish/ invalid numeric filter %s=%s %s=%s', min_key, min_val, max_key, max_val)
+					return respond_error(f'Invalid numeric filter for {field}: {num_ex}', status=400)
 		# Direct field match (common_name, scientific_name, species_code, etc.)
 		for field in ['common_name', 'scientific_name', 'species_code']:
 			if field in query:
 				mongo_query[field] = {"$eq": query[field]}
+				current_app.logger.debug('GET /fish/ direct match filter on %s=%s', field, query[field])
+		current_app.logger.debug('GET /fish/ final mongo_query: %s', mongo_query)
 		fish_list = fish_repository.find(mongo_query)
+		current_app.logger.debug('GET /fish/ repository returned %d fish docs', len(fish_list) if hasattr(fish_list, '__len__') else -1)
 		# Join analytics for each fish
 		result = []
 		min_age = query.get('min_age')
@@ -204,8 +239,10 @@ def get_fish():
 		avg_n = query.get('avg_n')
 		min_weight = query.get('min_weight')
 		max_weight = query.get('max_weight')
+		current_app.logger.debug('GET /fish/ analytics filters: min_age=%s max_age=%s avg_n=%s min_weight=%s max_weight=%s', min_age, max_age, avg_n, min_weight, max_weight)
 		for f in fish_list:
-			species_id = f['_id']
+			species_id = f.get('_id')
+			current_app.logger.debug('GET /fish/ processing fish_id=%s raw_doc=%s', species_id, f)
 			analytics = fish_analytics_repository.get_analytics(species_id, account_key=account_key, min_age=min_age, max_age=max_age, avg_n=avg_n, min_weight=min_weight, max_weight=max_weight)
 			# Post-filter by age_analytics if needed (kept for compatibility)
 			if min_age or max_age:
@@ -216,14 +253,27 @@ def get_fish():
 						match = True
 						break
 				if not match:
+					current_app.logger.debug('GET /fish/ fish_id=%s filtered out by age_analytics min_age=%s max_age=%s', species_id, min_age, max_age)
 					continue
 			f.update({'analytics': analytics})
-			result.append(fish_to_dict(f))
+			# try to format using DTO
+			try:
+				fdto = FishDTO.from_doc(f)
+				fdto.extra['analytics'] = analytics
+				ui_obj = fdto.to_ui()
+				result.append(ui_obj)
+				current_app.logger.debug('GET /fish/ DTO to_ui for fish_id=%s: %s', species_id, ui_obj)
+			except Exception as dto_ex:
+				current_app.logger.exception('GET /fish/ FishDTO.from_doc/to_ui failed for fish_id=%s, falling back to dict', species_id)
+				result.append(fish_to_dict(f))
+		current_app.logger.info('GET /fish/ returning %d fish records for account_key=%s', len(result), account_key)
 		return respond_success({'fish': result})
 	except UnauthorizedError as e:
-		return jsonify({'success': False, 'error': str(e)}), 401
+		current_app.logger.warning('GET /fish/ UnauthorizedError: %s', e)
+		return respond_error(str(e), status=401)
 	except Exception as e:
-		return jsonify({'success': False, 'error': 'Server error'}), 500
+		current_app.logger.exception('Exception in get_fish')
+		return respond_error('Server error', status=500)
 
 @fish_bp.route('/analytics', methods=['GET'])
 def get_fish_analytics():
@@ -255,10 +305,10 @@ def get_fish_analytics():
 				analytics_result.append({'species_code': sid, 'analytics': analytics})
 		return respond_success({'analytics': analytics_result})
 	except UnauthorizedError as e:
-		return jsonify({'success': False, 'error': str(e)}), 401
+		return respond_error(str(e), status=401)
 	except Exception as e:
 		current_app.logger.exception(f'Exception in get_fish_analytics: {e}')
-		return jsonify({'success': False, 'error': 'Server error'}), 500
+		return respond_error('Server error', status=500)
 
 @fish_bp.route('/<species_id>/analytics', methods=['GET'])
 def get_fish_analytics_by_id(species_id):
@@ -281,10 +331,10 @@ def get_fish_analytics_by_id(species_id):
 		analytics = fish_analytics_repository.get_analytics(species_id, account_key=account_key, min_age=min_age, max_age=max_age, avg_n=avg_n, min_weight=min_weight, max_weight=max_weight)
 		return respond_success({'species_code': species_id, 'analytics': analytics})
 	except UnauthorizedError as e:
-		return jsonify({'success': False, 'error': str(e)}), 401
+		return respond_error(str(e), status=401)
 	except Exception as e:
 		current_app.logger.exception(f'Exception in get_fish_analytics_by_id: {e}')
-		return jsonify({'success': False, 'error': 'Server error'}), 500
+		return respond_error('Server error', status=500)
 
 # New: update fish entity and optionally add a batch
 @fish_bp.route('/<species_id>', methods=['PUT'])
@@ -328,10 +378,10 @@ def update_fish(species_id):
 
 		return respond_success({'species_id': species_id})
 	except UnauthorizedError as e:
-		return jsonify({'success': False, 'error': str(e)}), 401
+		return respond_error(str(e), status=401)
 	except Exception as e:
 		current_app.logger.exception(f'Exception in update_fish: {e}')
-		return jsonify({'success': False, 'error': 'Server error'}), 500
+		return respond_error('Server error', status=500)
 
 
 # GET /fish/fields
@@ -354,12 +404,12 @@ def get_fish_distinct(field):
 	try:
 		_ = get_auth_payload(request)
 		values = fish_repository.get_distinct_values(field)
-		return jsonify({'success': True, 'field': field, 'values': values}), 200
+		return respond_success({'field': field, 'values': values})
 	except UnauthorizedError as e:
-		return jsonify({'success': False, 'error': str(e)}), 401
+		return respond_error(str(e), status=401)
 	except Exception as e:
 		current_app.logger.exception(f'Exception in get_fish_distinct: {e}')
-		return jsonify({'success': False, 'error': 'Server error'}), 500
+		return respond_error('Server error', status=500)
 
 
 # GET /fish/stats/<field>
@@ -368,12 +418,12 @@ def get_fish_stats(field):
 	try:
 		_ = get_auth_payload(request)
 		stats = fish_repository.get_field_stats(field)
-		return jsonify({'success': True, 'field': field, 'stats': stats}), 200
+		return respond_success({'field': field, 'stats': stats})
 	except UnauthorizedError as e:
-		return jsonify({'success': False, 'error': str(e)}), 401
+		return respond_error(str(e), status=401)
 	except Exception as e:
 		current_app.logger.exception(f'Exception in get_fish_stats: {e}')
-		return jsonify({'success': False, 'error': 'Server error'}), 500
+		return respond_error('Server error', status=500)
 
 def fish_to_dict(fish):
 	if not fish:
@@ -392,3 +442,25 @@ def fish_to_dict(fish):
 		# age_analytics is already calculated
 		pass
 	return fish
+
+def _prepare_fish_ui(fish, analytics=None, pond_ids=None):
+	try:
+		fish_doc = dict(fish)
+		if analytics is not None:
+			fish_doc['analytics'] = analytics
+		if pond_ids is not None:
+			fish_doc['ponds'] = pond_ids
+		fish_dto = FishDTO.from_doc(fish_doc)
+		return fish_dto.to_ui()
+	except Exception:
+		# fallback
+		if isinstance(fish, dict):
+			fish['_id'] = str(fish.get('_id'))
+			fish['id'] = fish.get('_id')
+			if analytics is not None:
+				fish['analytics'] = analytics
+			if pond_ids is not None:
+				fish['ponds'] = pond_ids
+			return fish
+		return None
+

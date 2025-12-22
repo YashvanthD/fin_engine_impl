@@ -8,6 +8,23 @@ user_repo = repo.user
 
 from fin_server.security.authentication import AuthSecurity
 
+
+def default_subscription():
+    """Return a default free-tier subscription object.
+
+    Used when creating the very first admin for a new account or when no
+    admin subscription is available. This keeps subscription shape
+    consistent across the app.
+    """
+    return {
+        'subscription_type': 'free',
+        'plan': 'free',
+        # expiry can be None or a far-future placeholder; leaving None here
+        'expiry': None,
+        'features': []
+    }
+
+
 def epoch_to_datetime(epoch):
     return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(epoch))
 

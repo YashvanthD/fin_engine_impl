@@ -61,6 +61,15 @@ class MongoRepositorySingleton:
         from fin_server.repository.notification_repository import NotificationRepository
         from fin_server.repository.notification_queue_repository import NotificationQueueRepository
         from .fish_mapping_repository import FishMappingRepository
+        # New optional repositories for frontend compatibility (import defensively)
+        try:
+            from fin_server.repository.feeding_repository import FeedingRepository
+        except Exception:
+            FeedingRepository = None
+        try:
+            from fin_server.repository.sampling_repository import SamplingRepository
+        except Exception:
+            SamplingRepository = None
 
         db = self.get_db()
         self.fish = FishRepository(db)
@@ -70,6 +79,9 @@ class MongoRepositorySingleton:
         self.task = TaskRepository(db)
         self.message = MessageRepository(db)
         self.notification = NotificationRepository(db)
+        # optional repositories (only initialize if available)
+        self.feeding = FeedingRepository(db) if FeedingRepository else None
+        self.sampling = SamplingRepository(db) if SamplingRepository else None
         # fish_mapping repository expects an already-created collection
         self.fish_mapping = FishMappingRepository(self.get_collection('fish_mapping', db))
         # NotificationQueueRepository expects a db instance (it will fetch/create its collection)

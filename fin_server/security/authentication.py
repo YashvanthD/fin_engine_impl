@@ -7,14 +7,16 @@ from cryptography.hazmat.backends import default_backend
 import hashlib
 import time
 from fin_server.exception.UnauthorizedError import UnauthorizedError
+from fin_server.repository.mongo_helper import MongoRepositorySingleton
 
 class AuthSecurity:
     secret_key = None
     algorithm = 'HS256'
-    access_token_expire_minutes = 3600
-    refresh_token_expire_days = 30
+    # Defaults: access token valid for 7 days, refresh token valid for 90 days
+    access_token_expire_minutes = 7 * 24 * 60  # 10080 minutes
+    refresh_token_expire_days = 90
 
-    def __init__(self, secret_key=None, algorithm='HS256', access_token_expire_minutes=3600, refresh_token_expire_days=30):
+    def __init__(self, secret_key=None, algorithm='HS256', access_token_expire_minutes=7*24*60, refresh_token_expire_days=90):
         if secret_key:
             self.__class__.secret_key = secret_key
         self.__class__.algorithm = algorithm
@@ -22,7 +24,7 @@ class AuthSecurity:
         self.__class__.refresh_token_expire_days = refresh_token_expire_days
 
     @classmethod
-    def configure(cls, secret_key, algorithm='HS256', access_token_expire_minutes=3660, refresh_token_expire_days=30):
+    def configure(cls, secret_key, algorithm='HS256', access_token_expire_minutes=7*24*60, refresh_token_expire_days=90):
         cls.secret_key = secret_key
         cls.algorithm = algorithm
         cls.access_token_expire_minutes = access_token_expire_minutes
@@ -135,48 +137,43 @@ class AuthSecurity:
             return False
 
     @classmethod
+    def _user_repo(cls):
+        """Convenience accessor for the UserRepository singleton."""
+        return MongoRepositorySingleton.get_instance().user
+
+    @classmethod
     def validate(cls, repository, collection_name, token: str) -> bool:
+        """Legacy validate API kept for compatibility.
+
+        New code should prefer validate_token_for_account(), which uses
+        the UserRepository directly. This implementation now delegates
+        to _user_repo() and ignores the injected repository/collection_name.
+        """
         try:
             payload = cls.decode_token(token)
             user_key = payload.get('user_key')
             account_key = payload.get('account_key')
             permission = payload.get('permission')
-            user = repository.find_one(collection_name, {'user_key': user_key, 'account_key': account_key, 'permission': permission})
+            repo = cls._user_repo()
+            user = repo.find_one({'user_key': user_key, 'account_key': account_key, 'permission': permission})
             return user is not None
         except Exception:
             return False
 
     @classmethod
-    def validate_has_role(cls, token: str, required_roles) -> bool:
-        try:
-            payload = cls.decode_token(token)
-            user_roles = payload.get('roles', [])
-            if isinstance(required_roles, str):
-                required_roles = [required_roles]
-            return all(role in user_roles for role in required_roles)
-        except Exception:
-            return False
-
-    @classmethod
-    def validate_has_actions(cls, token: str, required_actions) -> bool:
-        try:
-            payload = cls.decode_token(token)
-            user_actions = payload.get('actions', [])
-            if isinstance(required_actions, str):
-                required_actions = [required_actions]
-            return all(action in user_actions for action in required_actions)
-        except Exception:
-            return False
-
-    @classmethod
     def validate_refresh_token(cls, repository, collection_name, user_key: str, refresh_token: str) -> bool:
+        """Validate a refresh token for a given user_key.
+
+        The repository/collection_name parameters are ignored; we always
+        use the UserRepository singleton under the hood.
+        """
         try:
             payload = cls.decode_token(refresh_token)
             if payload.get('type') != 'refresh':
                 return False
-            user = repository.find_one(collection_name, {'user_key': user_key})
+            repo = cls._user_repo()
+            user = repo.find_one({'user_key': user_key})
             tokens = user.get('refresh_tokens', [])[-5:] if user else []
-            # Base validation: ensure the token belongs to the same user
             token_user_key = payload.get('user_key')
             if not token_user_key or token_user_key != user_key:
                 return False
@@ -186,13 +183,20 @@ class AuthSecurity:
 
     @classmethod
     def validate_role_token(cls, repository, collection_name, token: str, required_role: str, account_key: str = None) -> bool:
+        """Validate that the token belongs to a user with a specific role.
+
+        Uses the UserRepository directly; repository and collection_name
+        are accepted for backwards compatibility but ignored.
+        """
         try:
             payload = cls.decode_token(token)
             user_key = payload.get('user_key')
             query = {'user_key': user_key}
             if account_key:
                 query['account_key'] = account_key
-            user = repository.find_one(collection_name, query)
+            repo = cls._user_repo()
+            user = repo.find_one(query)
+            print("user found for role validation:", user, query)
             if not user:
                 return False
             user_roles = payload.get('roles', [])
@@ -202,16 +206,21 @@ class AuthSecurity:
 
     @classmethod
     def validate_roles_token(cls, repository, collection_name, token: str, required_roles: list, account_key: str = None) -> bool:
+        """Validate that the token has all of the required roles.
+
+        Uses the UserRepository directly; repository and collection_name
+        are accepted for backwards compatibility but ignored.
+        """
         try:
             payload = cls.decode_token(token)
             user_key = payload.get('user_key')
             query = {'user_key': user_key}
             if account_key:
                 query['account_key'] = account_key
-            user = repository.find_one(collection_name, query)
+            repo = cls._user_repo()
+            user = repo.find_one(query)
             if not user:
                 return False
-            # Use 'role' for single role, 'roles' for multiple roles
             user_roles = []
             if 'roles' in payload:
                 user_roles = payload.get('roles', [])
@@ -220,6 +229,21 @@ class AuthSecurity:
             if isinstance(required_roles, str):
                 required_roles = [required_roles]
             return all(role in user_roles for role in required_roles)
+        except Exception:
+            return False
+
+    @classmethod
+    def validate_token_for_account(cls, token: str, account_key: str = None) -> bool:
+        """New helper: validate a token against the current UserRepository and optional account_key."""
+        try:
+            payload = cls.decode_token(token)
+            user_key = payload.get('user_key')
+            query = {'user_key': user_key}
+            if account_key:
+                query['account_key'] = account_key
+            repo = cls._user_repo()
+            user = repo.find_one(query)
+            return user is not None
         except Exception:
             return False
 

@@ -4,11 +4,15 @@ from fin_server.repository.mongo_helper import MongoRepositorySingleton
 from fin_server.security.authentication import UnauthorizedError
 from fin_server.utils.generator import resolve_user, get_default_task_date, get_default_end_date
 from fin_server.utils.helpers import get_request_payload, respond_error, respond_success
+
 from pytz import timezone
 import time
 import logging
 from datetime import datetime
+from fin_server.dto.task_dto import TaskDTO
 
+
+# Task repository and related singletons
 task_repo = TaskRepository()
 repo = MongoRepositorySingleton.get_instance()
 user_repo = repo.user
@@ -30,7 +34,7 @@ def create_task():
             assigned_to_input = user_key
         # Resolve assigned_to to user object
         if assigned_to_input == user_key:
-            assigned_user = user_repo.find_one('users', {'user_key': user_key, 'account_key': account_key})
+            assigned_user = user_repo.find_one({'user_key': user_key, 'account_key': account_key})
         else:
             assigned_user = resolve_user(assigned_to_input, account_key)
         if not assigned_user:
@@ -116,9 +120,25 @@ def create_task():
                     task_data['priority'] = 1
         except Exception:
             pass
-        task_id = task_repo.create_task(task_data)
+        # Persist using TaskDTO.save for canonical behavior
+        try:
+            task_data['task_id'] = task_data.get('task_id') or None
+            td = TaskDTO.from_request(task_data)
+            res = td.save(repo=task_repo, collection_name='tasks', upsert=True)
+            task_id = getattr(res, 'inserted_id', res)
+            # Some repo.create implementations return inserted id or the doc
+            if isinstance(task_id, dict):
+                task_id = task_id.get('task_id') or task_id.get('_id')
+        except Exception:
+            task_id = task_repo.create(task_data)
         current_app.logger.info(f'Task created with id: {task_id}, account={account_key}, user={user_key}')
-        return respond_success({'task_id': task_id}, status=201)
+        # Build DTO for returned task
+        try:
+            task_data['task_id'] = task_id
+            task_dto = TaskDTO.from_request(task_data)
+            return respond_success(task_dto.to_dict(), status=201)
+        except Exception:
+            return respond_success({'task_id': task_id}, status=201)
     except Exception as e:
         logging.exception("Error in create_task")
         return respond_error('Server error', status=500)
@@ -143,39 +163,91 @@ def get_tasks():
             'unread': 0
         }
         task_objs = []
+
+        def _parse_to_epoch(s: str):
+            if not s:
+                return None
+            # Try ISO first
+            try:
+                dt = datetime.fromisoformat(s)
+                return int(dt.timestamp())
+            except Exception:
+                pass
+            # Try common formats
+            fmts = ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d']
+            for f in fmts:
+                try:
+                    dt = datetime.strptime(s, f)
+                    return int(time.mktime(dt.timetuple()))
+                except Exception:
+                    continue
+            # Last resort: try to parse as float epoch
+            try:
+                return int(float(s))
+            except Exception:
+                return None
+
         for t in tasks:
-            t['_id'] = str(t['_id'])
-            if 'task_id' not in t:
-                t['task_id'] = t['_id']  # fallback for legacy tasks
-            if 'viewed' not in t:
-                t['viewed'] = False
-            status = t.get('status', '').lower()
+            # Convert using DTO when possible
+            try:
+                td = TaskDTO.from_doc(t)
+                tdict = td.to_dict()
+            except Exception:
+                t['_id'] = str(t['_id'])
+                tdict = t
+            status = str(tdict.get('status', '')).lower()
             if status == 'pending':
                 meta['pending'] += 1
-            elif status == 'inprogress':
+            elif status == 'inprogress' or status == 'in-progress':
                 meta['inprogress'] += 1
-            elif status == 'completed':
+            elif status == 'completed' or status == 'done':
                 meta['completed'] += 1
-            end_date = t.get('end_date')
-            if status != 'completed' and end_date:
+            end_date = tdict.get('endTime') or tdict.get('end_date') or tdict.get('endTime')
+            if status not in ('completed',) and end_date:
                 try:
-                    end_epoch = int(time.mktime(time.strptime(end_date, '%Y-%m-%d')))
-                    if end_epoch < now:
+                    end_epoch = _parse_to_epoch(end_date)
+                    if end_epoch is not None and end_epoch < now:
                         meta['overdue'] += 1
                 except Exception:
                     pass
-            if t.get('priority') == 1:
+            if tdict.get('priority') in (1, '1', 'critical'):
                 meta['critical'] += 1
-            if t['viewed']:
+            if tdict.get('viewed'):
                 meta['read'] += 1
             else:
                 meta['unread'] += 1
-            task_objs.append(t)
+            task_objs.append(tdict)
         return respond_success({'meta': meta, 'tasks': task_objs})
     except UnauthorizedError as e:
         return respond_error(str(e), status=401)
     except Exception as e:
         logging.exception("Error in get_tasks")
+        return respond_error('Server error', status=500)
+
+@task_bp.route('/<task_id>', methods=['GET'])
+def get_task(task_id):
+    """Get a single task by ID.
+
+    Supports flexible lookup by:
+      - task_id (business id used in most APIs)
+      - Mongo _id string (id field returned by TaskDTO)
+    """
+    try:
+        _ = get_request_payload(request)
+        task = task_repo.find_by_any_id(task_id)
+        if not task:
+            return respond_error('Task not found', status=404)
+        try:
+            td = TaskDTO.from_doc(task)
+            return respond_success(td.to_dict())
+        except Exception:
+            task['_id'] = str(task.get('_id'))
+            task['id'] = task.get('task_id') or task['_id']
+            return respond_success(task)
+    except UnauthorizedError as e:
+        return respond_error(str(e), status=401)
+    except Exception:
+        logging.exception('Error in get_task')
         return respond_error('Server error', status=500)
 
 @task_bp.route('/<task_id>', methods=['PUT'])
@@ -186,11 +258,41 @@ def update_task(task_id):
         account_key = payload.get('account_key')
         roles = payload.get('roles', [])
         data = request.get_json(force=True)
+        current_app.logger.debug('PUT /task/%s raw payload: %s', task_id, data)
+        # Normalize common camelCase fields coming from UI into backend field names
+        if isinstance(data, dict):
+            # id/taskId -> task_id (query still uses URL param task_id)
+            if 'taskId' in data and 'task_id' not in data:
+                data['task_id'] = data.get('taskId')
+            # assignedTo -> assigned_to/assignee
+            if 'assignedTo' in data and 'assigned_to' not in data and 'assignee' not in data:
+                data['assigned_to'] = data.get('assignedTo')
+            # scheduledDate -> task_date
+            if 'scheduledDate' in data and 'task_date' not in data:
+                data['task_date'] = data.get('scheduledDate')
+            # endDate -> end_date
+            if 'endDate' in data and 'end_date' not in data:
+                data['end_date'] = data.get('endDate')
+            # remindBefore -> remind_before
+            if 'remindBefore' in data and 'remind_before' not in data:
+                data['remind_before'] = data.get('remindBefore')
+            # reminderTime -> reminder_time
+            if 'reminderTime' in data and 'reminder_time' not in data:
+                data['reminder_time'] = data.get('reminderTime')
+            # userKey -> user_key
+            if 'userKey' in data and 'user_key' not in data:
+                data['user_key'] = data.get('userKey')
+            # pondId -> pond_id
+            if 'pondId' in data and 'pond_id' not in data:
+                data['pond_id'] = data.get('pondId')
         update_fields = dict(data)
         update_fields.pop('_id', None)  # Remove immutable _id field before update
-        task = task_repo.get_task(task_id)
+        # Flexible lookup by task_id or _id
+        task = task_repo.find_by_any_id(task_id)
         if not task:
+            current_app.logger.warning('PUT /task/%s: task not found', task_id)
             return respond_error('Task not found', status=404)
+        current_app.logger.debug('PUT /task/%s existing task doc: %s', task_id, task)
         new_assignee_input = update_fields.get('assignee') or update_fields.get('assigned_to')
         if new_assignee_input and new_assignee_input != task.get('assignee', task.get('assigned_to')):
             assigned_user = resolve_user(new_assignee_input, account_key)
@@ -200,7 +302,7 @@ def update_task(task_id):
             # Allow self-assignment for any user
             if new_assignee != user_key:
                 if 'admin' not in roles:
-                    admin_user = user_repo.find_one('users', {'roles': {'$in': ['admin']}, 'account_key': account_key})
+                    admin_user = user_repo.find_one({'roles': {'$in': ['admin']}, 'account_key': account_key})
                     if not admin_user or new_assignee != admin_user['user_key'] or task.get('assignee', task.get('assigned_to')) != user_key:
                         return respond_error('Only admin can assign to other users, or user can reassign their own task to admin', status=403)
             history = task.get('history', [])
@@ -213,13 +315,24 @@ def update_task(task_id):
             update_fields['history'] = history
             update_fields['assignee'] = new_assignee
             update_fields['assigned_to'] = new_assignee
-        updated = task_repo.update_task(task_id, update_fields)
+        current_app.logger.debug('PUT /task/%s final update_fields: %s', task_id, update_fields)
+        # Update by task_id and, as a fallback, by _id
+        updated = task_repo.update({'task_id': task.get('task_id') or task_id}, update_fields)
+        if not updated and task.get('_id'):
+            updated = task_repo.update({'_id': task.get('_id')}, update_fields)
+        # If nothing was modified but the task exists, treat it as a no-op success instead of failing
         if not updated:
-            logging.error(f"Task update failed for task_id={task_id}, user_key={user_key}, update_fields={update_fields}")
-            return respond_error('Task update failed', status=400)
-        logging.info(f"Task updated successfully for task_id={task_id}, user_key={user_key}")
-        return respond_success({'updated': True})
-    except Exception as e:
+            current_app.logger.info('PUT /task/%s: no fields modified (no-op update). Returning success.', task_id)
+        else:
+            current_app.logger.info('Task updated successfully for task_id=%s, user_key=%s', task.get('task_id') or task_id, user_key)
+        # Return updated task via DTO
+        try:
+            refreshed = task_repo.find_by_any_id(task.get('task_id') or task_id)
+            td = TaskDTO.from_doc(refreshed)
+            return respond_success(td.to_dict())
+        except Exception:
+            return respond_success({'updated': bool(updated)})
+    except Exception:
         logging.exception("Error in update_task")
         return respond_error('Server error', status=500)
 
@@ -228,12 +341,19 @@ def delete_task(task_id):
     try:
         payload = get_request_payload(request)
         user_key = payload.get('user_key')
-        deleted = task_repo.delete(task_id)
+        # support deleting by task_id or _id
+        task = task_repo.find_by_any_id(task_id)
+        deleted = 0
+        if task:
+            if task.get('task_id'):
+                deleted = task_repo.delete({'task_id': task.get('task_id')})
+            if not deleted and task.get('_id'):
+                deleted = task_repo.delete({'_id': task.get('_id')})
         return respond_success({'deleted': bool(deleted)})
     except UnauthorizedError as e:
         return respond_error(str(e), status=401)
-    except Exception as e:
-        logging.exception("Error in delete_task")
+    except Exception:
+        logging.exception('Error in delete_task')
         return respond_error('Server error', status=500)
 
 @task_bp.route('/<task_id>/move', methods=['POST'])
@@ -247,7 +367,7 @@ def move_task(task_id):
         new_assignee_input = data.get('new_assignee')
         if not new_assignee_input:
             return respond_error('Missing new_assignee', status=400)
-        task = task_repo.get_task(task_id)
+        task = task_repo.find_by_any_id(task_id)
         if not task:
             return respond_error('Task not found', status=404)
         assigned_user = resolve_user(new_assignee_input, account_key)
@@ -268,8 +388,111 @@ def move_task(task_id):
             'assigned_to': new_assignee,
             'history': history
         }
-        updated = task_repo.update_task(task_id, update_fields)
-        return respond_success({'updated': bool(updated)})
+        updated = task_repo.update({'task_id': task.get('task_id') or task_id}, update_fields)
+        if not updated and task.get('_id'):
+            updated = task_repo.update({'_id': task.get('_id')}, update_fields)
+        try:
+            refreshed = task_repo.find_by_any_id(task.get('task_id') or task_id)
+            td = TaskDTO.from_doc(refreshed)
+            return respond_success(td.to_dict())
+        except Exception:
+            return respond_success({'updated': bool(updated)})
+    except Exception:
+        logging.exception('Error in move_task')
+        return respond_error('Server error', status=500)
+
+# Remove misplaced API routes under task_bp and provide proper api blueprint
+from flask import Blueprint
+
+task_api_bp = Blueprint('task_api', __name__, url_prefix='/api')
+
+@task_api_bp.route('/schedules', methods=['GET'])
+def api_list_schedules():
+    try:
+        payload = get_request_payload(request)
+        query = {}
+        pondId = request.args.get('pondId') or request.args.get('pond_id')
+        if pondId:
+            query['pond_id'] = pondId
+        assignedTo = request.args.get('assignedTo') or request.args.get('assigned_to')
+        if assignedTo:
+            query['assigned_to'] = assignedTo
+        status = request.args.get('status')
+        if status:
+            query['status'] = status
+        tasks = task_repo.find(query)
+        out = []
+        for t in tasks:
+            try:
+                td = TaskDTO.from_doc(t)
+                out.append(td.to_dict())
+            except Exception:
+                t['_id'] = str(t.get('_id'))
+                t['id'] = t.get('task_id') or t['_id']
+                out.append(t)
+        return respond_success({'data': out})
+    except UnauthorizedError as e:
+        return respond_error(str(e), status=401)
     except Exception as e:
-        logging.exception("Error in move_task")
+        current_app.logger.exception('Error in api_list_schedules')
+        return respond_error('Server error', status=500)
+
+@task_api_bp.route('/schedules', methods=['POST'])
+def api_create_schedule():
+    try:
+        payload = get_request_payload(request)
+        data = request.get_json(force=True)
+        task_data = dict(data)
+        if 'pondId' in data and 'pond_id' not in data:
+            task_data['pond_id'] = data['pondId']
+        task_data['user_key'] = payload.get('user_key')
+        # Use repository create if available
+        try:
+            td = TaskDTO.from_request(task_data)
+            res = td.save(repo=task_repo, collection_name='tasks', upsert=True)
+            inserted = getattr(res, 'inserted_id', res)
+            task_id = inserted if inserted else task_data.get('task_id')
+            task_data['task_id'] = task_id
+            return respond_success({'data': TaskDTO.from_request(task_data).to_dict()}, status=201)
+        except Exception:
+            try:
+                res = task_repo.collection.insert_one(task_data)
+                task_id = str(res.inserted_id)
+                task_data['task_id'] = task_id
+                td = TaskDTO.from_request(task_data)
+                return respond_success({'data': td.to_dict()}, status=201)
+            except Exception:
+                return respond_error('Failed to create task', status=500)
+    except UnauthorizedError as e:
+        return respond_error(str(e), status=401)
+    except Exception as e:
+        current_app.logger.exception('Error in api_create_schedule')
+        return respond_error('Server error', status=500)
+
+@task_api_bp.route('/schedules/<sched_id>', methods=['PATCH'])
+def api_update_schedule(sched_id):
+    try:
+        data = request.get_json(force=True)
+        updated = task_repo.update({'task_id': sched_id}, data)
+        if not updated:
+            updated = task_repo.update({'_id': sched_id}, data)
+        updated_task = task_repo.find_one({'task_id': sched_id}) or task_repo.find_one({'_id': sched_id})
+        try:
+            td = TaskDTO.from_doc(updated_task)
+            return respond_success({'data': td.to_dict()})
+        except Exception:
+            return respond_success({'data': {'updated': True}})
+    except Exception:
+        current_app.logger.exception('Error in api_update_schedule')
+        return respond_error('Server error', status=500)
+
+@task_api_bp.route('/schedules/<sched_id>', methods=['DELETE'])
+def api_delete_schedule(sched_id):
+    try:
+        deleted = task_repo.delete({'task_id': sched_id})
+        if not deleted:
+            deleted = task_repo.delete({'_id': sched_id})
+        return respond_success({'data': {'deleted': bool(deleted)}})
+    except Exception:
+        current_app.logger.exception('Error in api_delete_schedule')
         return respond_error('Server error', status=500)

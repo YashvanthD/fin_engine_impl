@@ -1,10 +1,12 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, current_app
 from datetime import datetime, timezone
+
+from fin_server.exception.UnauthorizedError import UnauthorizedError
 from fin_server.repository.pond_repository import PondRepository
 from fin_server.security.authentication import get_auth_payload
 from fin_server.utils.helpers import get_request_payload, parse_pagination
-from fin_server.utils.helpers import normalize_doc
-from fin_server.exception.UnauthorizedError import UnauthorizedError
+from fin_server.utils.helpers import normalize_doc, respond_success, respond_error
+from fin_server.dto.pond_dto import PondDTO
 
 pond_bp = Blueprint('pond', __name__, url_prefix='/pond')
 pond_repository = PondRepository()
@@ -54,18 +56,29 @@ def create_pond_entity():
         # Check for duplicate pond_id
         existing = pond_repository.find_one({'pond_id': pond_id})
         if existing:
-            return jsonify({'success': False, 'error': 'Pond with this pond_id already exists.'}), 409
+            return respond_error('Pond with this pond_id already exists.', status=409)
         # Insert pond entity (ensure account_key is saved)
         pond_entity = data.copy()
         pond_entity['_id'] = pond_id
         pond_entity['account_key'] = account_key
-        pond_repository.create(pond_entity)
-        return jsonify({'success': True, 'pond_id': pond_id}), 201
+        # Persist using DTO save helper when possible
+        try:
+            pdto = PondDTO.from_request(pond_entity)
+            res = pdto.save(repo=pond_repository, collection_name='ponds', upsert=True)
+            created = pond_repository.find_one({'pond_id': pond_id})
+            try:
+                return respond_success(PondDTO.from_doc(created).to_dict(), status=201)
+            except Exception:
+                return respond_success(created, status=201)
+        except Exception:
+            pond_repository.create(pond_entity)
+            created = pond_repository.find_one({'pond_id': pond_id})
+            return respond_success(pond_to_dict(created), status=201)
     except UnauthorizedError as e:
-        return jsonify({'success': False, 'error': str(e)}), 401
+        return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception(f'Exception in create_pond_entity: {e}')
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 @pond_bp.route('/update/<pond_id>', methods=['PUT'])
 def update_pond_entity(pond_id):
@@ -76,17 +89,18 @@ def update_pond_entity(pond_id):
         # Only allow updating certain fields (not _id/account_key)
         update_fields = {k: v for k, v in data.items() if k not in ['_id', 'account_key', 'pond_id']}
         if not update_fields:
-            return jsonify({'success': False, 'error': 'No updatable fields provided.'}), 400
+            return respond_error('No updatable fields provided.', status=400)
         account_key = payload.get('account_key')
         result = pond_repository.update({'pond_id': pond_id, 'account_key': account_key}, update_fields)
-        if not result or not result.modified_count:
-            return jsonify({'success': False, 'error': 'Pond not found or nothing updated.'}), 404
-        return jsonify({'success': True, 'pond_id': pond_id}), 200
+        if not result or not getattr(result, 'modified_count', 0):
+            return respond_error('Pond not found or nothing updated.', status=404)
+        updated = pond_repository.find_one({'pond_id': pond_id})
+        return respond_success(updated)
     except UnauthorizedError as e:
-        return jsonify({'success': False, 'error': str(e)}), 401
+        return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception(f'Exception in update_pond_entity: {e}')
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 @pond_bp.route('/<pond_id>', methods=['GET'])
 def get_pond(pond_id):
@@ -98,12 +112,16 @@ def get_pond(pond_id):
         account_key = payload.get('account_key')
         pond = pond_repository.find_one({'pond_id': pond_id, 'account_key': account_key})
         if not pond:
-            return jsonify({'success': False, 'error': 'Pond not found'}), 404
-        return jsonify({'success': True, 'pond': pond_to_dict(pond)}), 200
+            return respond_error('Pond not found', status=404)
+        try:
+            pond_dto = PondDTO.from_doc(pond)
+            return respond_success(pond_dto.to_dict())
+        except Exception:
+            return respond_success(pond_to_dict(pond))
     except UnauthorizedError as e:
-        return jsonify({'success': False, 'error': str(e)}), 401
+        return respond_error(str(e), status=401)
     except Exception as e:
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 @pond_bp.route('/<pond_id>', methods=['PUT'])
 def update_pond(pond_id):
@@ -113,13 +131,14 @@ def update_pond(pond_id):
         data = request.get_json(force=True)
         account_key = payload.get('account_key')
         result = pond_repository.update({'pond_id': pond_id, 'account_key': account_key}, data)
-        if not result or not result.modified_count:
-            return jsonify({'success': False, 'error': 'Pond not found or nothing updated.'}), 404
-        return jsonify({'success': True, 'updated': True}), 200
+        if not result or not getattr(result, 'modified_count', 0):
+            return respond_error('Pond not found or nothing updated.', status=404)
+        updated = pond_repository.find_one({'pond_id': pond_id})
+        return respond_success(updated)
     except UnauthorizedError as e:
-        return jsonify({'success': False, 'error': str(e)}), 401
+        return respond_error(str(e), status=401)
     except Exception as e:
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 @pond_bp.route('/<pond_id>', methods=['DELETE'])
 def delete_pond(pond_id):
@@ -128,13 +147,13 @@ def delete_pond(pond_id):
         payload = get_auth_payload(request)
         account_key = payload.get('account_key')
         result = pond_repository.delete({'pond_id': pond_id, 'account_key': account_key})
-        if not result or not result.deleted_count:
-            return jsonify({'success': False, 'error': 'Pond not found'}), 404
-        return jsonify({'success': True, 'deleted': True}), 200
+        if not result or not getattr(result, 'deleted_count', 0):
+            return respond_error('Pond not found', status=404)
+        return respond_success({'deleted': True})
     except UnauthorizedError as e:
-        return jsonify({'success': False, 'error': str(e)}), 401
+        return respond_error(str(e), status=401)
     except Exception as e:
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 @pond_bp.route('/', methods=['GET'])
 def list_ponds():
@@ -147,7 +166,7 @@ def list_ponds():
         # Parse pagination params first (validate)
         limit, skip, perr = parse_pagination(args, default_limit=100, max_limit=1000)
         if perr:
-            return jsonify({'success': False, 'errors': perr}), 400
+            return respond_error(perr, status=400)
 
         # Build other_filters from query params (exclude reserved params)
         other_filters = {}
@@ -191,11 +210,19 @@ def list_ponds():
         # Execute query with pagination
         cursor = pond_repository.collection.find(final_query).sort('created_at', -1).skip(skip).limit(limit)
         pond_list = list(cursor)
-        return jsonify({'success': True, 'ponds': [pond_to_dict(p) for p in pond_list], 'meta': {'limit': limit, 'skip': skip}}), 200
+        # return list with meta
+        out_list = []
+        for p in pond_list:
+            try:
+                pd = PondDTO.from_doc(p)
+                out_list.append(pd.to_dict())
+            except Exception:
+                out_list.append(pond_to_dict(p))
+        return respond_success({'data': out_list, 'meta': {'limit': limit, 'skip': skip}})
     except UnauthorizedError as e:
-        return jsonify({'success': False, 'error': str(e)}), 401
+        return respond_error(str(e), status=401)
     except Exception as e:
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 
 # GET fish options (for dropdown) for a pond - list fish entities mapped to the account
@@ -215,12 +242,12 @@ def pond_fish_options(pond_id):
         fish_list = fr.find({'_id': {'$in': fish_ids}}) if fish_ids else []
         # transform to simple dropdown format
         options = [{'id': f['_id'], 'species_code': f.get('species_code'), 'common_name': f.get('common_name')} for f in fish_list]
-        return jsonify({'success': True, 'pond_id': pond_id, 'options': options}), 200
+        return respond_success({'pondId': pond_id, 'options': options})
     except UnauthorizedError as e:
-        return jsonify({'success': False, 'error': str(e)}), 401
+        return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception(f'Exception in pond_fish_options: {e}')
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 
 # GET /pond/<pond_id>/activity - paginated list of fish_activity (samples)
@@ -271,12 +298,12 @@ def pond_activity(pond_id):
         for a in activities:
             if 'created_at' in a and hasattr(a['created_at'], 'isoformat'):
                 a['created_at'] = a['created_at'].isoformat()
-        return jsonify({'success': True, 'pond_id': pond_id, 'activities': activities}), 200
+        return respond_success({'pondId': pond_id, 'activities': activities})
     except UnauthorizedError as e:
-        return jsonify({'success': False, 'error': str(e)}), 401
+        return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception(f'Exception in pond_activity: {e}')
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 
 # GET /pond/<pond_id>/history - combine pond events, activity samples and analytics
@@ -413,10 +440,179 @@ def pond_history(pond_id):
 
         # Normalize nested BSON types (ObjectId) and datetimes
         result_normalized = normalize_doc(result)
-        return jsonify({'success': True, 'history': result_normalized}), 200
+        return respond_success({'history': result_normalized})
     except UnauthorizedError as e:
-        return jsonify({'success': False, 'error': str(e)}), 401
+        return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception(f'Exception in pond_history: {e}')
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
+
+# New: API helpers (canonical pond API functions used by /api/compat shim)
+def api_list_ponds():
+    """Return Flask response listing ponds for authenticated account (used by compat layer)."""
+    try:
+        payload = get_request_payload()
+        account_key = payload.get('account_key')
+        args = request.args
+        limit, skip, perr = parse_pagination(args, default_limit=100, max_limit=1000)
+        if perr:
+            return respond_error(perr, status=400)
+        other_filters = {}
+        reserved = {'limit', 'skip', 'page', 'from_date', 'to_date', 'sort', 'order', 'account_key'}
+        for k, v in args.items():
+            if k in reserved:
+                continue
+            if v is not None and v != '':
+                other_filters[k] = v
+        date_filter = {}
+        from_date = args.get('from_date')
+        to_date = args.get('to_date')
+        if from_date:
+            try:
+                date_filter['$gte'] = datetime.fromisoformat(from_date)
+            except Exception:
+                try:
+                    date_filter['$gte'] = datetime.fromtimestamp(float(from_date), tz=timezone.utc)
+                except Exception:
+                    pass
+        if to_date:
+            try:
+                date_filter['$lte'] = datetime.fromisoformat(to_date)
+            except Exception:
+                try:
+                    date_filter['$lte'] = datetime.fromtimestamp(float(to_date), tz=timezone.utc)
+                except Exception:
+                    pass
+        if date_filter:
+            other_filters['created_at'] = date_filter
+        or_clause = [ {'account_key': account_key}, {'account_key': {'$exists': False}, 'pond_id': {'$regex': f'^{account_key}-'}} ]
+        final_query = {'$and': [ {'$or': or_clause}, other_filters ]} if other_filters else {'$or': or_clause}
+        cursor = pond_repository.collection.find(final_query).sort('created_at', -1).skip(skip).limit(limit)
+        pond_list = list(cursor)
+        out_list = []
+        for p in pond_list:
+            try:
+                pd = PondDTO.from_doc(p)
+                out_list.append(pd.to_dict())
+            except Exception:
+                out_list.append(pond_to_dict(p))
+        return respond_success({'data': out_list, 'meta': {'limit': limit, 'skip': skip}})
+    except UnauthorizedError as e:
+        return respond_error(str(e), status=401)
+    except Exception as e:
+        current_app.logger.exception('Error in api_list_ponds')
+        return respond_error('Server error', status=500)
+
+
+def api_create_pond():
+    """Create pond (used by compat shim)."""
+    try:
+        payload = get_request_payload()
+        data = request.get_json(force=True)
+        account_key = payload.get('account_key')
+        data.pop('account_key', None)
+        data['created_at'] = datetime.now(timezone.utc)
+        pond_id = data.get('pond_id')
+        if not pond_id:
+            next_num = get_next_pond_number(account_key)
+            pond_id = f"{account_key}-{next_num:03d}"
+            data['pond_id'] = pond_id
+        existing = pond_repository.find_one({'pond_id': pond_id})
+        if existing:
+            return respond_error('Pond with this pond_id already exists.', status=409)
+        pond_entity = data.copy()
+        pond_entity['_id'] = pond_id
+        pond_entity['account_key'] = account_key
+        try:
+            pdto = PondDTO.from_request(pond_entity)
+            pdto.save(repo=pond_repository, collection_name='ponds', upsert=True)
+            return respond_success({'pond_id': pond_id}, status=201)
+        except Exception:
+            res = pond_repository.create(pond_entity)
+            return respond_success({'pond_id': pond_id}, status=201)
+    except UnauthorizedError as e:
+        return respond_error(str(e), status=401)
+    except Exception as e:
+        current_app.logger.exception('Error in api_create_pond')
+        return respond_error('Server error', status=500)
+
+
+def api_get_pond(pond_id):
+    try:
+        payload = get_request_payload()
+        account_key = payload.get('account_key')
+        pond = pond_repository.find_one({'pond_id': pond_id, 'account_key': account_key})
+        if not pond:
+            return respond_error('Pond not found', status=404)
+        try:
+            pd = PondDTO.from_doc(pond)
+            return respond_success({'pond': pd.to_dict()})
+        except Exception:
+            return respond_success({'pond': pond_to_dict(pond)})
+    except UnauthorizedError as e:
+        return respond_error(str(e), status=401)
+    except Exception as e:
+        current_app.logger.exception('Error in api_get_pond')
+        return respond_error('Server error', status=500)
+
+
+def api_patch_pond(pond_id):
+    try:
+        payload = get_request_payload()
+        data = request.get_json(force=True)
+        data.pop('_id', None)
+        data.pop('account_key', None)
+        result = pond_repository.update({'pond_id': pond_id, 'account_key': payload.get('account_key')}, data)
+        if not result or not result.modified_count:
+            return respond_error('Pond not found or nothing updated.', status=404)
+        updated = pond_repository.find_one({'pond_id': pond_id})
+        try:
+            pd = PondDTO.from_doc(updated)
+            return respond_success({'pond': pd.to_dict()})
+        except Exception:
+            return respond_success({'pond': pond_to_dict(updated)})
+    except UnauthorizedError as e:
+        return respond_error(str(e), status=401)
+    except Exception as e:
+        current_app.logger.exception('Error in api_patch_pond')
+        return respond_error('Server error', status=500)
+
+
+def api_delete_pond(pond_id):
+    try:
+        payload = get_request_payload()
+        result = pond_repository.delete({'pond_id': pond_id, 'account_key': payload.get('account_key')})
+        if not result or not result.deleted_count:
+            return respond_error('Pond not found', status=404)
+        return respond_success({'deleted': True})
+    except UnauthorizedError as e:
+        return respond_error(str(e), status=401)
+    except Exception as e:
+        current_app.logger.exception('Error in api_delete_pond')
+        return respond_error('Server error', status=500)
+
+
+from flask import Blueprint as _Blueprint
+
+pond_api_bp = _Blueprint('pond_api', __name__, url_prefix='/api')
+
+@pond_api_bp.route('/ponds', methods=['GET'])
+def api_list_ponds_route():
+    return api_list_ponds()
+
+@pond_api_bp.route('/ponds', methods=['POST'])
+def api_create_pond_route():
+    return api_create_pond()
+
+@pond_api_bp.route('/ponds/<pond_id>', methods=['GET'])
+def api_get_pond_route(pond_id):
+    return api_get_pond(pond_id)
+
+@pond_api_bp.route('/ponds/<pond_id>', methods=['PATCH'])
+def api_patch_pond_route(pond_id):
+    return api_patch_pond(pond_id)
+
+@pond_api_bp.route('/ponds/<pond_id>', methods=['DELETE'])
+def api_delete_pond_route(pond_id):
+    return api_delete_pond(pond_id)

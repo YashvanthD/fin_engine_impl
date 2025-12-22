@@ -1,6 +1,7 @@
 from flask import Blueprint, request, current_app
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
 from fin_server.utils.helpers import respond_error, respond_success
+from fin_server.dto.fish_dto import FishDTO
 
 public_bp = Blueprint('public', __name__, url_prefix='/public')
 repo = MongoRepositorySingleton.get_instance()
@@ -16,7 +17,7 @@ def get_company_public(account_key):
         result = {
             'account_key': company.get('account_key'),
             'company_name': company.get('company_name'),
-            'created_date': company.get('created_date'),
+            'created_date': company.get('created_date').isoformat() if hasattr(company.get('created_date'), 'isoformat') else company.get('created_date'),
             'description': company.get('description'),
         }
         return respond_success({'company': result})
@@ -41,11 +42,15 @@ def get_public_fish_list():
             cursor = fish_collection.find({})
         result = []
         for f in cursor:
-            f_out = dict(f)
-            f_out['id'] = str(f_out.pop('_id'))
-            if 'created_at' in f_out and hasattr(f_out['created_at'], 'isoformat'):
-                f_out['created_at'] = f_out['created_at'].isoformat()
-            result.append(f_out)
+            try:
+                dto = FishDTO.from_doc(f)
+                result.append(dto.to_ui())
+            except Exception:
+                f_out = dict(f)
+                f_out['id'] = str(f_out.pop('_id'))
+                if 'created_at' in f_out and hasattr(f_out['created_at'], 'isoformat'):
+                    f_out['created_at'] = f_out['created_at'].isoformat()
+                result.append(f_out)
         return respond_success({'fish': result})
     except Exception as e:
         current_app.logger.exception(f'Error in public.get_public_fish_list: {e}')

@@ -21,6 +21,18 @@ class TaskRepository(BaseRepository):
     def find_one(self, query):
         return self.collection.find_one(query)
 
+    def find_by_any_id(self, task_id: str):
+        """Flexibly resolve a task by business task_id or Mongo _id string.
+
+        This lets API routes accept either the logical task_id (e.g. "0001008")
+        or the underlying ObjectId string that TaskDTO exposes as id.
+        """
+        doc = self.find_one({'task_id': task_id})
+        if doc:
+            return doc
+        # Fallback: try _id as raw string; callers can cast to ObjectId if desired
+        return self.find_one({'_id': task_id})
+
     def update(self, query, update_fields):
         return self.collection.update_one(query, {'$set': update_fields}).modified_count
 

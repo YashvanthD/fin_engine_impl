@@ -2,12 +2,11 @@ import datetime
 import os
 import hmac
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, current_app
 import logging
 
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
-repo = MongoRepositorySingleton.get_instance()
-user_repo = repo.user
+from fin_server.utils.helpers import respond_success, respond_error, normalize_doc
 from fin_server.utils.validation import validate_signup, validate_signup_user
 
 
@@ -23,6 +22,10 @@ MASTER_ADMIN_PASSWORD = os.getenv('MASTER_ADMIN_PASSWORD', 'password')  # Set th
 # Blueprint for auth routes
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
+# Define repo and user_repo variables
+repo = MongoRepositorySingleton.get_instance()
+user_repo = repo.user
+
 # Authentication Endpoints
 @auth_bp.route('/signup', methods=['POST'])
 def signup():
@@ -31,21 +34,38 @@ def signup():
     data = request.get_json(force=True)
     current_app.logger.info(f'Received signup data: {data}')
     provided_master = data.get('master_password')
-    if MASTER_ADMIN_PASSWORD is None:
-        logging.error("MASTER_ADMIN_PASSWORD is not configured in environment")
-        return jsonify({'success': False, 'error': 'Server not configured for admin registration'}), 500
-    if not provided_master or not hmac.compare_digest(str(provided_master), str(MASTER_ADMIN_PASSWORD)):
-        logging.warning("Invalid master password provided for admin signup")
-        return jsonify({'success': False, 'error': 'Unauthorized: invalid master password'}), 403
-    # Remove master_password from data before storing user
-    data.pop('master_password', None)
+    # If master password is configured and provided, enforce it for privileged admin/company bootstrap
+    if provided_master is not None:
+        if MASTER_ADMIN_PASSWORD is None:
+            logging.error("MASTER_ADMIN_PASSWORD is not configured in environment")
+            return respond_error('Server not configured for admin registration', status=500)
+        if not hmac.compare_digest(str(provided_master), str(MASTER_ADMIN_PASSWORD)):
+            logging.warning("Invalid master password provided for admin signup")
+            return respond_error('Unauthorized: invalid master password', status=403)
+        # Remove master_password from data before storing user
+        data.pop('master_password', None)
+    else:
+        # No master_password provided: allow creation of a free-tier admin account.
+        # This path is intended for public self‑service signup and should not require
+        # MASTER_ADMIN_PASSWORD. We still remove any stray master_password field.
+        data.pop('master_password', None)
+        logging.info("No master_password provided, creating free subscription admin account")
     is_valid, errors = validate_signup(data)
     current_app.logger.info(f'Validation result: {is_valid}, errors: {errors}')
     logging.info("Signup validation result: %s", is_valid)
     if not is_valid:
         logging.warning("Signup validation failed: %s", errors)
-        return jsonify({'success': False, 'errors': errors}), 400
-    data['roles']=['admin']
+        return respond_error(errors, status=400)
+    # Ensure this user is an admin for the account
+    data['roles'] = ['admin']
+    # If no subscription explicitly present, mark subscription type as 'free'
+    try:
+        subscription = data.get('subscription') or {}
+    except Exception:
+        subscription = {}
+    if 'subscription_type' not in subscription and 'type' not in subscription:
+        subscription['subscription_type'] = 'free'
+    data['subscription'] = subscription
     admin_data = build_user(data)
     logging.info("Built admin data: %s", admin_data)
     user_id = user_repo.create(admin_data)
@@ -55,7 +75,7 @@ def signup():
                                            account_key=admin_data['account_key'], user_key=admin_data['user_key'])
     current_app.logger.info(f'Signup response: {response}')
     logging.info("Signup response: %s", response)
-    return jsonify(response), 201
+    return respond_success(response, status=201)
 
 @auth_bp.route('/account/<account_key>/signup', methods=['POST'])
 def signup_user(account_key):
@@ -63,7 +83,7 @@ def signup_user(account_key):
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
         logging.warning("Missing or invalid admin token")
-        return jsonify({'success': False, 'error': 'Missing or invalid admin token'}), 401
+        return respond_error('Missing or invalid admin token', status=401)
     admin_token = auth_header.split(' ', 1)[1]
     logging.info("Validating admin token for account signup")
     is_admin_valid = AuthSecurity.validate_role_token(
@@ -72,14 +92,14 @@ def signup_user(account_key):
     logging.info("Admin token validation result: %s", is_admin_valid)
     if not is_admin_valid:
         logging.warning("Unauthorized admin token or role/account_key")
-        return jsonify({'success': False, 'error': 'Unauthorized: Invalid admin token, role, or account_key'}), 401
+        return respond_error('Unauthorized: Invalid admin token, role, or account_key', status=401)
     data = request.get_json(force=True)
     logging.info("Received user signup data: %s", data)
     is_valid, errors = validate_signup_user(data, account_key)
     logging.info("User signup validation result: %s", is_valid)
     if not is_valid:
         logging.warning("User signup validation failed: %s", errors)
-        return jsonify({'success': False, 'errors': errors}), 400
+        return respond_error(errors, status=400)
     user_data = build_user(data, account_key)
     logging.info("Built user data: %s", user_data)
     user_id = user_repo.create(user_data)
@@ -87,7 +107,7 @@ def signup_user(account_key):
     response = build_signup_login_response(success=True, message='User signup validated and saved.', user_id=user_id,
                                            account_key=account_key, user_key=user_data['user_key'])
     logging.info("Account signup response: %s", response)
-    return jsonify(response), 201
+    return respond_success(response, status=201)
 
 # Helper: Load user DTO from DB or cache
 def load_user_dto_by_username(username):
@@ -260,7 +280,9 @@ def login():
     phone = data.get('phone')
     email = data.get('email')
     response, status = handle_login_or_token_request(username=username, password=password, phone=phone, email=email)
-    return jsonify(response), status
+    if status >= 400:
+        return respond_error(response.get('error') or response.get('message') or response, status=status)
+    return respond_success(response, status=status)
 
 # User Data Endpoints
 @auth_bp.route('/account/users', methods=['GET'])
@@ -275,18 +297,18 @@ def list_account_users():
             logging.info("Admin role detected, fetching all users for account_key: %s", account_key)
             user_list = UserDTO.find_many_by_account(account_key)
             logging.info("Fetched users: %d", len(user_list))
-            return jsonify({'success': True, 'users': user_list}), 200
+            return respond_success({'users': user_list})
         else:
             logging.info("User role detected, fetching self for user_key: %s", user_key)
             user_dto = UserDTO.find_by_user_key(user_key)
             if not user_dto or user_dto.account_key != account_key:
                 logging.warning("User not found for user_key: %s, account_key: %s", user_key, account_key)
-                return jsonify({'success': False, 'error': 'User not found'}), 404
+                return respond_error('User not found', status=404)
             logging.info("Fetched user: %s", user_dto.to_dict())
-            return jsonify({'success': True, 'user': user_dto.to_dict()}), 200
+            return respond_success({'user': user_dto.to_dict()})
     except Exception as e:
         logging.exception("Exception in list_account_users endpoint")
-        return jsonify({'success': False, 'error': 'Invalid token or server error'}), 401
+        return respond_error('Invalid token or server error', status=401)
 
 @auth_bp.route('/settings', methods=['GET', 'PUT'])
 def user_settings():
@@ -299,7 +321,7 @@ def user_settings():
         user_dto = UserDTO.find_by_user_key(user_key)
         if not user_dto or user_dto.account_key != account_key:
             logging.warning("User not found for user_key: %s, account_key: %s", user_key, account_key)
-            return jsonify({'success': False, 'error': 'User not found'}), 404
+            return respond_error('User not found', status=404)
         if request.method == 'PUT':
             updated_settings = request.get_json(force=True).get('settings', {})
             logging.info("Updating settings for user_key: %s", user_key)
@@ -307,22 +329,17 @@ def user_settings():
             user_dto.save()
             logging.info("Settings updated and saved for user_key: %s", user_key)
         logging.info("Returning settings and subscription for user_key: %s", user_key)
-        return jsonify({
-            'user_key': user_key,
-            'account_key': account_key,
-            'settings': user_dto.settings,
-            'subscription': user_dto.subscription
-        }), 200
+        return respond_success({'user_key': user_key, 'account_key': account_key, 'settings': user_dto.settings, 'subscription': user_dto.subscription})
     except Exception as e:
         logging.exception("Exception in /settings endpoint")
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 
 
 @auth_bp.route('/permissions', methods=['GET'])
 def get_user_permissions():
     # TODO: Implement get user permissions
-    return jsonify({'message': 'Get user permissions endpoint'}), 200
+    return respond_success({'message': 'Get user permissions endpoint'})
 
 @auth_bp.route('/validate', methods=['GET'])
 def validate_token():
@@ -333,23 +350,21 @@ def validate_token():
     user_dto = UserDTO.find_by_user_key(user_key)
     if not user_dto or user_dto.account_key != account_key:
         logging.warning("User not found for user_key: %s, account_key: %s", user_key, account_key)
-        return jsonify({'success': False, 'error': 'User not found'}), 404
+        return respond_error('User not found', status=404)
     user_dict = user_dto.to_dict()
-    # Remove sensitive fields
     user_dict.pop('password', None)
     user_dict.pop('refresh_tokens', None)
-    # Build response
     response = {
-        'success': True,
         'user_key': user_dto.user_key,
         'account_key': user_dto.account_key,
         'roles': user_dto.roles,
         'settings': user_dto.settings,
         'subscription': user_dto.subscription,
-        'last_active': user_dto.last_active
+        'last_active': user_dto.last_active,
+        'user': user_dict
     }
     logging.info("Validate response: %s", response)
-    return jsonify(response), 200
+    return respond_success(response)
 
 def build_token_only_response(access_token, expires_in=None):
     response = {
@@ -377,7 +392,7 @@ def generate_token():
         # Validate token format before decoding
         if not token or token.count('.') != 2:
             logging.warning("Malformed or missing refresh token in /auth/token endpoint")
-            return jsonify({'success': False, 'error': 'Malformed or missing refresh token. Please provide a valid JWT refresh token.'}), 401
+            return {'success': False, 'error': 'Malformed or missing refresh token. Please provide a valid JWT refresh token.'}, 401
         try:
             payload = AuthSecurity.decode_token(token)
             user_key = payload.get('user_key')
@@ -385,11 +400,11 @@ def generate_token():
             user_dto = UserDTO.find_by_user_key(user_key)
             if not user_dto or user_dto.account_key != account_key:
                 logging.warning("User not found for user_key: %s, account_key: %s", user_key, account_key)
-                return jsonify({'success': False, 'error': 'User not found'}), 404
+                return {'success': False, 'error': 'User not found'}, 404
             valid = AuthSecurity.validate_refresh_token(user_repo, 'users', user_key, token)
             if not valid:
                 logging.warning("Invalid or expired refresh token")
-                return jsonify({'success': False, 'error': 'Invalid or expired refresh token'}), 401
+                return {'success': False, 'error': 'Invalid or expired refresh token'}, 401
             expires_delta = None
             if expires_in:
                 try:
@@ -408,25 +423,25 @@ def generate_token():
                 expiry = int(time.time()) + int(expires_in)
             response = build_token_only_response(access_token, expiry)
             logging.info("Access token generated from refresh token: %s", response)
-            return jsonify(response), 200
+            return respond_success(response, status=200)
         except ValueError as ve:
             logging.warning("Token validation error: %s", ve)
-            return jsonify({'success': False, 'error': str(ve)}), 401
+            return {'success': False, 'error': str(ve)}, 401
         except Exception as e:
             logging.exception("Exception in token generation from refresh token")
-            return jsonify({'success': False, 'error': 'Invalid or corrupted refresh token. Please login again.'}), 401
+            return {'success': False, 'error': 'Invalid or corrupted refresh token. Please login again.'}, 401
     # If type is 'refresh_token' and password+identifier is provided, generate new refresh token
     elif token_type == 'refresh_token':
         if not password or not (username or phone or email):
             logging.warning("Missing password or user identifier for refresh_token type")
-            return jsonify({'success': False, 'error': 'Password and user identifier required for refresh_token'}), 400
+            return {'success': False, 'error': 'Password and user identifier required for refresh_token'}, 400
         user_doc, user_dto = load_user_dto_by_identifier(username=username, phone=phone, email=email)
         if not user_doc or not user_dto:
             logging.warning("Invalid credentials: user not found")
-            return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
+            return {'success': False, 'error': 'Invalid credentials'}, 401
         if not validate_password(user_doc.get('password'), password):
             logging.warning("Invalid credentials: password mismatch")
-            return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
+            return {'success': False, 'error': 'Invalid credentials'}, 401
         user_dto.touch()
         refresh_payload = {
             'user_key': user_dto.user_key,
@@ -451,7 +466,7 @@ def generate_token():
         if expiry:
             response['expires_in'] = str(expiry)
         logging.info("Refresh token generated and response: %s", response)
-        return jsonify(response), 200
+        return respond_success(response, status=200)
     else:
         # Default: access token flow (existing logic)
         response, status = handle_login_or_token_request(username=username, password=password, refresh_token=refresh_token, phone=phone, email=email, expires_in=expires_in)
@@ -461,7 +476,9 @@ def generate_token():
             if expires_in:
                 expiry = int(time.time()) + int(expires_in)
             response = build_token_only_response(response['access_token'], expiry)
-        return jsonify(response), status
+        if status >= 400:
+            return respond_error(response.get('error') or response.get('message') or response, status=status)
+        return respond_success(response, status=status)
 
 @auth_bp.route('/subscriptions', methods=['GET', 'PUT'])
 def user_subscriptions():
@@ -475,11 +492,11 @@ def user_subscriptions():
         user_dto = UserDTO.find_by_user_key(user_key)
         if not user_dto or user_dto.account_key != account_key:
             logging.warning("User not found for user_key: %s, account_key: %s", user_key, account_key)
-            return jsonify({'success': False, 'error': 'User not found'}), 404
+            return respond_error('User not found', status=404)
         if request.method == 'PUT':
             if 'admin' not in roles:
                 logging.warning("Non-admin tried to update subscriptions")
-                return jsonify({'success': False, 'error': 'Only admin can update subscriptions'}), 403
+                return respond_error('Only admin can update subscriptions', status=403)
             updated_subscription = request.get_json(force=True).get('subscription', {})
             logging.info("Admin updating subscription for account_key: %s", account_key)
             # Update subscription for all users in the account
@@ -502,14 +519,10 @@ def user_subscriptions():
                 'subscription_type': subscription.get('subscription_type', ''),
                 'expiry': subscription.get('expiry', '')
             }
-        return jsonify({
-            'user_key': user_key,
-            'account_key': account_key,
-            'subscription': resp_subscription
-        }), 200
+        return respond_success({'user_key': user_key, 'account_key': account_key, 'subscription': resp_subscription})
     except Exception as e:
         logging.exception("Exception in /subscriptions endpoint")
-        return jsonify({'success': False, 'error': 'Server error'}), 500
+        return respond_error('Server error', status=500)
 
 @auth_bp.route('/account/<account_key>/company', methods=['GET'])
 def get_company_name(account_key):
@@ -519,5 +532,56 @@ def get_company_name(account_key):
         'roles': {'$in': ['admin']}
     })
     if admin_doc and 'company_name' in admin_doc:
-        return jsonify({'success': True, 'company_name': admin_doc['company_name']}), 200
-    return jsonify({'success': False, 'error': 'Company not found'}), 404
+        return respond_success({'company_name': admin_doc['company_name']})
+    return respond_error('Company not found', status=404)
+
+# API blueprint for auth-level API compatibility
+auth_api_bp = Blueprint('auth_api', __name__, url_prefix='/api')
+
+@auth_api_bp.route('/auth/me', methods=['POST'])
+def api_auth_me():
+    try:
+        payload = get_auth_payload(request)
+        user = None
+        try:
+            from fin_server.repository.mongo_helper import MongoRepositorySingleton
+            repo = MongoRepositorySingleton.get_instance()
+            user = repo.user.find_one({'user_key': payload.get('user_key'), 'account_key': payload.get('account_key')})
+        except Exception:
+            current_app.logger.exception('Error fetching user in api_auth_me')
+        if not user:
+            return respond_error('User not found', status=404)
+        user_out = normalize_doc(user)
+        user_out['_id'] = str(user_out.get('_id'))
+        user_out['id'] = user_out.get('user_key') or user_out['_id']
+        return respond_success({'user': user_out})
+    except Exception:
+        current_app.logger.exception('Error in api_auth_me')
+        return respond_error('Server error', status=500)
+
+@auth_api_bp.route('/auth/refresh', methods=['POST'])
+def api_auth_refresh():
+    try:
+        data = request.get_json(force=True)
+        refresh_token = data.get('refreshToken') or data.get('refresh_token') or data.get('token')
+        if not refresh_token:
+            return respond_error('Missing refreshToken', status=400)
+        try:
+            payload = AuthSecurity.decode_token(refresh_token)
+            user_key = payload.get('user_key')
+            from fin_server.repository.mongo_helper import MongoRepositorySingleton
+            repo = MongoRepositorySingleton.get_instance()
+            user = repo.user.find_one({'user_key': user_key})
+            if not user:
+                return respond_error('User not found', status=404)
+            valid = AuthSecurity.validate_refresh_token(repo.user, 'users', user_key, refresh_token)
+            if not valid:
+                return respond_error('Invalid or expired refresh token', status=401)
+            access_token = AuthSecurity.encode_token({'user_key': user_key, 'account_key': user.get('account_key'), 'roles': user.get('roles', []), 'type': 'access'})
+            return respond_success({'accessToken': access_token})
+        except Exception:
+            current_app.logger.exception('Refresh token validation failed')
+            return respond_error('Invalid refresh token', status=401)
+    except Exception:
+        current_app.logger.exception('Error in api_auth_refresh')
+        return respond_error('Server error', status=500)

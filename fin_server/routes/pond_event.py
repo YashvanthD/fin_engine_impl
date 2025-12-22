@@ -1,15 +1,16 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, current_app
 from fin_server.repository.pond_event_repository import PondEventRepository
 from fin_server.repository.pond_repository import PondRepository
 from fin_server.repository.fish_analytics_repository import FishAnalyticsRepository
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
-from fin_server.security.authentication import UnauthorizedError
-from fin_server.utils.helpers import respond_error, respond_success, get_request_payload
+from fin_server.exception.UnauthorizedError import UnauthorizedError
+from fin_server.utils.helpers import respond_error, respond_success, get_request_payload, normalize_doc
 from bson import ObjectId
 from datetime import datetime, timezone
 
 from fin_server.repository.fish_activity_repository import FishActivityRepository
 from fin_server.utils.validation import validate_pond_event_payload
+from fin_server.dto.pond_event_dto import PondEventDTO
 
 pond_event_bp = Blueprint('pond_event', __name__, url_prefix='/pond_event')
 
@@ -84,20 +85,54 @@ def pond_event_action(pond_id, event_type):
             return respond_error(verrors, status=400)
         # log sanitized event info
         current_app.logger.info(f'PondEvent: account={payload.get("account_key")}, user={payload.get("user_key")}, pond={pond_id}, event={event_type}, fish={fish_id}, count={count}')
-        # Log event
-        event_doc = {
-            'pond_id': pond_id,
-            'fish_id': fish_id,
-            'count': count,
-            'event_type': event_type,
-            'details': data.get('details', {}),
-            'created_at': datetime.now(timezone.utc),
-            'user_key': payload.get('user_key')
-        }
-        if fish_age_in_month is not None:
-            event_doc['fish_age_in_month'] = fish_age_in_month
-        result = pond_event_repository.create(event_doc)
-        current_app.logger.info(f'PondEvent created id={result.inserted_id} for pond={pond_id} event={event_type}')
+        # Build DTO from request for canonical shape
+        try:
+            dto = PondEventDTO.from_request({
+                'pondId': pond_id,
+                'eventType': event_type,
+                'species': fish_id,
+                'count': count,
+                'details': data.get('details', {}),
+                'timestamp': data.get('timestamp') or data.get('created_at')
+            })
+            dto.recordedBy = payload.get('user_key')
+            if fish_age_in_month is not None:
+                dto.extra['fish_age_in_month'] = fish_age_in_month
+            # Persist via DTO save
+            try:
+                res = dto.save(repo=pond_event_repository, collection_name='pond_events')
+                event_inserted_id = getattr(res, 'inserted_id', res)
+            except Exception:
+                # fallback to repository create
+                res = pond_event_repository.create(dto.to_db_doc())
+                event_inserted_id = getattr(res, 'inserted_id', res)
+            event_doc_db = dto.to_db_doc()
+            # ensure created_at and user_key
+            event_doc_db['created_at'] = event_doc_db.get('created_at') or datetime.now(timezone.utc)
+            event_doc_db['user_key'] = dto.recordedBy
+        except Exception:
+            # fallback to previous behavior
+            event_doc_db = {
+                'pond_id': pond_id,
+                'fish_id': fish_id,
+                'count': count,
+                'event_type': event_type,
+                'details': data.get('details', {}),
+                'created_at': datetime.now(timezone.utc),
+                'user_key': payload.get('user_key')
+            }
+            if fish_age_in_month is not None:
+                event_doc_db['fish_age_in_month'] = fish_age_in_month
+
+        # If we used event_doc_db directly, ensure it's persisted
+        try:
+            if 'event_inserted_id' not in locals():
+                res = pond_event_repository.create(event_doc_db)
+                event_inserted_id = getattr(res, 'inserted_id', res)
+        except Exception:
+            current_app.logger.exception('Failed to persist pond event via repository; continuing')
+
+        current_app.logger.info(f'PondEvent created id={event_inserted_id} for pond={pond_id} event={event_type}')
         # Update pond metadata
         update_pond_metadata(pond_id, fish_id, count, event_type)
         # Update fish analytics and mapping
@@ -115,12 +150,13 @@ def pond_event_action(pond_id, event_type):
                     'count': count,
                     'user_key': payload.get('user_key'),
                     'details': data.get('details', {}),
-                    'samples': samples
+                    'samples': samples,
+                    'created_at': datetime.now(timezone.utc)
                 }
                 fish_activity_repo.create(activity_doc)
         except Exception:
             current_app.logger.exception('Failed to record fish activity')
-        return respond_success({'event_id': str(result.inserted_id)}, status=201)
+        return respond_success({'event_id': str(event_inserted_id)}, status=201)
     except UnauthorizedError as e:
         return respond_error(str(e), status=401)
     except Exception as e:
@@ -133,7 +169,16 @@ def get_pond_events(pond_id):
     try:
         _ = get_request_payload(request)
         events = pond_event_repository.get_events_by_pond(pond_id)
-        return respond_success({'events': events})
+        out = []
+        for e in events:
+            try:
+                dto = PondEventDTO.from_doc(e)
+                out.append(dto.to_dict())
+            except Exception:
+                ed = normalize_doc(e)
+                ed['id'] = str(ed.get('_id'))
+                out.append(ed)
+        return respond_success({'events': out})
     except UnauthorizedError as e:
         return respond_error(str(e), status=401)
     except Exception as e:
@@ -166,14 +211,14 @@ def update_pond_event(pond_id, event_id):
         try:
             oid = ObjectId(event_id)
         except Exception:
-            return jsonify({'success': False, 'error': 'Invalid event_id'}), 400
+            return respond_error('Invalid event_id', status=400)
         old = pond_event_repository.find_one({'_id': oid})
         if not old:
-            return jsonify({'success': False, 'error': 'Event not found'}), 404
+            return respond_error('Event not found', status=404)
 
         # Ensure the pond_id matches
         if str(old.get('pond_id')) != str(pond_id):
-            return jsonify({'success': False, 'error': 'Pond ID mismatch for event'}), 400
+            return respond_error('Pond ID mismatch for event', status=400)
 
         account_key = payload.get('account_key')
 
@@ -197,7 +242,7 @@ def update_pond_event(pond_id, event_id):
         allowed = ['fish_id', 'count', 'event_type', 'details', 'fish_age_in_month', 'samples']
         update_fields = {k: v for k, v in data.items() if k in allowed}
         if not update_fields:
-            return jsonify({'success': False, 'error': 'No updatable fields provided'}), 400
+            return respond_error('No updatable fields provided', status=400)
 
         # Update event document
         pond_event_repository.update({'_id': oid}, update_fields)
