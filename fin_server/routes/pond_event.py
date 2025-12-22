@@ -6,13 +6,16 @@ from fin_server.repository.mongo_helper import MongoRepositorySingleton
 from fin_server.exception.UnauthorizedError import UnauthorizedError
 from fin_server.utils.helpers import respond_error, respond_success, get_request_payload, normalize_doc
 from bson import ObjectId
-from datetime import datetime, timezone
+from datetime import datetime
+import zoneinfo
 
 from fin_server.repository.fish_activity_repository import FishActivityRepository
 from fin_server.utils.validation import validate_pond_event_payload
 from fin_server.dto.pond_event_dto import PondEventDTO
 
 pond_event_bp = Blueprint('pond_event', __name__, url_prefix='/pond_event')
+
+IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
 
 pond_event_repository = PondEventRepository()
 pond_repository = PondRepository()
@@ -29,7 +32,7 @@ def update_pond_metadata(pond_id, fish_id, count, event_type):
             'event_type': event_type,
             'fish_id': fish_id,
             'count': count,
-            'timestamp': datetime.now(timezone.utc).isoformat()
+            'timestamp': datetime.now(IST_TZ).isoformat()
         }
         pond_repository.atomic_update_metadata(pond_id, inc_fields=inc_fields, set_fields={'metadata.last_activity': last_activity})
         # Best-effort cleanup: remove negative/zero counts
@@ -52,17 +55,17 @@ def update_fish_analytics_and_mapping(account_key, fish_id, count, event_type, f
     except Exception:
         current_app.logger.exception('Failed to ensure fish mapping')
     # For add/shift_in: add a batch; for remove/sell/sample/shift_out: add negative batch
-    event_id = f"{account_key}-{fish_id}-{pond_id}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
+    event_id = f"{account_key}-{fish_id}-{pond_id}-{datetime.now(IST_TZ).strftime('%Y%m%d%H%M%S%f')}"
     if event_type in ['add', 'shift_in']:
         fish_analytics_repository.add_batch(
             fish_id, int(count), int(fish_age_in_month) if fish_age_in_month is not None else 0,
-            datetime.now(timezone.utc), account_key=account_key, event_id=event_id, pond_id=pond_id
+            datetime.now(IST_TZ), account_key=account_key, event_id=event_id, pond_id=pond_id
         )
     elif event_type in ['remove', 'sell', 'sample', 'shift_out']:
         # Store as negative batch for analytics
         fish_analytics_repository.add_batch(
             fish_id, -int(count), int(fish_age_in_month) if fish_age_in_month is not None else 0,
-            datetime.now(timezone.utc), account_key=account_key, event_id=event_id, pond_id=pond_id
+            datetime.now(IST_TZ), account_key=account_key, event_id=event_id, pond_id=pond_id
         )
 
 @pond_event_bp.route('/<pond_id>/event/<event_type>', methods=['POST'])
@@ -108,7 +111,7 @@ def pond_event_action(pond_id, event_type):
                 event_inserted_id = getattr(res, 'inserted_id', res)
             event_doc_db = dto.to_db_doc()
             # ensure created_at and user_key
-            event_doc_db['created_at'] = event_doc_db.get('created_at') or datetime.now(timezone.utc)
+            event_doc_db['created_at'] = event_doc_db.get('created_at') or datetime.now(IST_TZ)
             event_doc_db['user_key'] = dto.recordedBy
         except Exception:
             # fallback to previous behavior
@@ -118,7 +121,7 @@ def pond_event_action(pond_id, event_type):
                 'count': count,
                 'event_type': event_type,
                 'details': data.get('details', {}),
-                'created_at': datetime.now(timezone.utc),
+                'created_at': datetime.now(IST_TZ),
                 'user_key': payload.get('user_key')
             }
             if fish_age_in_month is not None:
@@ -151,7 +154,7 @@ def pond_event_action(pond_id, event_type):
                     'user_key': payload.get('user_key'),
                     'details': data.get('details', {}),
                     'samples': samples,
-                    'created_at': datetime.now(timezone.utc)
+                    'created_at': datetime.now(IST_TZ)
                 }
                 fish_activity_repo.create(activity_doc)
         except Exception:

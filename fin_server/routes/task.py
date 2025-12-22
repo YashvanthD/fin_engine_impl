@@ -2,7 +2,7 @@ from flask import Blueprint, request, current_app
 from fin_server.repository.task_repository import TaskRepository
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
 from fin_server.security.authentication import UnauthorizedError
-from fin_server.utils.generator import resolve_user, get_default_task_date, get_default_end_date
+from fin_server.utils.generator import resolve_user, get_time_date
 from fin_server.utils.helpers import get_request_payload, respond_error, respond_success
 
 from pytz import timezone
@@ -43,14 +43,14 @@ def create_task():
         # Allow self-assignment for any user
         if assigned_to != user_key and 'admin' not in roles:
             return respond_error('Only admin can assign tasks to other users', status=403)
-        # Set default task_date as current date if not provided
+        # Set default task_date as current date if not provided (IST by default)
         task_date = data.get('task_date')
         if not task_date:
-            task_date = get_default_task_date()
-        # Set default end_date as 24 hours from creation if not provided
+            task_date = get_time_date(include_time=False)
+        # Set default end_date as current date+time if not provided (IST by default)
         end_date = data.get('end_date')
         if not end_date:
-            end_date = get_default_end_date()
+            end_date = get_time_date(include_time=True)
         # Get user's timezone from settings, default to IST
         user_tz = 'Asia/Kolkata'
         if hasattr(assigned_user, 'settings') and assigned_user.settings.get('timezone'):

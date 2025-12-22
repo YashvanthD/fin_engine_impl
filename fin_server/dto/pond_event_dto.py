@@ -73,9 +73,9 @@ class PondEventDTO:
 
     def save(self, collection=None, repo=None, collection_name: Optional[str] = 'pond_events', upsert: bool = False):
         doc = self.to_db_doc()
-        from datetime import datetime, timezone
+        from fin_server.utils.time_utils import get_time_date_dt
         if 'created_at' not in doc:
-            doc['created_at'] = datetime.now(timezone.utc)
+            doc['created_at'] = get_time_date_dt(include_time=True)
         if repo is not None:
             try:
                 if hasattr(repo, 'create'):

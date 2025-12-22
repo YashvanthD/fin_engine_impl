@@ -420,6 +420,7 @@ def generate_token():
             # Calculate expiry timestamp
             expiry = None
             if expires_delta:
+                # expiry is stored as epoch seconds; frontend can render in IST via helpers
                 expiry = int(time.time()) + int(expires_in)
             response = build_token_only_response(access_token, expiry)
             logging.info("Access token generated from refresh token: %s", response)
@@ -461,6 +462,7 @@ def generate_token():
         # Only return refresh token and expiry
         expiry = None
         if expires_delta:
+            # expiry is epoch seconds; UI converts to IST
             expiry = int(time.time()) + int(expires_in)
         response = {'refresh_token': refresh_token_val}
         if expiry:
@@ -474,6 +476,7 @@ def generate_token():
         if response.get('access_token'):
             expiry = None
             if expires_in:
+                # expiry is epoch seconds; UI converts to IST
                 expiry = int(time.time()) + int(expires_in)
             response = build_token_only_response(response['access_token'], expiry)
         if status >= 400:

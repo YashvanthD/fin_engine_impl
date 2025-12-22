@@ -1,7 +1,7 @@
 from fin_server.repository.base_repository import BaseRepository
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
 import logging
-from datetime import datetime, timezone
+from fin_server.utils.time_utils import get_time_date_dt
 
 class FishRepository(BaseRepository):
     def __init__(self, db=None, collection_name="fish"):
@@ -11,7 +11,8 @@ class FishRepository(BaseRepository):
 
     def create(self, data):
         logging.info(f"Inserting fish data: {data}")
-        data['created_at'] = datetime.now(timezone.utc)
+        # Use IST-aware timestamp from get_time_date_dt for DB
+        data['created_at'] = get_time_date_dt(include_time=True)
         return self.collection.insert_one(data)
 
     def find(self, query=None):
@@ -21,7 +22,7 @@ class FishRepository(BaseRepository):
         return self.collection.find_one(query)
 
     def update(self, query, update_fields):
-        update_fields['updated_at'] = datetime.now(timezone.utc)
+        update_fields['updated_at'] = get_time_date_dt(include_time=True)
         return self.collection.update_one(query, {'$set': update_fields})
 
     def delete(self, query):

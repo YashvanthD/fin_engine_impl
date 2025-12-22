@@ -1,5 +1,5 @@
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
-from datetime import datetime, timezone
+from fin_server.utils.time_utils import get_time_date_dt
 import logging
 
 class FishAnalyticsRepository:
@@ -10,7 +10,7 @@ class FishAnalyticsRepository:
 
     def add_batch(self, species_id, count, fish_age_in_month, date_added=None, account_key=None, event_id=None, fish_weight=None, pond_id=None):
         if not date_added:
-            date_added = datetime.now(timezone.utc)
+            date_added = get_time_date_dt(include_time=True)
         batch = {
             '_id': event_id,
             'species_id': species_id,
@@ -48,7 +48,7 @@ class FishAnalyticsRepository:
           - last_updated, batches
         """
         batches = self.get_batches(species_id, account_key=account_key)
-        now = datetime.now(timezone.utc)
+        now = get_time_date_dt(include_time=True)
         age_counts = {}
         weight_counts = {}
         total_fish = 0
@@ -60,11 +60,15 @@ class FishAnalyticsRepository:
             date_added = batch.get('date_added', now)
             if isinstance(date_added, str):
                 try:
-                    date_added = datetime.fromisoformat(date_added)
+                    # parse ISO string into a datetime (naive, local)
+                    from datetime import datetime as _dt
+                    date_added = _dt.fromisoformat(date_added)
                 except Exception:
                     date_added = now
             elif isinstance(date_added, (int, float)):
-                date_added = datetime.fromtimestamp(date_added, tz=timezone.utc)
+                from datetime import datetime as _dt
+                date_added = _dt.fromtimestamp(date_added)
+
             months_since_add = (now.year - date_added.year) * 12 + (now.month - date_added.month)
             current_age = int(age_at_add) + int(months_since_add)
 
@@ -232,7 +236,7 @@ class FishAnalyticsRepository:
             'commercial_importance': fish.get('commercial_importance'),
             'economic_value_inr': fish.get('economic_value_inr'),
             'account_key': account_key,
-            'last_updated': datetime.now(timezone.utc)
+            'last_updated': get_time_date_dt(include_time=True)
         }
         return mapped
 

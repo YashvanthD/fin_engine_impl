@@ -1,6 +1,6 @@
 from fin_server.repository.base_repository import BaseRepository
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
-from datetime import datetime, timezone
+from fin_server.utils.time_utils import get_time_date_dt
 
 class MessageRepository(BaseRepository):
     def __init__(self, db=None, collection_name="messages"):
@@ -13,7 +13,8 @@ class MessageRepository(BaseRepository):
             'from_user_key': data['from_user_key'],
             'to_user_key': data['to_user_key'],
             'message': data['message'],
-            'timestamp': int(datetime.now(timezone.utc).timestamp()),
+            # Use get_time_date_dt (IST-aware) then convert to epoch seconds for storage
+            'timestamp': int(get_time_date_dt(include_time=True).timestamp()),
             'delivered': data.get('delivered', False)
         }
         return self.collection.insert_one(doc)

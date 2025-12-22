@@ -1,5 +1,6 @@
 from flask import Blueprint, request, current_app
-from datetime import datetime, timezone
+from datetime import datetime
+import zoneinfo
 import logging
 
 from fin_server.exception.UnauthorizedError import UnauthorizedError
@@ -14,6 +15,7 @@ from fin_server.utils.helpers import respond_error, respond_success, get_request
 from fin_server.utils.generator import generate_key
 
 fish_bp = Blueprint('fish', __name__, url_prefix='/fish')
+IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
 fish_repository = FishRepository()
 fish_analytics_repository = FishAnalyticsRepository()
 fish_mapping_repo = MongoRepositorySingleton.get_instance().fish_mapping
@@ -30,7 +32,7 @@ def create_fish_entity():
 			return respond_error(errors, status=400)
 		account_key = payload.get('account_key')
 		data.pop('account_key', None)
-		data['created_at'] = datetime.now(timezone.utc)
+		data['created_at'] = datetime.now(IST_TZ)
 		overwrite = str(request.args.get('overwrite', 'false')).lower() == 'true'
 		# Generate species_code if not provided
 		species_code = data.get('species_code')
@@ -120,7 +122,7 @@ def add_fish_batch():
 		event_id = f"{account_key}-{species_code}-{generate_key(9)}"
 		fish_weight = data.get('fish_weight') if isinstance(data, dict) else None
 		fish_analytics_repository.add_batch(
-			species_code, int(count), int(fish_age_in_month), datetime.now(timezone.utc), account_key=account_key, event_id=event_id, fish_weight=fish_weight
+			species_code, int(count), int(fish_age_in_month), datetime.now(IST_TZ), account_key=account_key, event_id=event_id, fish_weight=fish_weight
 		)
 		return respond_success({'species_id': species_code, 'event_id': event_id}, status=201)
 	except UnauthorizedError as e:
@@ -373,7 +375,7 @@ def update_fish(species_id):
 				upsert=True
 			)
 			event_id = f"{account_key}-{species_id}-{generate_key(9)}"
-			fish_analytics_repository.add_batch(species_id, int(count), int(fish_age_in_month), datetime.now(timezone.utc), account_key=account_key, event_id=event_id, fish_weight=fish_weight)
+			fish_analytics_repository.add_batch(species_id, int(count), int(fish_age_in_month), datetime.now(IST_TZ), account_key=account_key, event_id=event_id, fish_weight=fish_weight)
 			return respond_success({'species_id': species_id, 'event_id': event_id})
 
 		return respond_success({'species_id': species_id})

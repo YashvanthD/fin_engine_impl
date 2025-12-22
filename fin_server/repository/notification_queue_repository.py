@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from fin_server.utils.time_utils import get_time_date_dt
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
 
 class NotificationQueueRepository:
@@ -8,13 +8,13 @@ class NotificationQueueRepository:
 
     def enqueue(self, notification):
         notification['status'] = 'pending'
-        notification['created_at'] = datetime.now(timezone.utc)
+        notification['created_at'] = get_time_date_dt(include_time=True)
         return self.collection.insert_one(notification)
 
     def mark_sent(self, notification_id):
         return self.collection.update_one(
             {'_id': notification_id},
-            {'$set': {'status': 'sent', 'sent_at': datetime.now(timezone.utc)}}
+            {'$set': {'status': 'sent', 'sent_at': get_time_date_dt(include_time=True)}}
         )
 
     def get_pending(self, user_key=None):
@@ -25,4 +25,3 @@ class NotificationQueueRepository:
 
     def get_for_user(self, user_key, limit=50):
         return list(self.collection.find({'user_key': user_key}).sort('created_at', -1).limit(limit))
-

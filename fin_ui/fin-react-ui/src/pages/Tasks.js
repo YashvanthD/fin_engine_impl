@@ -322,7 +322,7 @@ export default function Tasks() {
         ) : (
           <Grid container spacing={2}>
             {filteredTasks.map((task, idx) => (
-              <Grid item xs={12} sm={6} md={4} key={task.task_id || idx}>
+              <Grid item xs={12} sm={6} md={6} key={task.task_id || idx}>
                 <Paper elevation={3} sx={{p:2, mb:2, ...getPriorityStyle(task.priority, task.status)}}>
                   <Stack direction="row" alignItems="center" justifyContent="space-between">
                     <Typography variant="h6" sx={{fontWeight:'bold'}}>{task.title}</Typography>

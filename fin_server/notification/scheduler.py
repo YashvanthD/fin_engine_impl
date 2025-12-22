@@ -1,6 +1,7 @@
 import time
 import threading
 from datetime import datetime
+from fin_server.utils.time_utils import get_time_date
 from .worker import NotificationWorker
 from fin_server.repository.task_repository import TaskRepository
 import logging
@@ -30,7 +31,8 @@ class TaskScheduler:
         now = datetime.now()
         now_seconds = now.hour * 3600 + now.minute * 60 + now.second
         next_seconds = now_seconds + self.interval
-        today_str = now.strftime('%Y-%m-%d')
+        # Use IST date string for matching end_date stored in tasks
+        today_str = get_time_date(include_time=False)
         # Find tasks with reminders due in the next interval (seconds), or overdue
         tasks = self.task_repository.collection.find({
             '$or': [

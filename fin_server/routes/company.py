@@ -3,7 +3,7 @@ from flask import Blueprint, request, current_app
 from fin_server.utils.helpers import respond_success, respond_error
 
 from fin_server.security.authentication import AuthSecurity
-from fin_server.utils.generator import build_user, get_current_timestamp, epoch_to_datetime
+from fin_server.utils.generator import generate_key, build_user, build_refresh, get_current_timestamp
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
 from fin_server.dto.company_dto import CompanyDTO
 repo = MongoRepositorySingleton.get_instance()
@@ -79,6 +79,7 @@ def register_company():
     account_key = admin_data['account_key']
     admin_user_key = admin_data['user_key']
     # Create company doc
+    # created_ts is epoch seconds; UI helpers convert to IST when displaying
     created_ts = get_current_timestamp()
     company_doc = {
         'account_key': account_key,

@@ -1,5 +1,6 @@
 from jose import jwt, JWTError
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta, datetime
+from fin_server.utils.time_utils import get_time_date_dt
 import base64
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -33,7 +34,9 @@ class AuthSecurity:
     @classmethod
     def encode_token(cls, data: dict, expires_delta: timedelta = None) -> str:
         to_encode = data.copy()
-        expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=cls.access_token_expire_minutes))
+        # Derive base time from get_time_date_dt (IST by default) and add expiry delta;
+        base = get_time_date_dt(include_time=True)
+        expire = base + (expires_delta or timedelta(minutes=cls.access_token_expire_minutes))
         to_encode.update({"exp": expire})
         return jwt.encode(to_encode, cls.secret_key, algorithm=cls.algorithm)
 
@@ -72,7 +75,8 @@ class AuthSecurity:
     @classmethod
     def create_refresh_token(cls, data: dict) -> str:
         to_encode = data.copy()
-        expire = datetime.now(timezone.utc) + timedelta(days=cls.refresh_token_expire_days)
+        base = get_time_date_dt(include_time=True)
+        expire = base + timedelta(days=cls.refresh_token_expire_days)
         to_encode.update({"exp": expire, "type": "refresh"})
         return jwt.encode(to_encode, cls.secret_key, algorithm=cls.algorithm)
 

@@ -1,6 +1,6 @@
 from fin_server.repository.base_repository import BaseRepository
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
-from datetime import datetime, timezone
+from fin_server.utils.time_utils import get_time_date_dt
 import logging
 
 class NotificationRepository(BaseRepository):
@@ -10,7 +10,7 @@ class NotificationRepository(BaseRepository):
         self.collection = MongoRepositorySingleton.get_collection(self.collection_name, db)
 
     def create(self, data):
-        data['created_at'] = datetime.now(timezone.utc)
+        data['created_at'] = get_time_date_dt(include_time=True)
         data['delivered'] = False
         return self.collection.insert_one(data)
 

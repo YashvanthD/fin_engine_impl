@@ -25,8 +25,8 @@ class FishMappingRepository:
             'common_name': fish_doc.get('common_name') if fish_doc else None,
         }
         # add timestamps if available
-        from datetime import datetime, timezone
-        mapping['updated_at'] = datetime.now(timezone.utc)
+        from fin_server.utils.time_utils import get_time_date_dt
+        mapping['updated_at'] = get_time_date_dt(include_time=True)
         # perform upsert by fish_id
         return self.collection.update_one({'fish_id': fish_id}, {'$set': mapping}, upsert=True)
 

@@ -69,9 +69,11 @@ class WaterQualityRecordDTO:
 
     def save(self, collection=None, repo=None, collection_name: Optional[str] = 'water_quality', upsert: bool = False):
         doc = self.to_db_doc()
-        from datetime import datetime, timezone
+        from datetime import datetime
+        import zoneinfo
         if 'created_at' not in doc:
-            doc['created_at'] = datetime.now(timezone.utc)
+            ist = zoneinfo.ZoneInfo('Asia/Kolkata')
+            doc['created_at'] = datetime.now(ist)
         if repo is not None:
             try:
                 if hasattr(repo, 'create'):

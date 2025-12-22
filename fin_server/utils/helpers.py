@@ -2,6 +2,7 @@ from flask import jsonify, current_app, request
 from fin_server.security.authentication import get_auth_payload
 from fin_server.exception.UnauthorizedError import UnauthorizedError
 from datetime import datetime, timezone
+import zoneinfo
 
 
 def respond_error(message_or_dict, status=400):
@@ -25,8 +26,9 @@ def respond_error(message_or_dict, status=400):
     else:
         body['message'] = str(message_or_dict)
         body['error'] = str(message_or_dict)
-    # always include a timestamp for debugging by frontend
-    body['timestamp'] = datetime.now(timezone.utc).isoformat()
+    # always include a timestamp for debugging by frontend (IST)
+    ist = zoneinfo.ZoneInfo('Asia/Kolkata')
+    body['timestamp'] = datetime.now(ist).isoformat()
     return jsonify(body), status
 
 
@@ -415,7 +417,8 @@ def respond_success(payload=None, status=200):
         body['data'] = normalize_for_ui(body['data'])
     except Exception:
         current_app.logger.exception('Failed to normalize response payload for UI')
-    body['timestamp'] = datetime.now(timezone.utc).isoformat()
+    # IST timestamp for success responses
+    body['timestamp'] = datetime.now(IST_TZ).isoformat()
     return jsonify(body), status
 
 
@@ -430,21 +433,29 @@ def get_request_payload(req=None):
         raise
 
 
+IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
+
+
 def parse_iso_or_epoch(s):
-    """Parse ISO datetime or epoch string/number into aware UTC datetime or return None."""
+    """Parse ISO datetime or epoch string/number into aware IST datetime or return None."""
     if not s:
         return None
     try:
         if isinstance(s, (int, float)):
-            return datetime.fromtimestamp(float(s), tz=timezone.utc)
+            return datetime.fromtimestamp(float(s), tz=IST_TZ)
         s = str(s)
         # try ISO first
         try:
-            return datetime.fromisoformat(s)
+            dt = datetime.fromisoformat(s)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=IST_TZ)
+            else:
+                dt = dt.astimezone(IST_TZ)
+            return dt
         except Exception:
             pass
         try:
-            return datetime.fromtimestamp(float(s), tz=timezone.utc)
+            return datetime.fromtimestamp(float(s), tz=IST_TZ)
         except Exception:
             return None
     except Exception:

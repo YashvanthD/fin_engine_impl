@@ -60,7 +60,7 @@
 <body>
 <div class="container">
     <h1>TaskCircuit API Documentation</h1>
-    <div class="note"><strong>Date:</strong> December 22, 2025 — <strong>Base URL:</strong> <code>http://localhost:5000/</code></div>
+    <div class="note"><strong>Date:</strong> December 22, 2025 — <strong>Time:</strong> 12:00 (local) — <strong>Base URL:</strong> <code>http://localhost:5000/</code></div>
     <div class="note small"><strong>Naming convention:</strong> All JSON APIs are <strong>lenient</strong> about field casing. Wherever you see a field like <code>account_key</code>, the camelCase alias <code>accountKey</code> (or similar) is also accepted, and vice‑versa. The same applies to <code>user_key/userKey</code>, <code>task_id/taskId</code>, <code>pond_id/pondId</code>, <code>species_code/speciesCode</code>, etc.</div>
 
     <div class="section">
@@ -168,13 +168,13 @@
     "account_key": "ACC123",
     "roles": ["admin"],
     "settings": {"timezone": "Asia/Kolkata"},
-    "subscription": {"subscription_type": "trial", "expiry": "2026-01-01"},
+    "subscription": {"subscription_type": "trial", "expiry": 1767225600},
     "user": {
       "user_key": "USR001",
       "username": "admin",
       "email": "admin@example.com",
       "company_name": "Acme Farm",
-      "joined_date": "2025-12-22T12:00:00Z"
+      "joined_date": 1766385600
     },
     "access_token": "eyJ...",
     "refresh_token": "rftok..."
@@ -211,14 +211,14 @@
   "success": true,
   "data": {
     "access_token": "eyJ...",
-    "expires_in": "1703251200"
+    "expires_in": 1703251200
   }
 }</pre></div>
                     <div class="example"><strong>Response (200, refresh only):</strong><br><pre>{
   "success": true,
   "data": {
     "refresh_token": "rftok...",
-    "expires_in": "1703251200"
+    "expires_in": 1703251200
   }
 }</pre></div>
                 </div>
@@ -404,7 +404,7 @@
                 </div>
                 <div id="card-user-profile" class="card-body">
                     <div class="small">Return current authenticated user's profile in frontend-friendly shape.</div>
-                    <div class="example small"><strong>Response:</strong> <code>{"user": {"id":..., "email":..., "name":..., "role":..., "phone":..., "avatar":..., "permissions": [...], "createdAt":..., "lastLogin":..., "managerId": ...}}</code></div>
+                    <div class="example small"><strong>Response:</strong> <code>{"user": {"id":..., "email":..., "name":..., "role":..., "phone":..., "avatar":..., "permissions": [...], "createdAt":..., "lastLogin":..., "managerId": ...}}</code> (timestamps are rendered in IST on UI, but may be stored as epoch seconds in tokens)</div>
                 </div>
             </div>
 
@@ -1255,6 +1255,7 @@
     </div>
 
     <div class="note small">Note: Server normalizes MongoDB types in responses — ObjectId -> string, datetime -> ISO string. You can click each section title to expand/collapse groups, and click "details" on each endpoint to view or hide full request/response documentation.</div>
+    <p><strong>Note:</strong> All timestamps are in IST (Asia/Kolkata) unless otherwise specified.</p>
 </div>
 </body>
 </html>

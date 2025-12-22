@@ -14,7 +14,7 @@ import { apiFetch } from '../utils/api';
 
 export default function NavBar() {
   const [anchorEl, setAnchorEl] = React.useState(null);
-  const [companyName, setCompanyName] = useState('FinnCorp');
+  const [companyName, setCompanyName] = useState('TaskCircuit');
   const open = Boolean(anchorEl);
   const navigate = useNavigate();
 
@@ -24,24 +24,24 @@ export default function NavBar() {
 
   useEffect(() => {
     async function fetchCompany() {
-      if (userInfo?.account_key) {
+      if (loggedIn && userInfo?.account_key) {
         try {
           const res = await apiFetch(`/auth/account/${userInfo.account_key}/company`, { method: 'GET' });
           const data = await res.json();
           if (res.ok && data.success && data.company_name) {
             setCompanyName(data.company_name);
           } else {
-            setCompanyName('FinnCorp');
+            setCompanyName('TaskCircuit');
           }
         } catch {
-          setCompanyName('FinnCorp');
+          setCompanyName('TaskCircuit');
         }
       } else {
-        setCompanyName('FinnCorp');
+        setCompanyName('TaskCircuit');
       }
     }
     fetchCompany();
-  }, [userInfo?.account_key]);
+  }, [loggedIn, userInfo?.account_key]);
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);

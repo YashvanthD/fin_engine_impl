@@ -1,5 +1,6 @@
 from flask import Blueprint, request, current_app
-from datetime import datetime, timezone
+from datetime import datetime
+import zoneinfo
 
 from fin_server.exception.UnauthorizedError import UnauthorizedError
 from fin_server.repository.pond_repository import PondRepository
@@ -9,6 +10,7 @@ from fin_server.utils.helpers import normalize_doc, respond_success, respond_err
 from fin_server.dto.pond_dto import PondDTO
 
 pond_bp = Blueprint('pond', __name__, url_prefix='/pond')
+IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
 pond_repository = PondRepository()
 
 def pond_to_dict(pond):
@@ -46,7 +48,7 @@ def create_pond_entity():
         data = request.get_json(force=True)
         account_key = payload.get('account_key')
         data.pop('account_key', None)
-        data['created_at'] = datetime.now(timezone.utc)
+        data['created_at'] = datetime.now(IST_TZ)
         # Generate pond_id if not provided, using auto-increment
         pond_id = data.get('pond_id')
         if not pond_id:
@@ -186,7 +188,7 @@ def list_ponds():
                 date_filter['$gte'] = datetime.fromisoformat(from_date)
             except Exception:
                 try:
-                    date_filter['$gte'] = datetime.fromtimestamp(float(from_date), tz=timezone.utc)
+                    date_filter['$gte'] = datetime.fromtimestamp(float(from_date), tz=IST_TZ)
                 except Exception:
                     pass
         if to_date:
@@ -194,7 +196,7 @@ def list_ponds():
                 date_filter['$lte'] = datetime.fromisoformat(to_date)
             except Exception:
                 try:
-                    date_filter['$lte'] = datetime.fromtimestamp(float(to_date), tz=timezone.utc)
+                    date_filter['$lte'] = datetime.fromtimestamp(float(to_date), tz=IST_TZ)
                 except Exception:
                     pass
         if date_filter:
@@ -275,7 +277,7 @@ def pond_activity(pond_id):
                 date_filter['$gte'] = datetime.fromisoformat(start_date)
             except Exception:
                 try:
-                    date_filter['$gte'] = datetime.fromtimestamp(float(start_date), tz=timezone.utc)
+                    date_filter['$gte'] = datetime.fromtimestamp(float(start_date), tz=IST_TZ)
                 except Exception:
                     pass
         if end_date:
@@ -283,7 +285,7 @@ def pond_activity(pond_id):
                 date_filter['$lte'] = datetime.fromisoformat(end_date)
             except Exception:
                 try:
-                    date_filter['$lte'] = datetime.fromtimestamp(float(end_date), tz=timezone.utc)
+                    date_filter['$lte'] = datetime.fromtimestamp(float(end_date), tz=IST_TZ)
                 except Exception:
                     pass
         if date_filter:
@@ -349,7 +351,7 @@ def pond_history(pond_id):
             except Exception:
                 try:
                     # fallback to timestamp
-                    return datetime.fromtimestamp(float(s), tz=timezone.utc)
+                    return datetime.fromtimestamp(float(s), tz=IST_TZ)
                 except Exception:
                     return None
 
@@ -473,7 +475,7 @@ def api_list_ponds():
                 date_filter['$gte'] = datetime.fromisoformat(from_date)
             except Exception:
                 try:
-                    date_filter['$gte'] = datetime.fromtimestamp(float(from_date), tz=timezone.utc)
+                    date_filter['$gte'] = datetime.fromtimestamp(float(from_date), tz=IST_TZ)
                 except Exception:
                     pass
         if to_date:
@@ -481,7 +483,7 @@ def api_list_ponds():
                 date_filter['$lte'] = datetime.fromisoformat(to_date)
             except Exception:
                 try:
-                    date_filter['$lte'] = datetime.fromtimestamp(float(to_date), tz=timezone.utc)
+                    date_filter['$lte'] = datetime.fromtimestamp(float(to_date), tz=IST_TZ)
                 except Exception:
                     pass
         if date_filter:
@@ -512,7 +514,7 @@ def api_create_pond():
         data = request.get_json(force=True)
         account_key = payload.get('account_key')
         data.pop('account_key', None)
-        data['created_at'] = datetime.now(timezone.utc)
+        data['created_at'] = datetime.now(IST_TZ)
         pond_id = data.get('pond_id')
         if not pond_id:
             next_num = get_next_pond_number(account_key)

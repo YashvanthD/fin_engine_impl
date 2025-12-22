@@ -4,6 +4,11 @@ import { baseUrl } from '../config';
 
 const USER_INFO_KEY = 'user_info';
 
+// Prevent duplicate refresh calls and reduce frequency
+let refreshInFlight = null; // Promise for ongoing refresh
+let lastRefreshTs = 0; // ms timestamp
+const MIN_REFRESH_INTERVAL_MS = 60 * 1000*100; // don't refresh more than once per minute
+
 export function saveUserInfo(userInfo) {
   localStorage.setItem(USER_INFO_KEY, JSON.stringify(userInfo));
   console.log('[Auth Debug] User info saved:', userInfo);
@@ -57,22 +62,58 @@ export function isTokenExpired(token) {
 
 // Utility: refresh access token
 export async function refreshAccessToken() {
+  const now = Date.now();
+  // Throttle: if we refreshed very recently, reuse the last token
+  if (now - lastRefreshTs < MIN_REFRESH_INTERVAL_MS && refreshInFlight === null) {
+    const info = getUserInfo();
+    return info?.access_token || null;
+  }
+
   const refreshToken = getRefreshToken();
   if (!refreshToken) return null;
-  try {
-    const res = await fetch(`${baseUrl}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken })
-    });
-    const data = await res.json();
-    if (data.success && data.access_token) {
-      const userInfo = getUserInfo() || {};
-      userInfo.access_token = data.access_token;
-      saveUserInfo(userInfo);
-      return data.access_token;
+
+  // Deduplicate concurrent refreshes
+  if (refreshInFlight) {
+    try {
+      return await refreshInFlight;
+    } catch (e) {
+      return null;
     }
-    return null;
+  }
+
+  // Use a simple request to avoid CORS preflight (OPTIONS):
+  // - method: POST
+  // - Content-Type: application/x-www-form-urlencoded
+  // - no custom headers
+  const body = new URLSearchParams({ refresh_token: refreshToken });
+
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetch(`${baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+        credentials: 'include', // if your server relies on cookies; harmless otherwise
+      });
+      const data = await res.json();
+      if (data.success && data.access_token) {
+        const userInfo = getUserInfo() || {};
+        userInfo.access_token = data.access_token;
+        saveUserInfo(userInfo);
+        lastRefreshTs = Date.now();
+        return data.access_token;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    } finally {
+      // Allow new refresh after completion
+      refreshInFlight = null;
+    }
+  })();
+
+  try {
+    return await refreshInFlight;
   } catch (e) {
     return null;
   }

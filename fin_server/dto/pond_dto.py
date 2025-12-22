@@ -172,9 +172,9 @@ class PondDTO:
 
     def save(self, collection=None, repo=None, collection_name: Optional[str] = 'ponds', upsert: bool = True):
         doc = self.to_db_doc()
-        from datetime import datetime, timezone
         if 'created_at' not in doc or not doc.get('created_at'):
-            doc['created_at'] = datetime.now(timezone.utc)
+            from fin_server.utils.time_utils import get_time_date_dt
+            doc['created_at'] = get_time_date_dt(include_time=True)
         if repo is not None:
             try:
                 if hasattr(repo, 'create'):

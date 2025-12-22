@@ -20,6 +20,7 @@ class UserDTO:
         self.subscription = subscription or {}
         self.password = password
         self._extra_fields = kwargs
+        # store last_activity as epoch seconds; UI can convert to IST when displaying
         self._last_activity = int(time.time())
         # Add to cache
         UserDTO._cache[self.user_key] = self
@@ -29,6 +30,7 @@ class UserDTO:
             self.settings['timezone'] = 'Asia/Kolkata'  # Default to IST
 
     def touch(self):
+        # update last_activity to current epoch seconds
         self._last_activity = int(time.time())
 
     def add_refresh_token(self, token):
@@ -99,7 +101,7 @@ class UserDTO:
 
     @classmethod
     def cleanup_cache(cls):
-        now = int(time.time())
+        now = int(time.time())  # epoch seconds, UI converts to IST
         expired_keys = [k for k, v in cls._cache.items() if now - v._last_activity > cls._CACHE_EXPIRY_SECONDS]
         for k in expired_keys:
             user_obj = cls._cache[k]

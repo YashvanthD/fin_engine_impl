@@ -2,7 +2,7 @@ import React from 'react';
 import SideNav from './SideNav';
 import { Box } from '@mui/material';
 
-const drawerWidth = 220;
+const drawerWidth = '100';
 const topNavHeight = 64; // AppBar fixed height
 
 export default function UserLayout({ children }) {
