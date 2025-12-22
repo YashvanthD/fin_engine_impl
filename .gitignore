@@ -3,3 +3,4 @@ node_modules
 fin_ui
 fin_ui/*
 tests
+tests/*
