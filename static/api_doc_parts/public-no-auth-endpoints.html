@@ -1,0 +1,87 @@
+<div class="section">
+        <div class="section-header" onclick="toggleSection('section-public')">
+            <span class="section-toggle">▾</span>
+            <h2>Public (no-auth) endpoints</h2>
+        </div>
+        <div id="section-public" class="section-body">
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-public-fish')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /public/fish</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-public-fish" class="card-body">
+                    <div class="small">Return list of fish entities. Optional query: <code>account_key</code> to return fish mapped to that account.</div>
+                    <table class="fields-table">
+                        <tr><th>Query</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>account_key</td><td>string</td><td>No</td><td>If provided, only fish mapped to this account are returned</td></tr>
+                    </table>
+                    <div class="curl"><pre>curl -X GET "http://localhost:5000/public/fish?account_key=ACC123"</pre></div>
+                    <div class="example"><strong>Response (200):</strong><br><pre>{
+  "success": true,
+  "data": {
+    "fish": [
+      {
+        "id": "CF001",
+        "speciesCode": "CF001",
+        "commonName": "Catfish",
+        "createdAt": "2025-12-16T10:00:00Z"
+      }
+    ]
+  }
+}</pre></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-public-company')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /public/company/&lt;account_key&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-public-company" class="card-body">
+                    <div class="small">Return minimal company info for an <code>account_key</code>.</div>
+                    <table class="fields-table">
+                        <tr><th>Path</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>account_key</td><td>string</td><td>Yes</td><td>Company account identifier</td></tr>
+                    </table>
+                    <div class="example"><strong>Response (200):</strong><br><pre>{
+  "success": true,
+  "data": {
+    "company": {
+      "account_key": "ACC123",
+      "company_name": "Acme Farm",
+      "created_date": "2025-01-10T08:00:00Z",
+      "description": "Farm 1"
+    }
+  }
+}</pre></div>
+                    <div class="example"><strong>Response (404):</strong> <code>{"success": false, "error": "Company not found"}</code></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-public-user-company')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /public/user/company</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-public-user-company" class="card-body">
+                    <div class="small">Lookup company name &amp; account_key for a user identifier.</div>
+                    <table class="fields-table">
+                        <tr><th>Query</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>user_key</td><td>string</td><td>No*</td><td>One of user_key, username, email or phone is required</td></tr>
+                        <tr><td>username</td><td>string</td><td>No*</td><td>User's username</td></tr>
+                        <tr><td>email</td><td>string</td><td>No*</td><td>User email</td></tr>
+                        <tr><td>phone</td><td>string</td><td>No*</td><td>User phone</td></tr>
+                    </table>
+                    <div class="example"><strong>Response (200):</strong><br><pre>{
+  "success": true,
+  "data": {
+    "account_key": "ACC123",
+    "company_name": "Acme Farm"
+  }
+}</pre></div>
+                    <div class="example"><strong>Response (400):</strong> <code>{"success": false, "error": {"identifier": "Provide one of user_key, username, email, or phone"}}</code></div>
+                    <div class="example"><strong>Response (404):</strong> <code>{"success": false, "error": "User not found"}</code></div>
+                </div>
+            </div>
+        </div>
+    </div>

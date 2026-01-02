@@ -1,0 +1,158 @@
+<div class="section">
+        <div class="section-header" onclick="toggleSection('section-user')">
+            <span class="section-toggle">▾</span>
+            <h2>User</h2>
+            <span class="pill">profile, settings</span>
+        </div>
+        <div id="section-user" class="section-body">
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-user-profile')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /user/profile</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-user-profile" class="card-body">
+                    <div class="small">Return current authenticated user's profile in frontend-friendly shape.</div>
+                    <div class="example small"><strong>Response:</strong> <code>{"user": {"id":..., "email":..., "name":..., "role":..., "phone":..., "avatar":..., "permissions": [...], "createdAt":..., "lastLogin":..., "managerId": ...}}</code> (timestamps are rendered in IST on UI, but may be stored as epoch seconds in tokens)</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-user-put-profile')">
+                    <div class="endpoint"><span class="method method-put">PUT</span> /user/profile</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-user-put-profile" class="card-body">
+                    <div class="small">Update basic profile fields of current user.</div>
+                    <table class="fields-table">
+                        <tr><th>Body field</th><th>Type</th><th>Notes</th></tr>
+                        <tr><td>first_name</td><td>string</td><td>Optional</td></tr>
+                        <tr><td>last_name</td><td>string</td><td>Optional</td></tr>
+                        <tr><td>dob</td><td>string</td><td>Date of birth, free format</td></tr>
+                        <tr><td>address1</td><td>string</td><td>Address line 1</td></tr>
+                        <tr><td>address2</td><td>string</td><td>Address line 2</td></tr>
+                        <tr><td>pincode</td><td>string</td><td>Postal code</td></tr>
+                        <tr><td>timezone</td><td>string</td><td>Also stored under <code>settings.timezone</code></td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-user-password')">
+                    <div class="endpoint"><span class="method method-put">PUT</span> /user/password</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-user-password" class="card-body">
+                    <div class="small">Change password for current user.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Req</th></tr>
+                        <tr><td>old_password</td><td>string</td><td>Yes</td></tr>
+                        <tr><td>new_password</td><td>string</td><td>Yes</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-user-logout')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /user/logout</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-user-logout" class="card-body">
+                    <div class="small">Invalidate all refresh tokens for current user (logs out from all devices).</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-user-settings')">
+                    <div class="endpoint"><span class="method method-put">PUT</span> /user/settings</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-user-settings" class="card-body">
+                    <div class="small">Replace entire <code>settings</code> object of current user.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-user-settings-notifications')">
+                    <div class="endpoint"><span class="method method-put">PUT</span> /user/settings/notifications</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-user-settings-notifications" class="card-body">
+                    <div class="small">Update only <code>settings.notifications</code> for current user.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-user-settings-help-support')">
+                    <div class="endpoint"><span class="method method-put">PUT</span> /user/settings/help_support</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-user-settings-help-support" class="card-body">
+                    <div class="small">Update only <code>settings.help_support</code> for current user.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-user-list')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /user/list</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-user-list" class="card-body">
+                    <div class="small">List users of the current account in frontend User shape.</div>
+                    <table class="fields-table">
+                        <tr><th>Query</th><th>Type</th><th>Notes</th></tr>
+                        <tr><td>phone</td><td>bool</td><td>If <code>true</code>, include phone numbers in result</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-api-users')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /api/users</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-api-users" class="card-body">
+                    <div class="small">Compatibility list of users (uses token context for account_key).</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-api-users-user_id')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /api/users/&lt;user_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-api-users-user_id" class="card-body">
+                    <div class="small">Compatibility single user fetch.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-api-users-create')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /api/users</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-api-users-create" class="card-body">
+                    <div class="small">Compatibility user creation (wrapper over <code>build_user</code>).</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-api-users-user_id-patch')">
+                    <div class="endpoint"><span class="method method-patch">PATCH</span> /api/users/&lt;user_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-api-users-user_id-patch" class="card-body">
+                    <div class="small">Compatibility partial update of a user.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-api-users-user_id-delete')">
+                    <div class="endpoint"><span class="method method-delete">DELETE</span> /api/users/&lt;user_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-api-users-user_id-delete" class="card-body">
+                    <div class="small">Compatibility deletion of a user in current account.</div>
+                </div>
+            </div>
+        </div>
+    </div>

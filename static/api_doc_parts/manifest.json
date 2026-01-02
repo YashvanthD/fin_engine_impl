@@ -1,0 +1,42 @@
+[
+  {
+    "title": "Authentication",
+    "file": "authentication.html"
+  },
+  {
+    "title": "Company",
+    "file": "company.html"
+  },
+  {
+    "title": "User",
+    "file": "user.html"
+  },
+  {
+    "title": "Tasks / Schedules",
+    "file": "tasks-schedules.html"
+  },
+  {
+    "title": "Public (no-auth) endpoints",
+    "file": "public-no-auth-endpoints.html"
+  },
+  {
+    "title": "Fish",
+    "file": "fish.html"
+  },
+  {
+    "title": "Pond",
+    "file": "pond.html"
+  },
+  {
+    "title": "Pond Events",
+    "file": "pond-events.html"
+  },
+  {
+    "title": "Feeding &amp; Sampling",
+    "file": "feeding-amp-sampling.html"
+  },
+  {
+    "title": "Financials",
+    "file": "financials.html"
+  }
+]

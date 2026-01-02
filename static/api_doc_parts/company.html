@@ -1,0 +1,69 @@
+<div class="section">
+        <div class="section-header" onclick="toggleSection('section-company')">
+            <span class="section-toggle">▾</span>
+            <h2>Company</h2>
+            <span class="pill">company, admin</span>
+        </div>
+        <div id="section-company" class="section-body">
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-company-register')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /company/register</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-company-register" class="card-body">
+                    <div class="small">Register a new company and its first admin user in a single call. Protected by master password.</div>
+                    <table class="fields-table">
+                        <tr><th>Body field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>master_password</td><td>string</td><td>Yes</td><td>Must match <code>MASTER_ADMIN_PASSWORD</code> on server</td></tr>
+                        <tr><td>company_name</td><td>string</td><td>Yes</td><td>Company name</td></tr>
+                        <tr><td>username</td><td>string</td><td>Yes</td><td>Admin username</td></tr>
+                        <tr><td>password</td><td>string</td><td>Yes</td><td>Admin password</td></tr>
+                        <tr><td>email</td><td>string</td><td>Yes*</td><td>Email or phone required</td></tr>
+                        <tr><td>phone</td><td>string</td><td>Yes*</td><td>Email or phone required</td></tr>
+                        <tr><td>roles</td><td>array&lt;string&gt;</td><td>No</td><td>Will include <code>admin</code> automatically</td></tr>
+                        <tr><td>pincode</td><td>string</td><td>No</td><td>Postal code</td></tr>
+                        <tr><td>description</td><td>string</td><td>No</td><td>Free-form description</td></tr>
+                    </table>
+                    <div class="example small"><strong>Success (201):</strong> <code>{"company":{...},"admin":{...},"access_token":"...","refresh_token":"..."}</code></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-company-get')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /company/&lt;account_key&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-company-get" class="card-body">
+                    <div class="small">Get full company record for an authenticated user of that account. Requires Bearer token for the same <code>account_key</code>.</div>
+                    <div class="example small"><strong>Success:</strong> <code>{"company": {"account_key":..., "company_name":..., "users": [...], "employee_count": N, ...}}</code></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-company-put')">
+                    <div class="endpoint"><span class="method method-put">PUT</span> /company/&lt;account_key&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-company-put" class="card-body">
+                    <div class="small">Update company metadata. Only the original admin user of the account can call this.</div>
+                    <table class="fields-table">
+                        <tr><th>Body field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>company_name</td><td>string</td><td>No</td><td>New company name; propagated to all user docs</td></tr>
+                        <tr><td>pincode</td><td>string</td><td>No</td><td>Postal code</td></tr>
+                        <tr><td>description</td><td>string</td><td>No</td><td>Description / notes</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-company-public')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /company/public/&lt;account_key&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-company-public" class="card-body">
+                    <div class="small">Public minimal company info: company name, created date, owner (admin user), worker count.</div>
+                    <div class="example small"><strong>Response:</strong> <code>{"company": {"account_key":..., "company_name":..., "created_date": "YYYY-MM-DD", "owner": {"user_key":..., "username": ...}, "worker_count": N}}</code></div>
+                </div>
+            </div>
+        </div>
+    </div>

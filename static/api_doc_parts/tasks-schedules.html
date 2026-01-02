@@ -1,0 +1,123 @@
+<div class="section">
+        <div class="section-header" onclick="toggleSection('section-tasks')">
+            <span class="section-toggle">▾</span>
+            <h2>Tasks / Schedules</h2>
+            <span class="pill">tasks, schedules</span>
+        </div>
+        <div id="section-tasks" class="section-body">
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-task-create')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /task/</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-task-create" class="card-body">
+                    <div class="small">Create a task assigned to yourself or (if admin) to another user. Returns canonical TaskDTO fields.</div>
+                    <table class="fields-table">
+                        <tr><th>Body field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>title</td><td>string</td><td>Yes</td><td>Short summary of the task</td></tr>
+                        <tr><td>description</td><td>string</td><td>No</td><td>Details</td></tr>
+                        <tr><td>assigned_to</td><td>string</td><td>No</td><td>User key or identifier; defaults to current user</td></tr>
+                        <tr><td>task_date</td><td>string</td><td>No</td><td>Defaults to current date in user timezone (<code>YYYY-MM-DD</code> or <code>YYYY-MM-DD HH:MM</code>)</td></tr>
+                        <tr><td>end_date</td><td>string</td><td>No</td><td>Defaults to +24h from creation</td></tr>
+                        <tr><td>priority</td><td>string|int</td><td>No</td><td><code>normal</code> by default; automatically set to <code>1</code> (critical) if due &lt; 30min</td></tr>
+                        <tr><td>reminder</td><td>bool</td><td>No</td><td>Enable or disable reminders</td></tr>
+                        <tr><td>reminder_time</td><td>string</td><td>No</td><td>Optional specific time for reminder</td></tr>
+                        <tr><td>remind_before</td><td>int</td><td>No</td><td>Minutes before end date to trigger reminder (default 30)</td></tr>
+                        <tr><td>recurring</td><td>string</td><td>No</td><td><code>once</code> (default) or other recurrence patterns</td></tr>
+                        <tr><td>notes</td><td>string</td><td>No</td><td>Free-form text</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-task-list')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /task/</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-task-list" class="card-body">
+                    <div class="small">List tasks for current user, with meta counters (pending, completed, overdue, etc.).</div>
+                    <div class="example small"><strong>Response:</strong> <code>{"meta": {"pending": 5, "completed": 2, ...}, "tasks": [ TaskDTO..., ... ]}</code></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-task-put')">
+                    <div class="endpoint"><span class="method method-put">PUT</span> /task/&lt;task_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-task-put" class="card-body">
+                    <div class="small">Update fields of an existing task. Supports reassignment with history tracking.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-task-delete')">
+                    <div class="endpoint"><span class="method method-delete">DELETE</span> /task/&lt;task_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-task-delete" class="card-body">
+                    <div class="small">Delete a task by <code>task_id</code> or underlying Mongo <code>_id</code>.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-task-move')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /task/&lt;task_id&gt;/move</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-task-move" class="card-body">
+                    <div class="small">Explicitly move a task to a new assignee and append to history. Admin or current assignee only.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Req</th></tr>
+                        <tr><td>new_assignee</td><td>string</td><td>Yes</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-api-schedules')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /api/schedules</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-api-schedules" class="card-body">
+                    <div class="small">Compatibility endpoint. Filter tasks/schedules by pond, assignee, and status. Accepts both camelCase and snake_case query params.</div>
+                    <table class="fields-table">
+                        <tr><th>Query param (snake | camel)</th><th>Type</th><th>Notes</th></tr>
+                        <tr><td>pond_id / pondId</td><td>string</td><td>Filter by pond</td></tr>
+                        <tr><td>assigned_to / assignedTo</td><td>string</td><td>Filter by assignee</td></tr>
+                        <tr><td>status</td><td>string</td><td>Filter by task status</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-api-schedules-post')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /api/schedules</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-api-schedules-post" class="card-body">
+                    <div class="small">Compatibility creation of schedule; wraps TaskDTO and uses same storage as /task/.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-api-schedules-sched_id-patch')">
+                    <div class="endpoint"><span class="method method-patch">PATCH</span> /api/schedules/&lt;sched_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-api-schedules-sched_id-patch" class="card-body">
+                    <div class="small">Compatibility partial update of an existing schedule/task.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-api-schedules-sched_id-delete')">
+                    <div class="endpoint"><span class="method method-delete">DELETE</span> /api/schedules/&lt;sched_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-api-schedules-sched_id-delete" class="card-body">
+                    <div class="small">Compatibility delete of a schedule/task.</div>
+                </div>
+            </div>
+        </div>
+    </div>

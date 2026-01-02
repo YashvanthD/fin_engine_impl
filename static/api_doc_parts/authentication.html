@@ -1,0 +1,254 @@
+<div class="section">
+        <div class="section-header" onclick="toggleSection('section-auth')">
+            <span class="section-toggle">▾</span>
+            <h2>Authentication</h2>
+            <span class="pill">auth, tokens, users</span>
+        </div>
+        <div id="section-auth" class="section-body">
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-auth-signup')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /auth/signup</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-auth-signup" class="card-body">
+                    <div class="small">Create the first admin user and company. Protected by a master admin password (server env <code>MASTER_ADMIN_PASSWORD</code>).</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>master_password</td><td>string</td><td>Yes</td><td>Must match server-side MASTER_ADMIN_PASSWORD env variable</td></tr>
+                        <tr><td>company_name</td><td>string</td><td>Yes</td><td>Company / farm name for this account</td></tr>
+                        <tr><td>username</td><td>string</td><td>Yes</td><td>Admin login username</td></tr>
+                        <tr><td>password</td><td>string</td><td>Yes</td><td>Admin login password (stored base64-encoded)</td></tr>
+                        <tr><td>email</td><td>string</td><td>Yes*</td><td>Email or phone required</td></tr>
+                        <tr><td>phone</td><td>string</td><td>Yes*</td><td>Email or phone required</td></tr>
+                        <tr><td>roles</td><td>array&lt;string&gt;</td><td>No</td><td>Will always include <code>admin</code></td></tr>
+                    </table>
+                    <div class="curl"><strong>Request:</strong><br><pre>curl -X POST http://localhost:5000/auth/signup \
+  -H "Content-Type: application/json" \
+  -d '{
+    "master_password": "MASTER",
+    "company_name": "Acme Farm",
+    "username": "owner",
+    "password": "secret",
+    "email": "owner@example.com"
+  }'</pre></div>
+                    <div class="example"><strong>Response (201):</strong><br><pre>{
+  "success": true,
+  "data": {
+    "message": "Admin signup validated and saved.",
+    "user_id": "64fe...",
+    "account_key": "ACC123",
+    "user_key": "USR001"
+  }
+}</pre></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-auth-account-signup')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /auth/account/&lt;account_key&gt;/signup</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-auth-account-signup" class="card-body">
+                    <div class="small">Create additional users in an existing account. Requires a valid admin Bearer token for that <code>account_key</code>.</div>
+                    <table class="fields-table">
+                        <tr><th>Header</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>Authorization</td><td>string</td><td>Yes</td><td><code>Bearer ACCESS_TOKEN</code> for an admin of the same account</td></tr>
+                    </table>
+                    <table class="fields-table">
+                        <tr><th>Body field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>username</td><td>string</td><td>Yes</td><td>Unique within the account</td></tr>
+                        <tr><td>password</td><td>string</td><td>Yes</td><td>Plain-text; server stores base64-encoded</td></tr>
+                        <tr><td>email</td><td>string</td><td>No*</td><td>Email or phone required</td></tr>
+                        <tr><td>phone</td><td>string</td><td>No*</td><td>Email or phone required</td></tr>
+                        <tr><td>roles</td><td>array&lt;string&gt;</td><td>No</td><td>e.g. ["worker"]. If omitted, defaults are applied inside <code>build_user</code>.</td></tr>
+                        <tr><td>name / first_name / last_name</td><td>string</td><td>No</td><td>Optional profile fields</td></tr>
+                    </table>
+                    <div class="curl"><pre>curl -X POST http://localhost:5000/auth/account/ACC123/signup \
+  -H "Authorization: Bearer ADMIN_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"worker1","password":"pwd","phone":"+910000000"}'</pre></div>
+                    <div class="example"><strong>Response (201):</strong><br><pre>{
+  "success": true,
+  "data": {
+    "message": "User signup validated and saved.",
+    "user_id": "6501...",
+    "account_key": "ACC123",
+    "user_key": "USR002"
+  }
+}</pre></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-auth-login')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /auth/login</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-auth-login" class="card-body">
+                    <div class="small">Login with username/password, phone/password or email/password. Returns access and refresh tokens with embedded user data.</div>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>username</td><td>string</td><td>No*</td><td>Username, email or phone plus password required</td></tr>
+                        <tr><td>phone</td><td>string</td><td>No*</td><td>Alternative identifier</td></tr>
+                        <tr><td>email</td><td>string</td><td>No*</td><td>Alternative identifier</td></tr>
+                        <tr><td>password</td><td>string</td><td>Yes*</td><td>Required when no refresh_token provided</td></tr>
+                    </table>
+                    <div class="curl"><strong>Request:</strong><br><pre>curl -X POST http://localhost:5000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"secret"}'</pre></div>
+                    <div class="example"><strong>Response (200):</strong><br><pre>{
+  "success": true,
+  "data": {
+    "user_key": "USR001",
+    "account_key": "ACC123",
+    "roles": ["admin"],
+    "settings": {"timezone": "Asia/Kolkata"},
+    "subscription": {"subscription_type": "trial", "expiry": 1767225600},
+    "user": {
+      "user_key": "USR001",
+      "username": "admin",
+      "email": "admin@example.com",
+      "company_name": "Acme Farm",
+      "joined_date": 1766385600
+    },
+    "access_token": "eyJ...",
+    "refresh_token": "rftok..."
+  }
+}</pre></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-auth-token')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /auth/token</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-auth-token" class="card-body">
+                    <div class="small">Issue access tokens and/or refresh tokens. Three flows are supported:</div>
+                    <ol class="small">
+                        <li><strong>Access token from refresh token</strong> (<code>type=refresh_token</code> + <code>token</code>)</li>
+                        <li><strong>New refresh token</strong> (<code>type=refresh_token</code> + identifier + password)</li>
+                        <li><strong>Access token (default)</strong> (identifier + password or <code>refresh_token</code>)</li>
+                    </ol>
+                    <table class="fields-table">
+                        <tr><th>Body field (snake | camel)</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>type</td><td>string</td><td>No</td><td><code>access_token</code> (default) or <code>refresh_token</code></td></tr>
+                        <tr><td>token / refreshToken</td><td>string</td><td>Yes*</td><td>JWT refresh token when exchanging (<code>type=refresh_token</code>)</td></tr>
+                        <tr><td>refresh_token / refreshToken</td><td>string</td><td>No*</td><td>Alternative key name accepted in default flow</td></tr>
+                        <tr><td>username / phone / email</td><td>string</td><td>No*</td><td>One identifier required when issuing new refresh token or access token from credentials</td></tr>
+                        <tr><td>password</td><td>string</td><td>No*</td><td>Required with identifier when no refresh token is provided</td></tr>
+                        <tr><td>expires_in / expiresIn</td><td>int</td><td>No</td><td>Lifetime in seconds for new access token (default from config if omitted)</td></tr>
+                    </table>
+                    <div class="curl"><strong>Request (exchange refresh -&gt; access):</strong><br><pre>curl -X POST http://localhost:5000/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"type": "refresh_token", "token": "REFRESH_JWT"}'</pre></div>
+                    <div class="example"><strong>Response (200, access only):</strong><br><pre>{
+  "success": true,
+  "data": {
+    "access_token": "eyJ...",
+    "expires_in": 1703251200
+  }
+}</pre></div>
+                    <div class="example"><strong>Response (200, refresh only):</strong><br><pre>{
+  "success": true,
+  "data": {
+    "refresh_token": "rftok...",
+    "expires_in": 1703251200
+  }
+}</pre></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-auth-account-users')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /auth/account/users</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-auth-account-users" class="card-body">
+                    <div class="small">List users within the current authenticated account. If caller is admin, returns all users; otherwise returns only the caller.</div>
+                    <table class="fields-table">
+                        <tr><th>Header</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>Authorization</td><td>string</td><td>Yes</td><td><code>Bearer ACCESS_TOKEN</code></td></tr>
+                    </table>
+                    <div class="example"><strong>Response (admin caller):</strong><br><pre>{
+  "success": true,
+  "data": {
+    "users": [ { "user_key": "USR001", "username": "admin", ... } ]
+  }
+}</pre></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-auth-settings')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /auth/settings</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-auth-settings" class="card-body">
+                    <div class="small">Get or update (<code>PUT</code>) user-level settings and subscription data.</div>
+                    <table class="fields-table">
+                        <tr><th>Method</th><th>Behavior</th></tr>
+                        <tr><td>GET</td><td>Return <code>settings</code> and <code>subscription</code> for current user</td></tr>
+                        <tr><td>PUT</td><td>Overwrite <code>settings</code> object for current user</td></tr>
+                    </table>
+                    <div class="example small"><strong>Response:</strong> <code>{"user_key":..., "account_key":..., "settings": {...}, "subscription": {...}}</code></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-auth-validate')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /auth/validate</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-auth-validate" class="card-body">
+                    <div class="small">Validate a Bearer token and return user identity, roles, settings and subscription. Useful for frontend bootstrap.</div>
+                    <div class="example small"><strong>Response:</strong> <code>{"user_key":..., "account_key":..., "roles": [...], "settings": {...}, "subscription": {...}, "last_active": ...}</code></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-auth-subscriptions')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /auth/subscriptions</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-auth-subscriptions" class="card-body">
+                    <div class="small">Manage subscriptions. Non-admin: GET only; Admin: can PUT to change subscription for all users in account.</div>
+                    <table class="fields-table">
+                        <tr><th>Method</th><th>Body</th><th>Notes</th></tr>
+                        <tr><td>GET</td><td>-</td><td>Returns current user's subscription (limited fields for non-admin)</td></tr>
+                        <tr><td>PUT</td><td><code>{ "subscription": { ... } }</code></td><td>Only allowed for admin; applies to all users of account</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-auth-account-company')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /auth/account/&lt;account_key&gt;/company</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-auth-account-company" class="card-body">
+                    <div class="small">Lightweight company lookup: returns <code>company_name</code> for any account_key that has an admin user.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-api-auth-me')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /api/auth/me</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-api-auth-me" class="card-body">
+                    <div class="small">Compatibility endpoint. Validate token and return normalized user object (with <code>id</code>, <code>email</code>, <code>name</code>, etc.).</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-api-auth-refresh')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /api/auth/refresh</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-api-auth-refresh" class="card-body">
+                    <div class="small">Compatibility endpoint. Accepts <code>refreshToken</code> or <code>token</code> and returns <code>accessToken</code>.</div>
+                </div>
+            </div>
+        </div>
+    </div>

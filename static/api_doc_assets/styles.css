@@ -1,0 +1,25 @@
+body { font-family: 'Segoe UI', Arial, sans-serif; background: #f8f9fa; color: #222; margin: 0; padding: 0; }
+        .container { max-width: 1100px; margin: 28px auto; background: #fff; border-radius: 10px; box-shadow: 0 2px 12px #0002; padding: 28px; }
+        h1, h2, h3 { color: #2a4d7c; }
+        h1 { font-size: 2em; margin-bottom: 0.4em; }
+        .section { border-bottom: 1px solid #eee; margin-bottom: 1.5em; padding-bottom: 1.5em; }
+        .section-header { display: flex; align-items: center; cursor: pointer; user-select: none; }
+        .section-toggle { font-size: 0.8em; margin-right: 8px; color: #666; }
+        .section-body { margin-top: 8px; }
+        .card { background: #f7fbff; border-radius: 8px; margin-bottom: 1em; padding: 16px; border-left: 6px solid #2a4d7c; }
+        .card-header { display: flex; align-items: center; justify-content: space-between; cursor: pointer; }
+        .card .endpoint { font-weight: bold; font-size: 1.05em; color: #1a355e; }
+        .card-toggle { font-size: 0.8em; color: #666; margin-left: 12px; }
+        .card-body { margin-top: 10px; }
+        .method { display: inline-block; font-size: 0.85em; font-weight: bold; border-radius: 4px; padding: 2px 8px; margin-right: 8px; }
+        .method-get { background: #2e8b57; color: #fff; }
+        .method-post { background: #007bff; color: #fff; }
+        .method-put { background: #ff9800; color: #fff; }
+        .method-delete { background: #e53935; color: #fff; }
+        .fields-table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+        .fields-table th, .fields-table td { border: 1px solid #e0e6ef; padding: 6px 10px; text-align: left; }
+        .fields-table th { background: #eaf6ff; }
+        .curl, .example, .note { background: #f4f4f4; border-radius: 4px; padding: 10px; margin: 8px 0; font-size: 0.95em; }
+        .small { font-size: 0.9em; color: #555; }
+        pre { white-space: pre-wrap; word-wrap: break-word; }
+        .pill { display: inline-block; padding: 2px 6px; font-size: 0.8em; border-radius: 999px; background: #eef2ff; color: #334; margin-left: 6px; }

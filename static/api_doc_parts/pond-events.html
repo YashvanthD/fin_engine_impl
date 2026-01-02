@@ -1,0 +1,73 @@
+<div class="section">
+        <div class="section-header" onclick="toggleSection('section-pond-events')">
+            <span class="section-toggle">▾</span>
+            <h2>Pond Events</h2>
+            <span class="pill">events, history</span>
+        </div>
+        <div id="section-pond-events" class="section-body">
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-pond-event-add')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /pond_event/&lt;pond_id&gt;/event/&lt;event_type&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-pond-event-add" class="card-body">
+                    <div class="small">Supported <code>event_type</code>: add, sell, sample, remove, shift_in, shift_out. Updates pond metadata, fish analytics, and mapping.</div>
+                    <table class="fields-table">
+                        <tr><th>Path</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>pond_id</td><td>string</td><td>Yes</td><td>Pond identifier</td></tr>
+                        <tr><td>event_type</td><td>string</td><td>Yes</td><td>One of add, sell, sample, remove, shift_in, shift_out</td></tr>
+                    </table>
+                    <table class="fields-table">
+                        <tr><th>Body field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>fish_id</td><td>string</td><td>Yes</td><td>Fish species id</td></tr>
+                        <tr><td>count</td><td>int</td><td>Yes</td><td>&gt; 0</td></tr>
+                        <tr><td>fish_age_in_month</td><td>int</td><td>Yes*</td><td>Required for add/shift_in events</td></tr>
+                        <tr><td>details</td><td>object</td><td>No</td><td>Arbitrary extra info</td></tr>
+                        <tr><td>timestamp</td><td>datetime/string</td><td>No</td><td>If omitted, server uses current time</td></tr>
+                        <tr><td>samples</td><td>array</td><td>No</td><td>For sample/add events, weight samples etc.</td></tr>
+                    </table>
+                    <div class="example"><strong>Response (201):</strong> <code>{"success": true, "data": {"event_id": "..."}}</code></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-pond-event-list')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /pond_event/&lt;pond_id&gt;/events</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-pond-event-list" class="card-body">
+                    <div class="small">Get all events for a pond (normalized DTO where possible).</div>
+                    <div class="example small"><strong>Response:</strong> <code>{"success": true, "data": {"events": [ PondEventDTO..., ... ]}}</code></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-pond-event-delete')">
+                    <div class="endpoint"><span class="method method-delete">DELETE</span> /pond_event/&lt;pond_id&gt;/events/&lt;event_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-pond-event-delete" class="card-body">
+                    <div class="small">Delete an existing pond event by ObjectId.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-pond-event-put')">
+                    <div class="endpoint"><span class="method method-put">PUT</span> /pond_event/&lt;pond_id&gt;/events/&lt;event_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-pond-event-put" class="card-body">
+                    <div class="small">Update a pond event and reconcile pond metadata + analytics (reverts old effects and applies new ones).</div>
+                    <table class="fields-table">
+                        <tr><th>Body field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>fish_id</td><td>string</td><td>No</td><td>New fish species id</td></tr>
+                        <tr><td>count</td><td>int</td><td>No</td><td>New count (&gt; 0)</td></tr>
+                        <tr><td>event_type</td><td>string</td><td>No</td><td>New event type</td></tr>
+                        <tr><td>details</td><td>object</td><td>No</td><td>Updated details</td></tr>
+                        <tr><td>fish_age_in_month</td><td>int</td><td>No</td><td>Updated age</td></tr>
+                        <tr><td>samples</td><td>array</td><td>No</td><td>For sample/add events, new samples</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>

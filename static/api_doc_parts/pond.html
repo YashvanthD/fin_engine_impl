@@ -1,0 +1,134 @@
+<div class="section">
+        <div class="section-header" onclick="toggleSection('section-pond')">
+            <span class="section-toggle">▾</span>
+            <h2>Pond</h2>
+            <span class="pill">pond, water, mapping</span>
+        </div>
+        <div id="section-pond" class="section-body">
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-pond-create')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /pond/create</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-pond-create" class="card-body">
+                    <div class="small">Create a new pond for the authenticated account. If pond_id omitted, server generates <code>&lt;account_key&gt;-NNN</code>.</div>
+                    <table class="fields-table">
+                        <tr><th>Body field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>pond_id</td><td>string</td><td>No</td><td>If omitted, auto-generated per account (001, 002,...)</td></tr>
+                        <tr><td>pond_name</td><td>string</td><td>No</td><td>Human-readable name</td></tr>
+                        <tr><td>location</td><td>string</td><td>No</td><td>Free-form location string</td></tr>
+                        <tr><td>size</td><td>string|number</td><td>No</td><td>Pond size (e.g. area or capacity)</td></tr>
+                        <tr><td>water_type</td><td>string</td><td>No</td><td>Freshwater, brackish, etc.</td></tr>
+                        <tr><td>...</td><td>any</td><td>No</td><td>Extra fields are persisted</td></tr>
+                    </table>
+                    <div class="example small"><strong>Response (201):</strong> PondDTO shape with <code>pond_id</code>, <code>account_key</code>, <code>created_at</code>, etc.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-pond-update')">
+                    <div class="endpoint"><span class="method method-put">PUT</span> /pond/update/&lt;pond_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-pond-update" class="card-body">
+                    <div class="small">Update limited fields on a pond (cannot change pond_id/account_key).</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-pond-get')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /pond/&lt;pond_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-pond-get" class="card-body">
+                    <div class="small">Get a single pond for the current account.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-pond-put')">
+                    <div class="endpoint"><span class="method method-put">PUT</span> /pond/&lt;pond_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-pond-put" class="card-body">
+                    <div class="small">Update pond document fields for the current account (less strict than /update).</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-pond-delete')">
+                    <div class="endpoint"><span class="method method-delete">DELETE</span> /pond/&lt;pond_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-pond-delete" class="card-body">
+                    <div class="small">Delete a pond by pond_id for the current account.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-pond-list')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /pond/</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-pond-list" class="card-body">
+                    <div class="small">List ponds for the authenticated account with pagination and filters.</div>
+                    <table class="fields-table">
+                        <tr><th>Query</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>limit</td><td>int</td><td>No</td><td>Max items (default 100, max 1000)</td></tr>
+                        <tr><td>skip</td><td>int</td><td>No</td><td>Offset for pagination</td></tr>
+                        <tr><td>from_date / to_date</td><td>datetime/string</td><td>No</td><td>Date filters on created_at</td></tr>
+                        <tr><td>...</td><td>string</td><td>No</td><td>Any other field filters directly on pond document</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-pond-fish-options')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /pond/&lt;pond_id&gt;/fish_options</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-pond-fish-options" class="card-body">
+                    <div class="small">Return simple list of fish options mapped to the account, for UI dropdowns.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-pond-activity')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /pond/&lt;pond_id&gt;/activity</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-pond-activity" class="card-body">
+                    <div class="small">Paginated fish_activity / sampling records for a pond. Accepts both snake_case and camelCase query fields.</div>
+                    <table class="fields-table">
+                        <tr><th>Query (snake | camel)</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>fish_id / fishId</td><td>string</td><td>No</td><td>Filter by fish species id</td></tr>
+                        <tr><td>limit</td><td>int</td><td>No</td><td>Default 50</td></tr>
+                        <tr><td>skip</td><td>int</td><td>No</td><td>Default 0</td></tr>
+                        <tr><td>start_date / startDate</td><td>datetime/string</td><td>No</td><td>Filter by created_at range (start)</td></tr>
+                        <tr><td>end_date / endDate</td><td>datetime/string</td><td>No</td><td>Filter by created_at range (end)</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-pond-history')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /pond/&lt;pond_id&gt;/history</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-pond-history" class="card-body">
+                    <div class="small">Combined history for a pond: events, activities, and analytics. All filters accept both snake_case and camelCase naming.</div>
+                    <table class="fields-table">
+                        <tr><th>Query (snake | camel)</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>start_date / startDate</td><td>datetime/string</td><td>No</td><td>Date window start for all sources</td></tr>
+                        <tr><td>end_date / endDate</td><td>datetime/string</td><td>No</td><td>Date window end for all sources</td></tr>
+                        <tr><td>species_code / speciesCode</td><td>string</td><td>No</td><td>Filter history for a single fish species</td></tr>
+                        <tr><td>include_events / includeEvents</td><td>bool</td><td>No</td><td>Default true</td></tr>
+                        <tr><td>include_activities / includeActivities</td><td>bool</td><td>No</td><td>Default true</td></tr>
+                        <tr><td>include_analytics / includeAnalytics</td><td>bool</td><td>No</td><td>Default true</td></tr>
+                        <tr><td>limit</td><td>int</td><td>No</td><td>Max items per section (default 100)</td></tr>
+                        <tr><td>skip</td><td>int</td><td>No</td><td>Offset per section (default 0)</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>

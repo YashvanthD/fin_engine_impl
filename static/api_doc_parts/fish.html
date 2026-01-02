@@ -1,0 +1,176 @@
+<div class="section">
+        <div class="section-header" onclick="toggleSection('section-fish')">
+            <span class="section-toggle">▾</span>
+            <h2>Fish</h2>
+            <span class="pill">species, analytics</span>
+        </div>
+        <div id="section-fish" class="section-body">
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-fish-create')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /fish/create</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-fish-create" class="card-body">
+                    <div class="small">Create static fish entity (metadata). Fish entity is global; mapping to an account happens via batch add or pond events.</div>
+                    <table class="fields-table">
+                        <tr><th>Body field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>common_name</td><td>string</td><td>Yes</td><td>Common name, used for duplicate check (case-insensitive)</td></tr>
+                        <tr><td>scientific_name</td><td>string</td><td>Yes</td><td>Scientific name, used for duplicate check</td></tr>
+                        <tr><td>species_code</td><td>string</td><td>No</td><td>If omitted, server generates a code from name + random key</td></tr>
+                        <tr><td>account_key</td><td>string</td><td>No</td><td>Auto-filled from token if present, otherwise left as provided</td></tr>
+                        <tr><td>overwrite</td><td>bool (query)</td><td>No</td><td>If true and duplicate species exists, overwrite instead of 409</td></tr>
+                        <tr><td>created_at</td><td>datetime</td><td>No</td><td>Server sets current UTC time</td></tr>
+                        <tr><td>...</td><td>any</td><td>No</td><td>Any extra fields are stored on the fish document</td></tr>
+                    </table>
+                    <div class="example"><strong>Response (201):</strong><br><pre>{"success": true, "data": {"species_id": "CF001", "species_code": "CF001"}}</pre></div>
+                    <div class="example"><strong>Response (409):</strong> <code>{"success": false, "error": "Fish with the same scientific_name, common_name, or species_code already exists. Use overwrite=true to force."}</code></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-fish-batch-add')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /fish/</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-fish-batch-add" class="card-body">
+                    <div class="small">Add a batch (single or bulk) for a fish species for the current account - creates analytics batch and ensures mapping.</div>
+                    <table class="fields-table">
+                        <tr><th>Body field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>species_code</td><td>string</td><td>Yes</td><td>Must match <code>_id</code> of an existing fish entity</td></tr>
+                        <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish in this batch (&gt; 0)</td></tr>
+                        <tr><td>fish_age_in_month</td><td>int</td><td>Yes</td><td>Age in months for this batch</td></tr>
+                        <tr><td>fish_weight</td><td>float</td><td>No</td><td>Average fish weight for this batch (kg)</td></tr>
+                    </table>
+                    <div class="example"><strong>Response (201):</strong><br><pre>{"success": true, "data": {"species_id": "CF001", "event_id": "ACC123-CF001-..."}}</pre></div>
+                    <div class="example"><strong>Response (404):</strong> <code>{"success": false, "error": "Fish species not found. Please create the fish entity first."}</code></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-fish-list')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /fish/</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-fish-list" class="card-body">
+                    <div class="small">List fish entities mapped to current user's account_key with analytics and optional filters. Query params support both snake_case and camelCase.</div>
+                    <table class="fields-table">
+                        <tr><th>Query (snake | camel)</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>from_date / fromDate</td><td>datetime/string</td><td>No</td><td>Filter by created_at &gt;= from_date (ISO or epoch)</td></tr>
+                        <tr><td>to_date / toDate</td><td>datetime/string</td><td>No</td><td>Filter by created_at &lt;= to_date</td></tr>
+                        <tr><td>min_size / minSize</td><td>float</td><td>No</td><td>Numeric filters on stored size field</td></tr>
+                        <tr><td>max_size / maxSize</td><td>float</td><td>No</td><td>Numeric filters on stored size field</td></tr>
+                        <tr><td>min_weight / minWeight</td><td>float</td><td>No</td><td>Numeric filters on stored weight field and analytics</td></tr>
+                        <tr><td>max_weight / maxWeight</td><td>float</td><td>No</td><td>Numeric filters on stored weight field and analytics</td></tr>
+                        <tr><td>min_count / minCount</td><td>int</td><td>No</td><td>Numeric filters on count</td></tr>
+                        <tr><td>max_count / maxCount</td><td>int</td><td>No</td><td>Numeric filters on count</td></tr>
+                        <tr><td>common_name / commonName</td><td>string</td><td>No</td><td>Exact match filter</td></tr>
+                        <tr><td>scientific_name / scientificName</td><td>string</td><td>No</td><td>Exact match filter</td></tr>
+                        <tr><td>species_code / speciesCode</td><td>string</td><td>No</td><td>Exact match filter</td></tr>
+                        <tr><td>min_age / minAge</td><td>int</td><td>No</td><td>Filtering within analytics age buckets</td></tr>
+                        <tr><td>max_age / maxAge</td><td>int</td><td>No</td><td>Filtering within analytics age buckets</td></tr>
+                        <tr><td>avg_n / avgN</td><td>int</td><td>No</td><td>Analytics parameter for averaging</td></tr>
+                    </table>
+                    <div class="example"><strong>Response (200):</strong> <code>{"success": true, "data": {"fish": [ {"id": "CF001", "speciesCode": "CF001", "commonName": "Catfish", "analytics": {...}} ]}}</code></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-fish-species_id')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /fish/&lt;species_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-fish-species_id" class="card-body">
+                    <div class="small">Get a fish entity with analytics for the current account; only if mapped to the account.</div>
+                    <table class="fields-table">
+                        <tr><th>Path</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>species_id</td><td>string</td><td>Yes</td><td>Fish species code / id</td></tr>
+                    </table>
+                    <div class="example"><strong>Response (200):</strong> <code>{"success": true, "data": {"fish": {"id": "CF001", "commonName": "Catfish", "analytics": {...}, "ponds": ["ACC123-001"]}}}</code></div>
+                    <div class="example"><strong>Response (404):</strong> <code>{"success": false, "error": "This fish is not present in your farm (not mapped to your account_key)."}</code></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-fish-put')">
+                    <div class="endpoint"><span class="method method-put">PUT</span> /fish/&lt;species_id&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-fish-put" class="card-body">
+                    <div class="small">Update fish entity fields and optionally add a new analytics batch.</div>
+                    <table class="fields-table">
+                        <tr><th>Body field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>common_name</td><td>string</td><td>No</td><td>Update common name</td></tr>
+                        <tr><td>scientific_name</td><td>string</td><td>No</td><td>Update scientific name</td></tr>
+                        <tr><td>...entity fields...</td><td>any</td><td>No</td><td>Additional updatable fields</td></tr>
+                        <tr><td>count</td><td>int</td><td>No*</td><td>Optional; when provided with fish_age_in_month adds a batch</td></tr>
+                        <tr><td>fish_age_in_month</td><td>int</td><td>No*</td><td>Required if count is provided</td></tr>
+                        <tr><td>fish_weight</td><td>float</td><td>No</td><td>Optional batch weight</td></tr>
+                    </table>
+                    <div class="example"><strong>Response (200 w/o batch):</strong> <code>{"success": true, "data": {"species_id": "CF001"}}</code></div>
+                    <div class="example"><strong>Response (200 with batch):</strong> <code>{"success": true, "data": {"species_id": "CF001", "event_id": "ACC123-CF001-..."}}</code></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-fish-analytics')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /fish/analytics</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-fish-analytics" class="card-body">
+                    <div class="small">Get analytics for all fish mapped to the account or a specific fish via <code>species_code</code>.</div>
+                    <table class="fields-table">
+                        <tr><th>Query</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>species_code</td><td>string</td><td>No</td><td>If provided, restricts analytics to one species</td></tr>
+                        <tr><td>min_age / max_age</td><td>int</td><td>No</td><td>Filter analytics by age bucket</td></tr>
+                        <tr><td>avg_n</td><td>int</td><td>No</td><td>Analytics window parameter</td></tr>
+                        <tr><td>min_weight / max_weight</td><td>float</td><td>No</td><td>Filter analytics by weight</td></tr>
+                    </table>
+                    <div class="example small"><strong>Response:</strong> <code>{"success": true, "data": {"analytics": [ {"species_code": "CF001", "analytics": {...}} ]}}</code></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-fish-species_id-analytics')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /fish/&lt;species_id&gt;/analytics</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-fish-species_id-analytics" class="card-body">
+                    <div class="small">Get analytics for a specific fish species mapped to your account.</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-fish-fields')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /fish/fields</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-fish-fields" class="card-body">
+                    <div class="small">Return list of available fish document fields (for dynamic UIs/filters).</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-fish-distinct')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /fish/distinct/&lt;field&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-fish-distinct" class="card-body">
+                    <div class="small">Return distinct values for a given fish field.</div>
+                    <table class="fields-table">
+                        <tr><th>Path</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>field</td><td>string</td><td>Yes</td><td>Field name (e.g. common_name, species_code)</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-fish-stats')">
+                    <div class="endpoint"><span class="method method-get">GET</span> /fish/stats/&lt;field&gt;</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-fish-stats" class="card-body">
+                    <div class="small">Return basic stats (min, max, avg, etc.) for a numeric fish field.</div>
+                </div>
+            </div>
+        </div>
+    </div>
