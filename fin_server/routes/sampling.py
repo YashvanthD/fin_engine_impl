@@ -7,6 +7,7 @@ from fin_server.dto.growth_dto import GrowthRecordDTO
 
 from fin_server.utils.generator import generate_sampling_id
 from fin_server.utils.validation import compute_total_amount_from_payload
+from fin_server.utils.threading_util import submit_task
 
 sampling_bp = Blueprint('sampling', __name__, url_prefix='/sampling')
 repo = MongoRepositorySingleton.get_instance()
@@ -237,15 +238,26 @@ def create_sampling_route():
                     current_app.logger.exception('Failed to record fish_activity for buy')
 
                 # update pond.current_stock using reusable StockRepository
+                # Run stock update asynchronously so transaction (HTTP response) returns fast.
                 try:
-                    from fin_server.repository.stock_repository import StockRepository
-                    sr = StockRepository()
-                    ok = sr.add_stock_transactional(payload.get('account_key'), dto.pondId, dto.species, buy_count, average_weight=getattr(dto, 'averageWeight', None), sampling_id=dto.extra.get('sampling_id') or inserted_id, recorded_by=dto.recordedBy, expense_amount=total_amt, timeout_seconds=3)
-                    if not ok:
-                        # fallback to non-transactional update
-                        sr.add_stock_to_pond(payload.get('account_key'), dto.pondId, dto.species, buy_count, average_weight=getattr(dto, 'averageWeight', None), sampling_id=dto.extra.get('sampling_id') or inserted_id, recorded_by=dto.recordedBy, create_event=False, create_activity=False, create_analytics=False, create_expense=True, expense_amount=total_amt)
+                    def _run_stock_update(account_key, pond_id, species, count, average_weight, sampling_id_val, recorded_by_val, expense_amount_val):
+                        try:
+                            from fin_server.repository.stock_repository import StockRepository
+                            sr = StockRepository()
+                            ok_inner = sr.add_stock_transactional(account_key, pond_id, species, count, average_weight=average_weight, sampling_id=sampling_id_val, recorded_by=recorded_by_val, expense_amount=expense_amount_val, timeout_seconds=3)
+                            if not ok_inner:
+                                # fallback to non-transactional update
+                                sr.add_stock_to_pond(account_key, pond_id, species, count, average_weight=average_weight, sampling_id=sampling_id_val, recorded_by=recorded_by_val, create_event=False, create_activity=False, create_analytics=False, create_expense=True, expense_amount=expense_amount_val)
+                        except Exception:
+                            current_app.logger.exception('Failed background stock update')
+
+                    sampling_id_val = dto.extra.get('sampling_id') or inserted_id
+                    try:
+                        submit_task(_run_stock_update, payload.get('account_key'), dto.pondId, dto.species, buy_count, getattr(dto, 'averageWeight', None), sampling_id_val, dto.recordedBy, total_amt)
+                    except Exception:
+                        current_app.logger.exception('Failed to schedule background stock update (executor)')
                 except Exception:
-                    current_app.logger.exception('Failed to update pond current_stock for buy (via StockRepository)')
+                    current_app.logger.exception('Failed to schedule background stock update')
 
             except Exception:
                 current_app.logger.exception('Unexpected error during buy post-processing')
