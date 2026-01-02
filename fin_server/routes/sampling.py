@@ -12,6 +12,7 @@ from fin_server.utils.threading_util import submit_task
 sampling_bp = Blueprint('sampling', __name__, url_prefix='/sampling')
 repo = MongoRepositorySingleton.get_instance()
 
+
 @sampling_bp.route('', methods=['POST'])
 @sampling_bp.route('/', methods=['POST'])
 def create_sampling_route():
@@ -182,15 +183,39 @@ def create_sampling_route():
                         except Exception:
                             total_amt = None
                     if expenses_repo and total_amt is not None:
-                        # Build a richer expense document with fields commonly used
+                        # Build a richer expense document with requested defaults for fish buys
+                        # Defaults: type='fish', action='buy', payment_method='cash', category='asset'
+                        metadata = {}
+                        # promote common metadata fields from extra or DTO
+                        metadata['species'] = extra.get('species') or getattr(dto, 'species', None)
+                        metadata['description'] = extra.get('description') or extra.get('notes') or getattr(dto, 'notes', None)
+                        # optional free-form note/reasons
+                        if extra.get('note') is not None:
+                            metadata['note'] = extra.get('note')
+                        if extra.get('reasons') is not None:
+                            metadata['reasons'] = extra.get('reasons')
+                        # preserve any explicit type in metadata (not to confuse top-level 'type')
+                        if extra.get('type') is not None:
+                            metadata['type'] = extra.get('type')
+                        # include any other explicit metadata keys (best-effort)
+                        for k in ('fish_age_in_month', 'sampling_id', 'batch_id'):
+                            if extra.get(k) is not None:
+                                metadata[k] = extra.get(k)
+
+                        # Clean metadata: remove None entries
+                        metadata = {k: v for k, v in metadata.items() if v is not None}
+                        # Build expense doc and remove None entries before persisting
                         expense_doc = {
                             'pond_id': dto.pondId,
-                            'species': dto.species,
-                            'category': extra.get('category') or 'buy',
-                            'type': extra.get('type') or extra.get('transactionType') or 'buy',
+                            # top-level classification fields
+                            'category': extra.get('category') or 'asset',
+                            'action': extra.get('action') or 'buy',
+                            'type': extra.get('type') or 'fish',
                             'amount': total_amt,
                             'currency': extra.get('currency') or 'INR',
-                            'notes': extra.get('notes') or extra.get('description'),
+                            # payment method default to 'cash' if not provided
+                            'payment_method': extra.get('payment_method') or extra.get('paymentMethod') or 'cash',
+                            'notes': extra.get('notes') or extra.get('description') or getattr(dto, 'notes', None),
                             'recorded_by': dto.recordedBy,
                             'account_key': payload.get('account_key'),
                             'creditor': extra.get('creditor') or extra.get('credited_to') or extra.get('vendor'),
@@ -198,10 +223,13 @@ def create_sampling_route():
                             'transaction_id': extra.get('transaction_id') or extra.get('transactionId') or extra.get('tx_id'),
                             'gst': extra.get('gst'),
                             'tax': extra.get('tax'),
-                            'payment_method': extra.get('payment_method') or extra.get('paymentMethod'),
                             'invoice_no': extra.get('invoice_no') or extra.get('invoiceNo') or extra.get('invoice'),
-                            'vendor': extra.get('vendor')
+                            'vendor': extra.get('vendor'),
                         }
+                        if metadata:
+                            expense_doc['metadata'] = metadata
+                        # Strip None values so we don't store nulls
+                        expense_doc = {k: v for k, v in expense_doc.items() if v is not None}
                         try:
                             # ExpensesRepository.create will also create a transaction and attach a transaction_ref when available
                             expenses_repo.create(expense_doc)
@@ -262,7 +290,6 @@ def create_sampling_route():
             except Exception:
                 current_app.logger.exception('Unexpected error during buy post-processing')
 
-
         return respond_success(dto.to_dict(), status=201)
     except UnauthorizedError as ue:
         return respond_error(str(ue), status=401)
@@ -283,8 +310,6 @@ def list_sampling_for_pond_route(pond_id):
                 dto = GrowthRecordDTO.from_doc(ro)
                 out.append(dto.to_dict())
             except Exception:
-                ro['_id'] = str(ro.get('_id'))
-                ro['id'] = ro['_id']
                 out.append(ro)
         return respond_success(out)
     except Exception:
@@ -344,8 +369,6 @@ def get_sampling_history():
                 dto = GrowthRecordDTO.from_doc(ro)
                 out.append(dto.to_dict())
             except Exception:
-                ro['_id'] = str(ro.get('_id'))
-                ro['id'] = ro['_id']
                 out.append(ro)
         return respond_success(out)
     except Exception:
@@ -438,6 +461,8 @@ def update_sampling_route(sampling_id):
             for ek, ev in data.get('extra').items():
                 update_fields[ek] = ev
 
+        # Remove None-valued fields from updates (do not store nulls)
+        update_fields = {k: v for k, v in update_fields.items() if v is not None}
         if not update_fields:
             return respond_error('No updatable fields provided', status=400)
 
@@ -454,8 +479,6 @@ def update_sampling_route(sampling_id):
             dto = GrowthRecordDTO.from_doc(ro)
             return respond_success(dto.to_dict())
         except Exception:
-            ro['_id'] = str(ro.get('_id'))
-            ro['id'] = ro['_id']
             return respond_success(ro)
     except UnauthorizedError as ue:
         return respond_error(str(ue), status=401)

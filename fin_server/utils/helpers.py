@@ -3,6 +3,7 @@ from fin_server.security.authentication import get_auth_payload
 from fin_server.exception.UnauthorizedError import UnauthorizedError
 from datetime import datetime, timezone
 import zoneinfo
+from werkzeug.exceptions import Forbidden
 
 
 def respond_error(message_or_dict, status=400):
@@ -29,6 +30,11 @@ def respond_error(message_or_dict, status=400):
     # always include a timestamp for debugging by frontend (IST)
     ist = zoneinfo.ZoneInfo('Asia/Kolkata')
     body['timestamp'] = datetime.now(ist).isoformat()
+    # prune None values before returning
+    try:
+        body = _prune_none(body)
+    except Exception:
+        current_app.logger.exception('Failed to prune None in respond_error')
     return jsonify(body), status
 
 
@@ -412,25 +418,64 @@ def respond_success(payload=None, status=200):
     else:
         body['data'] = data
 
-    # Normalize the data payload for UI (convert keys/types)
+    # Normalize the data payload for UI (convert keys/types) and remove None values
     try:
+        # normalize_for_ui may throw; wrap
         body['data'] = normalize_for_ui(body['data'])
     except Exception:
         current_app.logger.exception('Failed to normalize response payload for UI')
+    try:
+        body['data'] = _prune_none(body['data'])
+    except Exception:
+        current_app.logger.exception('Failed to prune None in respond_success')
     # IST timestamp for success responses
     body['timestamp'] = datetime.now(IST_TZ).isoformat()
     return jsonify(body), status
 
 
-def get_request_payload(req=None):
-    """Decode auth token from request or raise UnauthorizedError with clear message."""
+def get_request_payload(req=None, required_role: str = None, account_key: str = None):
+    """Decode auth token from request and optionally enforce authorization.
+
+    Parameters:
+    - req: Flask request object (defaults to flask.request)
+    - required_role: if provided, the decoded payload must include this role (raises 403 otherwise)
+    - account_key: if provided, the decoded payload must have matching account_key (raises 403 otherwise)
+
+    Raises:
+    - UnauthorizedError: when authentication fails (401)
+    - Forbidden: when token is valid but user is not authorized (403)
+    """
     if req is None:
         req = request
     try:
-        return get_auth_payload(req)
+        payload = get_auth_payload(req)
     except UnauthorizedError as e:
         current_app.logger.warning(f'Auth failure: {e}')
+        # Preserve project-specific UnauthorizedError so existing code paths catch it
+        raise UnauthorizedError(str(e))
+
+    # Authorization checks (optional)
+    try:
+        if required_role:
+            roles = []
+            if isinstance(payload.get('roles'), list):
+                roles = payload.get('roles', [])
+            elif payload.get('role'):
+                roles = [payload.get('role')]
+            if required_role not in roles:
+                current_app.logger.warning(f'Authorization failure: missing role {required_role} in token')
+                raise Forbidden(f'Missing required role: {required_role}')
+
+        if account_key:
+            tok_acct = payload.get('account_key')
+            if tok_acct != account_key:
+                current_app.logger.warning(f'Authorization failure: token account_key {tok_acct} does not match required {account_key}')
+                raise Forbidden('Account mismatch or not authorized for this account')
+    except Forbidden:
+        # Re-raise Forbidden to be handled by Flask as 403
         raise
+
+    return payload
 
 
 IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
@@ -506,3 +551,50 @@ def parse_pagination(args, default_limit=100, max_limit=1000):
     if errors:
         return None, None, errors
     return limit, skip, None
+
+
+def _prune_none(obj):
+    """Recursively remove keys with None values and None items in lists.
+
+    Keeps empty strings and falsy but non-None values (0, False, []).
+    Returns a new object (does not mutate input) to be safe.
+    """
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        out = {}
+        for k, v in obj.items():
+            pv = _prune_none(v)
+            if pv is None:
+                continue
+            out[k] = pv
+        return out
+    if isinstance(obj, list):
+        out = []
+        for v in obj:
+            pv = _prune_none(v)
+            if pv is None:
+                continue
+            out.append(pv)
+        return out
+    return obj
+
+
+def clean_for_ui(obj):
+    """Normalize an object for UI and remove None values.
+
+    This composes the existing normalize_for_ui pipeline, then prunes None
+    entries so responses won't include nulls. Use this from global middleware
+    before sending JSON responses.
+    """
+    try:
+        transformed = normalize_for_ui(obj)
+    except Exception:
+        current_app.logger.exception('normalize_for_ui failed in clean_for_ui')
+        # fallback: try to at least prune the original
+        return _prune_none(obj)
+    try:
+        return _prune_none(transformed)
+    except Exception:
+        current_app.logger.exception('Prune None failed in clean_for_ui')
+        return transformed

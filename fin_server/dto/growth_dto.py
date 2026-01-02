@@ -196,7 +196,8 @@ class GrowthRecordDTO:
                 continue
             if k not in doc:
                 doc[k] = v
-        return doc
+        # Remove keys with None values so we don't store nulls in DB
+        return {k: v for k, v in doc.items() if v is not None}
 
     def save(self, collection=None, repo=None, collection_name: Optional[str] = 'sampling', upsert: bool = False):
         doc = self.to_db_doc()
