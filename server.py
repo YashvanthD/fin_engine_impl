@@ -1,7 +1,7 @@
 import argparse
 import os
 import warnings
-from flask import Flask, render_template
+from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 # Register canonical blueprints and their API blueprints from route modules
 from fin_server.routes.auth import auth_bp, auth_api_bp
@@ -17,6 +17,7 @@ from fin_server.routes.sampling import sampling_bp, sampling_api_bp
 from fin_server.security.authentication import AuthSecurity
 from fin_server.notification.scheduler import TaskScheduler
 from fin_server.messaging.socket_server import socketio, start_notification_worker
+from fin_server.utils.metrics import collector as metrics_collector
 import logging
 
 try:
@@ -87,6 +88,38 @@ def create_app() -> Flask:
     app.register_blueprint(sampling_api_bp)
 
     logging.basicConfig(level=logging.INFO)
+
+    # Middleware: record request start time and capture metrics in after_request
+    @app.before_request
+    def _metrics_before_request():
+        # store start time in the flask global request context
+        from time import perf_counter
+        request._metrics_start = perf_counter()
+
+    @app.after_request
+    def _metrics_after_request(response):
+        try:
+            from time import perf_counter
+            start = getattr(request, '_metrics_start', None)
+            if start is not None:
+                duration_ms = (perf_counter() - start) * 1000.0
+            else:
+                duration_ms = 0.0
+            # Determine a route identifier: prefer endpoint (blueprint.function) if available
+            route = request.endpoint or request.path
+            method = request.method
+            metrics_collector.record(method, route, response.status_code, duration_ms)
+        except Exception:
+            logging.exception('Failed to record metrics')
+        return response
+
+    @app.route('/metrics', methods=['GET'])
+    def _metrics_endpoint():
+        try:
+            return jsonify(metrics_collector.get_metrics())
+        except Exception:
+            logging.exception('Failed to read metrics')
+            return {}, 500
 
     @app.route('/')
     def index():  # type: ignore[func-returns-value]
