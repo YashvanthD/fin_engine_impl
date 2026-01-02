@@ -49,7 +49,7 @@ class StockRecordDTO:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        out = {
             'id': self.id,
             'pondId': self.pondId,
             'species': self.species,
@@ -59,8 +59,16 @@ class StockRecordDTO:
             'source': self.source,
             'batchId': self.batchId,
             'expectedHarvestDate': self.expectedHarvestDate,
-            **self.extra
         }
+        # include non-null extra fields
+        if isinstance(self.extra, dict):
+            for k, v in self.extra.items():
+                if v is None:
+                    continue
+                if k not in out:
+                    out[k] = v
+        # remove None values
+        return {k: v for k, v in out.items() if v is not None}
 
 
 class PondDTO:
@@ -134,7 +142,7 @@ class PondDTO:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        out = {
             'id': self.id,
             'name': self.name,
             'dimensions': self.dimensions,
@@ -147,8 +155,15 @@ class PondDTO:
             'createdAt': self.createdAt,
             'lastMaintenance': self.lastMaintenance,
             'status': self.status,
-            **self.extra
         }
+        if isinstance(self.extra, dict):
+            for k, v in self.extra.items():
+                if v is None:
+                    continue
+                if k not in out:
+                    out[k] = v
+        # remove None values before returning
+        return {k: v for k, v in out.items() if v is not None}
 
     def to_db_doc(self) -> Dict[str, Any]:
         doc = {

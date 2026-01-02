@@ -152,3 +152,148 @@ def validate_pagination_params(args):
     except Exception:
         errors['skip'] = 'skip must be an integer'
     return (len(errors) == 0, errors)
+
+
+# New functions added to support sampling route behavior and tests
+
+def is_buy_transaction(extra, dto=None):
+    """Determine whether a transaction payload/extra indicates a buy (purchase).
+
+    Returns (is_buy: bool, buy_count: int|None)
+    Logic (defensive):
+    - Look for transaction-type fields (transactionType, transaction, type) and check if value contains 'buy' (case-insensitive).
+    - If any numeric buy count fields exist (buy_count, bought, count, quantity), parse and return as int.
+    - If transaction indicates buy but no explicit count, fall back to dto.sampleSize or dto.sample_size when available.
+    """
+    try:
+        if not isinstance(extra, dict):
+            return (False, None)
+        # Normalize keys
+        tx_keys = ['transactionType', 'transaction', 'type', 'transaction_type', 'tx_type']
+        tx_val = None
+        for k in tx_keys:
+            if k in extra and extra.get(k) is not None:
+                tx_val = str(extra.get(k))
+                break
+        is_buy = False
+        if tx_val:
+            if 'buy' in tx_val.lower() or 'purchase' in tx_val.lower():
+                is_buy = True
+        # Also if extra contains explicit buy_count-like fields consider it a buy
+        count_keys = ['buy_count', 'bought', 'count', 'quantity']
+        buy_count = None
+        for ck in count_keys:
+            if ck in extra and extra.get(ck) is not None:
+                try:
+                    buy_count = int(float(extra.get(ck)))
+                    is_buy = True
+                    break
+                except Exception:
+                    continue
+        # If we detected buy via tx_val but didn't find count, try dto.sampleSize
+        if is_buy and buy_count is None and dto is not None:
+            for attr in ('sampleSize', 'sample_size', 'sampleSize'):
+                val = getattr(dto, attr, None)
+                if val is not None:
+                    try:
+                        buy_count = int(float(val))
+                        break
+                    except Exception:
+                        continue
+        return (is_buy, buy_count)
+    except Exception:
+        return (False, None)
+
+
+def compute_total_amount_from_payload(data, dto=None):
+    """Compute a total monetary amount from request payload and DTO.
+
+    Rules used by tests and route logic:
+    - If explicit totalAmount / total_amount is present in data, parse and return rounded to 2 decimals.
+    - Otherwise, if a per-unit cost is available (dto.cost or data.cost) and a sample/count exists (dto.sampleSize or sample_size), compute:
+        total = unit_cost * weight_factor * count
+      where weight_factor is determined by data.minWeight / min_weight or dto.averageWeight (clamped to >= 1.0), default 1.0.
+    - Returns a float rounded to 2 decimals or None when insufficient data.
+    """
+    try:
+        if not isinstance(data, dict):
+            return None
+        # explicit total
+        if 'totalAmount' in data and data.get('totalAmount') is not None:
+            try:
+                return round(float(data.get('totalAmount')), 2)
+            except Exception:
+                pass
+        if 'total_amount' in data and data.get('total_amount') is not None:
+            try:
+                return round(float(data.get('total_amount')), 2)
+            except Exception:
+                pass
+
+        # find unit cost
+        unit_cost = None
+        if dto is not None and getattr(dto, 'cost', None) is not None:
+            try:
+                unit_cost = float(getattr(dto, 'cost'))
+            except Exception:
+                unit_cost = None
+        if unit_cost is None and data.get('cost') is not None:
+            try:
+                unit_cost = float(data.get('cost'))
+            except Exception:
+                unit_cost = None
+
+        # find count/sample size
+        count = None
+        if dto is not None:
+            for attr in ('sampleSize', 'sample_size'):
+                val = getattr(dto, attr, None)
+                if val is not None:
+                    try:
+                        count = int(float(val))
+                        break
+                    except Exception:
+                        continue
+        if count is None:
+            for k in ('sampleSize', 'sample_size', 'count', 'quantity'):
+                if k in data and data.get(k) is not None:
+                    try:
+                        count = int(float(data.get(k)))
+                        break
+                    except Exception:
+                        continue
+
+        if unit_cost is None or count is None:
+            return None
+
+        # determine weight factor
+        weight = None
+        if 'minWeight' in data and data.get('minWeight') is not None:
+            try:
+                weight = float(data.get('minWeight'))
+            except Exception:
+                weight = None
+        elif 'min_weight' in data and data.get('min_weight') is not None:
+            try:
+                weight = float(data.get('min_weight'))
+            except Exception:
+                weight = None
+        elif dto is not None and getattr(dto, 'averageWeight', None) is not None:
+            try:
+                weight = float(getattr(dto, 'averageWeight'))
+            except Exception:
+                weight = None
+        # default weight factor
+        if weight is None:
+            weight = 1.0
+        # clamp averageWeight < 1 to 1.0 as tests expect
+        try:
+            if float(weight) < 1.0:
+                weight = 1.0
+        except Exception:
+            weight = 1.0
+
+        total = float(unit_cost) * float(weight) * int(count)
+        return round(total, 2)
+    except Exception:
+        return None

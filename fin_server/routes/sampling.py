@@ -5,6 +5,9 @@ from fin_server.security.authentication import get_auth_payload
 from fin_server.exception.UnauthorizedError import UnauthorizedError
 from fin_server.dto.growth_dto import GrowthRecordDTO
 
+from fin_server.utils.generator import generate_sampling_id
+from fin_server.utils.validation import compute_total_amount_from_payload
+
 sampling_bp = Blueprint('sampling', __name__, url_prefix='/sampling')
 repo = MongoRepositorySingleton.get_instance()
 
@@ -27,49 +30,17 @@ def create_sampling_route():
         # Ensure sampling_id exists
         try:
             if not dto.extra.get('sampling_id'):
-                from fin_server.utils.time_utils import get_time_date_dt
-                import random
-                ts = get_time_date_dt(include_time=True).strftime('%Y%m%d%H%M%S')
-                dto.extra['sampling_id'] = f"SAMP-{ts}-{random.randint(1000,9999)}"
+                dto.extra['sampling_id'] = generate_sampling_id()
         except Exception:
             current_app.logger.exception('Failed to generate sampling id')
 
         # Compute total amount if not provided
         total_amount = None
         try:
-            if 'totalAmount' in data and data.get('totalAmount') not in (None, ''):
-                total_amount = float(data.get('totalAmount'))
-            elif 'total_amount' in data and data.get('total_amount') not in (None, ''):
-                total_amount = float(data.get('total_amount'))
-            else:
-                cost = getattr(dto, 'cost', None)
-                count = getattr(dto, 'sampleSize', None)
-                if cost is not None and count is not None:
-                    cost_unit = data.get('costUnit') or data.get('cost_unit') or data.get('costType') or data.get('cost_type') or 'kg'
-                    cost_unit = str(cost_unit).lower()
-                    if cost_unit in ('unit', 'per_fish', 'perfish', 'fish', 'count'):
-                        total_amount = float(cost) * int(count)
-                    else:
-                        weight = getattr(dto, 'averageWeight', None)
-                        if weight is None:
-                            mw = data.get('minWeight') or data.get('min_weight')
-                            try:
-                                weight = float(mw) if mw not in (None, '') else None
-                            except Exception:
-                                weight = None
-                        if weight is None:
-                            weight = 1.0
-                        try:
-                            weight = float(weight)
-                        except Exception:
-                            weight = 1.0
-                        if weight < 1.0:
-                            weight = 1.0
-                        total_amount = float(cost) * float(weight) * int(count)
-                # round
+            total_amount = compute_total_amount_from_payload(data, dto)
             if total_amount is not None:
                 try:
-                    dto.extra['totalAmount'] = round(float(total_amount), 2)
+                    dto.extra['totalAmount'] = total_amount
                 except Exception:
                     dto.extra['totalAmount'] = total_amount
         except Exception:
@@ -88,28 +59,58 @@ def create_sampling_route():
 
         # Detect buy vs sample
         extra = dto.extra or {}
-        tx_val = extra.get('transactionType') or extra.get('transaction_type') or extra.get('transaction') or extra.get('type') or extra.get('action')
         try:
-            tx = str(tx_val).strip().lower() if tx_val is not None else ''
+            # Sampling API is treated as buy-only. Determine buy_count from payload or DTO.
+            is_buy = True
+            buy_count = None
+            # Prefer explicit canonical total_count in extra (snake_case) then camelCase
+            if 'total_count' in extra and extra.get('total_count') not in (None, ''):
+                try:
+                    buy_count = int(float(extra.get('total_count')))
+                except Exception:
+                    buy_count = None
+            elif 'totalCount' in extra and extra.get('totalCount') not in (None, ''):
+                try:
+                    buy_count = int(float(extra.get('totalCount')))
+                except Exception:
+                    buy_count = None
+
+            # Fallback: look inside dto.extra if present
+            if buy_count is None and isinstance(dto.extra, dict):
+                if 'total_count' in dto.extra and dto.extra.get('total_count') not in (None, ''):
+                    try:
+                        buy_count = int(float(dto.extra.get('total_count')))
+                    except Exception:
+                        buy_count = None
+                elif 'totalCount' in dto.extra and dto.extra.get('totalCount') not in (None, ''):
+                    try:
+                        buy_count = int(float(dto.extra.get('totalCount')))
+                    except Exception:
+                        buy_count = None
+
+            # Final fallback: older count-like fields and DTO sampleSize (but sampleSize is test only)
+            if buy_count is None:
+                count_keys = ['buy_count', 'bought', 'count', 'quantity']
+                for ck in count_keys:
+                    if ck in extra and extra.get(ck) is not None:
+                        try:
+                            buy_count = int(float(extra.get(ck)))
+                            break
+                        except Exception:
+                            continue
+            if buy_count is None and dto is not None:
+                for attr in ('sampleSize', 'sample_size'):
+                    val = getattr(dto, attr, None)
+                    if val is not None:
+                        try:
+                            buy_count = int(float(val))
+                            break
+                        except Exception:
+                            continue
         except Exception:
-            tx = ''
-        buy_count = None
-        if 'buy_count' in extra:
-            try:
-                buy_count = int(extra.get('buy_count'))
-            except Exception:
-                buy_count = None
-        if 'bought' in extra and buy_count is None:
-            try:
-                buy_count = int(extra.get('bought'))
-            except Exception:
-                buy_count = None
-        if buy_count is None and getattr(dto, 'sampleSize', None) is not None and tx in ('buy', 'purchase'):
-            try:
-                buy_count = int(dto.sampleSize)
-            except Exception:
-                buy_count = None
-        is_buy = (tx in ('buy', 'purchase')) or (buy_count is not None and tx == '')
+            current_app.logger.exception('Failed to determine buy count')
+            is_buy = True
+            buy_count = None
         # If this is a buy/purchase sampling, persist the total_count in DTO extra so it is stored and returned
         try:
             if is_buy and buy_count is not None:
@@ -249,63 +250,6 @@ def create_sampling_route():
             except Exception:
                 current_app.logger.exception('Unexpected error during buy post-processing')
 
-        else:
-            # 2) Sampling (non-buy) handling
-            try:
-                try:
-                    fish_mapping = mr.fish_mapping
-                    try:
-                        fish_mapping.add_fish_to_account(payload.get('account_key'), dto.species)
-                    except Exception:
-                        mr.get_collection('fish_mapping').update_one({'account_key': payload.get('account_key')}, {'$addToSet': {'fish_ids': dto.species}}, upsert=True)
-                except Exception:
-                    current_app.logger.exception('Failed to ensure fish mapping during sampling')
-
-                # pond_event for sample
-                try:
-                    pe = mr.pond_event
-                    event_doc = {'pond_id': dto.pondId, 'event_type': 'sample', 'details': extra.get('details', {}), 'samples': data.get('samples') if isinstance(data.get('samples'), list) else None, 'count': int(dto.sampleSize) if getattr(dto, 'sampleSize', None) is not None else None, 'user_key': dto.recordedBy}
-                    try:
-                        pe.create(event_doc)
-                    except Exception:
-                        mr.get_collection('pond_events').insert_one(event_doc)
-                except Exception:
-                    current_app.logger.exception('Failed to create pond_event for sampling')
-
-                # fish_activity for sample
-                try:
-                    from fin_server.repository.fish_activity_repository import FishActivityRepository
-                    far = FishActivityRepository()
-                    activity_doc = {'account_key': payload.get('account_key'), 'pond_id': dto.pondId, 'fish_id': dto.species, 'event_type': 'sample', 'count': int(dto.sampleSize) if getattr(dto, 'sampleSize', None) is not None else None, 'user_key': dto.recordedBy, 'details': extra.get('details', {}), 'samples': data.get('samples') if isinstance(data.get('samples'), list) else None}
-                    try:
-                        far.create(activity_doc)
-                    except Exception:
-                        mr.get_collection('fish_activity').insert_one(activity_doc)
-                except Exception:
-                    current_app.logger.exception('Failed to record fish_activity for sampling')
-
-                # decrement pond.current_stock using StockRepository
-                try:
-                    from fin_server.repository.stock_repository import StockRepository
-                    sr = StockRepository()
-                    sr.remove_stock_from_pond(payload.get('account_key'), dto.pondId, dto.species, int(dto.sampleSize) if getattr(dto, 'sampleSize', None) is not None else 0, recorded_by=dto.recordedBy, create_event=False, create_activity=False, create_analytics=False)
-                except Exception:
-                    current_app.logger.exception('Failed to decrement pond current_stock for sampling (via StockRepository)')
-
-                # analytics negative batch for sample
-                try:
-                    from fin_server.repository.fish_analytics_repository import FishAnalyticsRepository
-                    fa = FishAnalyticsRepository()
-                    fish_age = extra.get('fish_age_in_month') or extra.get('fish_age')
-                    sample_count = int(dto.sampleSize) if getattr(dto, 'sampleSize', None) is not None else 0
-                    if sample_count:
-                        event_id = f"{payload.get('account_key')}-{dto.species}-sample-{inserted_id}"
-                        fa.add_batch(dto.species, -int(sample_count), int(fish_age) if fish_age is not None else 0, account_key=payload.get('account_key'), event_id=event_id, fish_weight=getattr(dto, 'averageWeight', None), pond_id=dto.pondId)
-                except Exception:
-                    current_app.logger.exception('Failed to add analytics batch for sampling')
-
-            except Exception:
-                current_app.logger.exception('Unexpected error during sampling post-processing')
 
         return respond_success(dto.to_dict(), status=201)
     except UnauthorizedError as ue:
@@ -318,7 +262,8 @@ def create_sampling_route():
 def list_sampling_for_pond_route(pond_id):
     try:
         sr = repo.get_collection('sampling')
-        recs = list(sr.find({'pondId': pond_id}).sort('created_at', -1))
+        # Query canonical pond_id field
+        recs = list(sr.find({'pond_id': pond_id}).sort('created_at', -1))
         out = []
         for r in recs:
             ro = normalize_doc(r)
@@ -436,8 +381,9 @@ def update_sampling_route(sampling_id):
             'survivalRate': 'survival_rate', 'survival_rate': 'survival_rate',
             'feedConversionRatio': 'feed_conversion_ratio', 'feed_conversion_ratio': 'feed_conversion_ratio',
             'cost': 'cost', 'cost_amount': 'cost', 'total_cost': 'total_cost',
-            'notes': 'notes'
-        }
+            'totalCount': 'total_count', 'total_count': 'total_count',
+             'notes': 'notes'
+         }
 
         update_fields = {}
         # normalize incoming keys presence and set corresponding db fields
@@ -462,6 +408,18 @@ def update_sampling_route(sampling_id):
             update_fields['cost_unit'] = data.get('costUnit')
         elif 'cost_unit' in data:
             update_fields['cost_unit'] = data.get('cost_unit')
+
+        # handle totalCount / total_count -> total_count
+        if 'totalCount' in data:
+            try:
+                update_fields['total_count'] = int(float(data.get('totalCount')))
+            except Exception:
+                update_fields['total_count'] = data.get('totalCount')
+        elif 'total_count' in data:
+            try:
+                update_fields['total_count'] = int(float(data.get('total_count')))
+            except Exception:
+                update_fields['total_count'] = data.get('total_count')
 
         # Allow updating extra fields passed inside an 'extra' object
         if isinstance(data.get('extra'), dict):

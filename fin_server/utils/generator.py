@@ -1,9 +1,12 @@
-import time
-from datetime import datetime
 import random
 import base64
+import time
 
 from fin_server.repository.mongo_helper import MongoRepositorySingleton
+from fin_server.security.authentication import AuthSecurity
+from fin_server.utils.time_utils import get_time_date_dt
+from fin_server.requests.subscription import default_subscription
+
 repo = MongoRepositorySingleton.get_instance()
 user_repo = repo.user
 
@@ -11,30 +14,28 @@ from fin_server.security.authentication import AuthSecurity
 from fin_server.utils.time_utils import get_time_date, get_time_date_dt
 
 
-def default_subscription():
-    """Return a default free-tier subscription object.
-
-    Used when creating the very first admin for a new account or when no
-    admin subscription is available. This keeps subscription shape
-    consistent across the app.
-    """
-    return {
-        'subscription_type': 'free',
-        'plan': 'free',
-        # expiry can be None or a far-future placeholder; leaving None here
-        'expiry': None,
-        'features': []
-    }
+def generate_key(length=6):
+    """Generate a short alphanumeric key of the requested length."""
+    alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    return ''.join(random.choice(alphabet) for _ in range(int(length)))
 
 
 def epoch_to_datetime(epoch):
     return time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(epoch))
 
 def get_current_timestamp():
-    return int(time.time())
+    """Return current timestamp as ISO string (UTC-aware using time util)."""
+    try:
+        return get_time_date_dt(include_time=True).isoformat()
+    except Exception:
+        return time.strftime('%Y-%m-%dT%H:%M:%S')
 
-def generate_key(length):
-    return ''.join(random.choices('0123456789', k=length))
+
+def generate_sampling_id():
+    """Generate a sampling id of the form SAMP-<YYYYmmddHHMMSS>-<rand4>."""
+    ts = get_time_date_dt(include_time=True).strftime('%Y%m%d%H%M%S')
+    return f"SAMP-{ts}-{random.randint(1000,9999)}"
+
 
 def build_user(data, account_key=None):
     user_data = data.copy()
@@ -82,6 +83,7 @@ def build_user(data, account_key=None):
     user_data['refresh_tokens'] = [refresh_token]
     return user_data
 
+
 def build_refresh(user_data):
     refresh_payload = {
         'user_key': user_data['user_key'],
@@ -93,6 +95,7 @@ def build_refresh(user_data):
     refresh_token = AuthSecurity.create_refresh_token(refresh_payload)
     return refresh_token
 
+
 def resolve_user(identifier, account_key):
     """Find user by userkey, email, phone, username, or name within the given account."""
     query_fields = ['user_key', 'email', 'phone', 'username', 'name']
@@ -102,11 +105,13 @@ def resolve_user(identifier, account_key):
             return user
     return None
 
+
 def get_default_task_date(current_time=None):
     """Return current date as YYYY-MM-DD."""
     if current_time is None:
         current_time = time.time()
     return time.strftime('%Y-%m-%d', time.localtime(current_time))
+
 
 def get_default_end_date(current_time=None):
     """Return date 24 hours from current_time as YYYY-MM-DD."""

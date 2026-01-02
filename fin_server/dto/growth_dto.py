@@ -58,7 +58,8 @@ class GrowthRecordDTO:
         )
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        # Canonical API representation uses camelCase keys
+        out: Dict[str, Any] = {
             'id': self.id,
             'pondId': self.pondId,
             'species': self.species,
@@ -71,8 +72,48 @@ class GrowthRecordDTO:
             'cost': self.cost,
             'recordedBy': self.recordedBy,
             'notes': self.notes,
-            **self.extra
         }
+
+        # Promote some canonical snake_case extras (if present) into camelCase response fields
+        # so clients always see a single representation for totals/units
+        if isinstance(self.extra, dict):
+            # mapping of canonical snake_case -> desired camelCase in response
+            promote_map = {
+                'total_cost': 'totalAmount',
+                'cost_unit': 'costUnit',
+                'total_count': 'totalCount'
+            }
+            for snake_key, camel_key in promote_map.items():
+                if snake_key in self.extra and self.extra.get(snake_key) is not None and out.get(camel_key) is None:
+                    out[camel_key] = self.extra.get(snake_key)
+
+            # When merging extra, skip keys that are aliases of core fields to avoid duplicates
+            alias_keys = {
+                'pondId', 'pond_id', 'pond',
+                'samplingDate', 'sampling_date',
+                'sampleSize', 'sample_size',
+                'averageWeight', 'average_weight',
+                'averageLength', 'average_length',
+                'survivalRate', 'survival_rate',
+                'feedConversionRatio', 'feed_conversion_ratio',
+                'cost', 'cost_amount', 'total_cost', 'totalAmount', 'total_amount',
+                'recordedBy', 'recorded_by',
+                'notes',
+                'costUnit', 'cost_unit',
+                'type'
+            }
+
+            for k, v in self.extra.items():
+                if k in alias_keys:
+                    # skip alias keys or core fields
+                    continue
+                # skip null values from extra
+                if v is None:
+                    continue
+                if k not in out:
+                    out[k] = v
+        # Remove any keys with None values so API doesn't send nulls (but keep falsy numeric/empty-collection values)
+        return {k: v for k, v in out.items() if v is not None}
 
     def to_db_doc(self) -> Dict[str, Any]:
         doc = {
@@ -114,6 +155,18 @@ class GrowthRecordDTO:
             if cu is not None and 'cost_unit' not in doc:
                 doc['cost_unit'] = cu
 
+            # total count
+            tc = None
+            if 'totalCount' in self.extra and self.extra.get('totalCount') not in (None, ''):
+                tc = self.extra.get('totalCount')
+            elif 'total_count' in self.extra and self.extra.get('total_count') not in (None, ''):
+                tc = self.extra.get('total_count')
+            if tc is not None and 'total_count' not in doc:
+                try:
+                    doc['total_count'] = int(float(tc))
+                except Exception:
+                    doc['total_count'] = tc
+
             # type
             t = None
             if 'type' in self.extra and self.extra.get('type') not in (None, ''):
@@ -121,7 +174,26 @@ class GrowthRecordDTO:
             if t is not None and 'type' not in doc:
                 doc['type'] = t
 
+        # Avoid inserting duplicate alias keys present in extra (camelCase) that map to canonical fields
+        alias_keys = {
+            'pondId', 'pond_id', 'pond',
+            'samplingDate', 'sampling_date',
+            'sampleSize', 'sample_size',
+            'averageWeight', 'average_weight',
+            'averageLength', 'average_length',
+            'survivalRate', 'survival_rate',
+            'feedConversionRatio', 'feed_conversion_ratio',
+            'cost', 'cost_amount', 'total_cost', 'totalAmount', 'total_amount',
+            'recordedBy', 'recorded_by',
+            'notes',
+            'costUnit', 'cost_unit',
+            'type', 'totalCount', 'total_count'
+        }
+
         for k, v in (self.extra or {}).items():
+            if k in alias_keys:
+                # skip aliases; core fields already in doc or handled above
+                continue
             if k not in doc:
                 doc[k] = v
         return doc

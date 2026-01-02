@@ -30,6 +30,10 @@ class PondRepository(BaseRepository):
     def get_pond(self, pond_id):
         return self.find_one({'pond_id': pond_id})
 
+    def _pond_query(self, pond_id):
+        """Return a query that matches a pond by either pond_id or _id."""
+        return {'$or': [{'pond_id': pond_id}, {'_id': pond_id}]}
+
     def atomic_update_metadata(self, pond_id, inc_fields=None, set_fields=None, unset_fields=None):
         """Perform an atomic update on pond metadata using $inc/$set/$unset.
         inc_fields: dict of fields to increment
@@ -45,4 +49,5 @@ class PondRepository(BaseRepository):
             update['$unset'] = unset_fields
         if not update:
             return None
-        return self.collection.update_one({'pond_id': pond_id}, update, upsert=False)
+        # Use a query that matches by pond_id or _id so both insertion styles are supported
+        return self.collection.update_one(self._pond_query(pond_id), update, upsert=False)
