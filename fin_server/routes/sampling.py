@@ -20,59 +20,38 @@ def create_sampling_route():
         # Build DTO from request
         dto = GrowthRecordDTO.from_request(data)
         dto.recordedBy = payload.get('user_key')
-        # recordedBy (and persisted recorded_by) already stores the sampler extracted from the token
-
-        # Ensure we include a type field for sampling
-        if dto.extra is None:
-            dto.extra = {}
-        # only set if caller didn't explicitly set a type
+        # Normalize extra
+        dto.extra = dto.extra or {}
         dto.extra.setdefault('type', 'sampling')
 
-        # Ensure a sampling identifier exists (human-friendly). Accept client-provided sampling_id or generate one.
-        # Format: SAMP-YYYYMMDDHHMMSS-<rand4>
+        # Ensure sampling_id exists
         try:
             if not dto.extra.get('sampling_id'):
                 from fin_server.utils.time_utils import get_time_date_dt
                 import random
                 ts = get_time_date_dt(include_time=True).strftime('%Y%m%d%H%M%S')
-                suffix = str(random.randint(1000, 9999))
-                sid = f"SAMP-{ts}-{suffix}"
-                dto.extra['sampling_id'] = sid
+                dto.extra['sampling_id'] = f"SAMP-{ts}-{random.randint(1000,9999)}"
         except Exception:
-            # never fail creation because of sampling id generation
             current_app.logger.exception('Failed to generate sampling id')
 
-        # Determine total amount: allow manual override (totalAmount), otherwise compute
+        # Compute total amount if not provided
         total_amount = None
-        # Accept either camelCase or snake_case keys
-        if 'totalAmount' in data and data.get('totalAmount') not in (None, ''):
-            try:
+        try:
+            if 'totalAmount' in data and data.get('totalAmount') not in (None, ''):
                 total_amount = float(data.get('totalAmount'))
-            except Exception:
-                total_amount = None
-        elif 'total_amount' in data and data.get('total_amount') not in (None, ''):
-            try:
+            elif 'total_amount' in data and data.get('total_amount') not in (None, ''):
                 total_amount = float(data.get('total_amount'))
-            except Exception:
-                total_amount = None
-        else:
-            # compute only if cost and sampleSize are available
-            try:
-                cost = dto.cost if getattr(dto, 'cost', None) is not None else None
-                count = dto.sampleSize if getattr(dto, 'sampleSize', None) is not None else None
+            else:
+                cost = getattr(dto, 'cost', None)
+                count = getattr(dto, 'sampleSize', None)
                 if cost is not None and count is not None:
-                    # detect cost unit (default to per kg)
                     cost_unit = data.get('costUnit') or data.get('cost_unit') or data.get('costType') or data.get('cost_type') or 'kg'
                     cost_unit = str(cost_unit).lower()
                     if cost_unit in ('unit', 'per_fish', 'perfish', 'fish', 'count'):
                         total_amount = float(cost) * int(count)
                     else:
-                        # per kg: use averageWeight, but enforce minimum 1 kg per fish when under 1kg
-                        weight = None
-                        if getattr(dto, 'averageWeight', None) is not None:
-                            weight = dto.averageWeight
-                        else:
-                            # allow payload to specify minWeight/min_weight
+                        weight = getattr(dto, 'averageWeight', None)
+                        if weight is None:
                             mw = data.get('minWeight') or data.get('min_weight')
                             try:
                                 weight = float(mw) if mw not in (None, '') else None
@@ -87,18 +66,16 @@ def create_sampling_route():
                         if weight < 1.0:
                             weight = 1.0
                         total_amount = float(cost) * float(weight) * int(count)
-            except Exception:
-                total_amount = None
+                # round
+            if total_amount is not None:
+                try:
+                    dto.extra['totalAmount'] = round(float(total_amount), 2)
+                except Exception:
+                    dto.extra['totalAmount'] = total_amount
+        except Exception:
+            current_app.logger.exception('Failed to compute total amount')
 
-        # Persist the computed or provided total amount so frontend can override later
-        if total_amount is not None:
-            # round to 2 decimals for currency
-            try:
-                total_amount = round(float(total_amount), 2)
-            except Exception:
-                pass
-            dto.extra['totalAmount'] = total_amount
-
+        # Persist sampling
         try:
             res = dto.save(repo=repo, collection_name='sampling')
             inserted_id = getattr(res, 'inserted_id', res)
@@ -108,97 +85,67 @@ def create_sampling_route():
             rr = sr.insert_one(dto.to_db_doc())
             inserted_id = str(rr.inserted_id)
         dto.id = inserted_id
-        # Prepare post-processing variables so they're always defined
-        extra = dto.extra or {}
-        is_buy = False
-        buy_count = None
-        # If this sampling payload represents a purchase / buying fish, update related entities
-        try:
-            # Determine buy intent: look for explicit transactionType/transaction_type == 'buy' or buy_count/bought fields
-            extra = dto.extra or {}
-            # Extract transaction type robustly (accept multiple key names and non-string values)
-            tx_val = extra.get('transactionType') or extra.get('transaction_type') or extra.get('transaction')
-            if tx_val is None:
-                # fall back to general 'type' or 'action' keys
-                tx_val = extra.get('type') or extra.get('action')
-            if isinstance(tx_val, str):
-                tx = tx_val.strip().lower()
-            else:
-                try:
-                    tx = str(tx_val).strip().lower() if tx_val is not None else ''
-                except Exception:
-                    tx = ''
-            buy_count = None
-            if 'buy_count' in extra:
-                try:
-                    buy_count = int(extra.get('buy_count'))
-                except Exception:
-                    buy_count = None
-            if 'bought' in extra:
-                try:
-                    buy_count = int(extra.get('bought'))
-                except Exception:
-                    pass
-            # Fallback to sampleSize for count if not explicitly provided
-            if buy_count is None and getattr(dto, 'sampleSize', None) is not None:
-                try:
-                    buy_count = int(dto.sampleSize)
-                except Exception:
-                    buy_count = None
 
-            is_buy = (tx == 'buy' or tx == 'purchase' or buy_count is not None)
-            if is_buy and buy_count and buy_count > 0:
-                mr = MongoRepositorySingleton.get_instance()
-                # pond update: increment fish_count or stock by buy_count
+        # Detect buy vs sample
+        extra = dto.extra or {}
+        tx_val = extra.get('transactionType') or extra.get('transaction_type') or extra.get('transaction') or extra.get('type') or extra.get('action')
+        try:
+            tx = str(tx_val).strip().lower() if tx_val is not None else ''
+        except Exception:
+            tx = ''
+        buy_count = None
+        if 'buy_count' in extra:
+            try:
+                buy_count = int(extra.get('buy_count'))
+            except Exception:
+                buy_count = None
+        if 'bought' in extra and buy_count is None:
+            try:
+                buy_count = int(extra.get('bought'))
+            except Exception:
+                buy_count = None
+        if buy_count is None and getattr(dto, 'sampleSize', None) is not None and tx in ('buy', 'purchase'):
+            try:
+                buy_count = int(dto.sampleSize)
+            except Exception:
+                buy_count = None
+        is_buy = (tx in ('buy', 'purchase')) or (buy_count is not None and tx == '')
+
+        # Best-effort post-processing operations
+        mr = MongoRepositorySingleton.get_instance()
+        # 1) Buy handling
+        if is_buy and buy_count and buy_count > 0:
+            try:
+                # pond metadata increment
                 try:
                     pond_repo = mr.pond
-                    # prefer pond_id key from DTO
-                    pond_id = dto.pondId
-                    inc_fields = {'fish_count': buy_count}
-                    pond_repo.atomic_update_metadata(pond_id, inc_fields=inc_fields)
+                    pond_repo.atomic_update_metadata(dto.pondId, inc_fields={'fish_count': buy_count})
                 except Exception:
-                    current_app.logger.exception('Failed to update pond metadata for buy')
+                    current_app.logger.exception('Failed to atomic update pond metadata for buy')
 
-                # pond event: record a buy event
+                # pond event
                 try:
                     pe = mr.pond_event
-                    event_doc = {
-                        'pond_id': dto.pondId,
-                        'event_type': 'buy',
-                        'details': {
-                            'species': dto.species,
-                            'count': buy_count,
-                            'cost_unit': extra.get('costUnit') or extra.get('cost_unit'),
-                            'total_amount': extra.get('totalAmount') if 'totalAmount' in extra else extra.get('total_amount')
-                        },
-                        'recorded_by': dto.recordedBy
-                    }
+                    event_doc = {'pond_id': dto.pondId, 'event_type': 'buy', 'details': {'species': dto.species, 'count': buy_count, 'cost_unit': extra.get('costUnit') or extra.get('cost_unit'), 'total_amount': extra.get('totalAmount') or extra.get('total_amount')}, 'recorded_by': dto.recordedBy}
                     try:
                         pe.create(event_doc)
                     except Exception:
-                        # fallback to direct collection insert
                         mr.get_collection('pond_events').insert_one(event_doc)
                 except Exception:
-                    current_app.logger.exception('Failed to create pond event for buy')
+                    current_app.logger.exception('Failed to create pond_event for buy')
 
-                # fish repository: increment fish stock for species or create a fish entry
+                # fish repo update/create
                 try:
                     fish_repo = mr.fish
-                    # We'll try to find a fish document by species code
-                    query = {'species_code': dto.species}
-                    existing = fish_repo.find_one(query)
+                    existing = fish_repo.find_one({'species_code': dto.species})
                     if existing:
-                        # increment a 'stock' or 'current_stock' field
-                        delta_field = 'current_stock'
-                        fish_repo.update({'_id': existing.get('_id')}, {delta_field: (existing.get(delta_field, 0) + buy_count)})
+                        try:
+                            fish_repo.update({'_id': existing.get('_id')}, {'current_stock': (existing.get('current_stock', 0) or 0) + buy_count})
+                        except Exception:
+                            # best-effort direct update
+                            mr.get_collection('fish').update_one({'_id': existing.get('_id')}, {'$inc': {'current_stock': buy_count}})
                     else:
-                        # create a minimal fish document
-                        fish_doc = {
-                            'species_code': dto.species,
-                            'common_name': dto.species,
-                            'current_stock': buy_count,
-                            'account_key': payload.get('account_key')
-                        }
+                        fish_doc = {'_id': dto.species, 'species_code': dto.species, 'common_name': dto.species, 'current_stock': buy_count, 'account_key': payload.get('account_key')}
                         try:
                             fish_repo.create(fish_doc)
                         except Exception:
@@ -206,7 +153,7 @@ def create_sampling_route():
                 except Exception:
                     current_app.logger.exception('Failed to update/create fish record for buy')
 
-                # expenses: insert a purchase expense if total amount present
+                # expenses
                 try:
                     expenses_repo = mr.expenses
                     total_amt = None
@@ -220,198 +167,111 @@ def create_sampling_route():
                             total_amt = float(extra.get('total_amount'))
                         except Exception:
                             total_amt = None
-                    elif getattr(dto, 'cost', None) is not None and buy_count is not None:
-                        # best-effort compute
+                    elif getattr(dto, 'cost', None) is not None:
                         try:
                             total_amt = float(dto.cost) * float(buy_count)
                         except Exception:
                             total_amt = None
                     if expenses_repo and total_amt is not None:
-                        expense_doc = {
-                            'pond_id': dto.pondId,
-                            'species': dto.species,
-                            'category': 'buy',
-                            'amount': total_amt,
-                            'currency': extra.get('currency') or 'INR',
-                            'notes': extra.get('notes'),
-                            'recorded_by': dto.recordedBy,
-                            'account_key': payload.get('account_key')
-                        }
+                        expense_doc = {'pond_id': dto.pondId, 'species': dto.species, 'category': 'buy', 'amount': total_amt, 'currency': extra.get('currency') or 'INR', 'notes': extra.get('notes'), 'recorded_by': dto.recordedBy, 'account_key': payload.get('account_key')}
                         try:
                             expenses_repo.create(expense_doc)
                         except Exception:
                             mr.get_collection('expenses').insert_one(expense_doc)
                 except Exception:
                     current_app.logger.exception('Failed to insert expense record for buy')
-                # Add analytics batch for the purchase (positive count)
+
+                # analytics batch (positive)
                 try:
                     from fin_server.repository.fish_analytics_repository import FishAnalyticsRepository
                     fa = FishAnalyticsRepository()
-                    # attempt to extract fish_age from extra or dto
-                    fish_age = extra.get('fish_age_in_month') if extra.get('fish_age_in_month') is not None else extra.get('fish_age') if extra.get('fish_age') is not None else None
+                    fish_age = extra.get('fish_age_in_month') or extra.get('fish_age')
+                    fish_weight = getattr(dto, 'averageWeight', None)
                     event_id = f"{payload.get('account_key')}-{dto.species}-{dto.pondId}-{inserted_id}"
-                    try:
-                        fish_weight = getattr(dto, 'averageWeight', None)
-                        fa.add_batch(dto.species, int(buy_count), int(fish_age) if fish_age is not None else 0, account_key=payload.get('account_key'), event_id=event_id, fish_weight=fish_weight if (fish_weight is not None) else None, pond_id=dto.pondId)
-                    except Exception:
-                        # best-effort: ensure call doesn't break flow
-                        current_app.logger.exception('Failed to add analytics batch for buy')
+                    fa.add_batch(dto.species, int(buy_count), int(fish_age) if fish_age is not None else 0, account_key=payload.get('account_key'), event_id=event_id, fish_weight=fish_weight if fish_weight is not None else None, pond_id=dto.pondId)
                 except Exception:
-                    current_app.logger.exception('FishAnalyticsRepository not available for buy analytics')
+                    current_app.logger.exception('Failed to add analytics batch for buy')
 
-                # Record a fish_activity entry for the buy (best-effort)
+                # fish_activity
                 try:
                     from fin_server.repository.fish_activity_repository import FishActivityRepository
                     far = FishActivityRepository()
-                    activity_doc = {
-                        'account_key': payload.get('account_key'),
-                        'pond_id': dto.pondId,
-                        'fish_id': dto.species,
-                        'event_type': 'buy',
-                        'count': buy_count,
-                        'details': extra.get('details') or {},
-                        'created_at': None,
-                        'user_key': dto.recordedBy
-                    }
+                    activity_doc = {'account_key': payload.get('account_key'), 'pond_id': dto.pondId, 'fish_id': dto.species, 'event_type': 'buy', 'count': buy_count, 'details': extra.get('details') or {}, 'user_key': dto.recordedBy}
                     try:
                         far.create(activity_doc)
                     except Exception:
-                        # fallback to collection insert
-                        MongoRepositorySingleton.get_instance().get_collection('fish_activity').insert_one(activity_doc)
+                        mr.get_collection('fish_activity').insert_one(activity_doc)
                 except Exception:
                     current_app.logger.exception('Failed to record fish_activity for buy')
-                # Update pond.current_stock: increment if species exists otherwise push new stock record
+
+                # update pond.current_stock using reusable StockRepository
                 try:
-                    from fin_server.utils.time_utils import get_time_date_dt
-                    ponds_coll = MongoRepositorySingleton.get_instance().get_collection('ponds')
-                    # Try increment existing stock entry
-                    try:
-                        res = ponds_coll.update_one({'pond_id': dto.pondId, 'current_stock.species': dto.species},
-                                                   {'$inc': {'current_stock.$.quantity': int(buy_count)},
-                                                    '$set': {'current_stock.$.average_weight': getattr(dto, 'averageWeight', None)}})
-                        if not res.matched_count:
-                            stock_doc = {
-                                'stock_id': dto.extra.get('sampling_id') or inserted_id,
-                                'species': dto.species,
-                                'quantity': int(buy_count),
-                                'average_weight': getattr(dto, 'averageWeight', None),
-                                'stocking_date': get_time_date_dt(include_time=True)
-                            }
-                            ponds_coll.update_one({'pond_id': dto.pondId}, {'$push': {'current_stock': stock_doc}})
-                    except Exception:
-                        # best-effort fallback: try to read and update manually
-                        try:
-                            pond = ponds_coll.find_one({'pond_id': dto.pondId})
-                            if pond:
-                                updated = False
-                                cs = pond.get('current_stock') or []
-                                for s in cs:
-                                    if s.get('species') == dto.species:
-                                        try:
-                                            s['quantity'] = int(s.get('quantity', 0) or 0) + int(buy_count)
-                                        except Exception:
-                                            s['quantity'] = (s.get('quantity') or 0) + buy_count
-                                        updated = True
-                                        break
-                                if not updated:
-                                    cs.append({'stock_id': dto.extra.get('sampling_id') or inserted_id, 'species': dto.species, 'quantity': int(buy_count), 'average_weight': getattr(dto, 'averageWeight', None), 'stocking_date': get_time_date_dt(include_time=True)})
-                                ponds_coll.update_one({'pond_id': dto.pondId}, {'$set': {'current_stock': cs}})
-                        except Exception:
-                            current_app.logger.exception('Failed to update pond current_stock for buy')
+                    from fin_server.repository.stock_repository import StockRepository
+                    sr = StockRepository()
+                    sr.add_stock_to_pond(payload.get('account_key'), dto.pondId, dto.species, buy_count, average_weight=getattr(dto, 'averageWeight', None), sampling_id=dto.extra.get('sampling_id') or inserted_id, recorded_by=dto.recordedBy, create_event=False, create_activity=False, create_analytics=False, create_expense=False)
                 except Exception:
-                    current_app.logger.exception('Unexpected error updating pond current_stock for buy')
-        except Exception:
-            current_app.logger.exception('Failed post-sampling buy handling')
-        # If not a buy, handle sampling-specific post-processing: pond_event and fish_activity, fish_mapping
-        try:
-            if not is_buy:
+                    current_app.logger.exception('Failed to update pond current_stock for buy (via StockRepository)')
+
+            except Exception:
+                current_app.logger.exception('Unexpected error during buy post-processing')
+
+        else:
+            # 2) Sampling (non-buy) handling
+            try:
                 try:
-                    mr = MongoRepositorySingleton.get_instance()
-                    # Ensure mapping exists
+                    fish_mapping = mr.fish_mapping
                     try:
-                        fish_mapping = mr.fish_mapping
-                        try:
-                            fish_mapping.add_fish_to_account(payload.get('account_key'), dto.species)
-                        except Exception:
-                            # fallback: update mapping collection directly
-                            mapping_coll = mr.get_collection('fish_mapping')
-                            mapping_coll.update_one({'account_key': payload.get('account_key')}, {'$addToSet': {'fish_ids': dto.species}}, upsert=True)
+                        fish_mapping.add_fish_to_account(payload.get('account_key'), dto.species)
                     except Exception:
-                        current_app.logger.exception('Failed to ensure fish mapping during sampling')
+                        mr.get_collection('fish_mapping').update_one({'account_key': payload.get('account_key')}, {'$addToSet': {'fish_ids': dto.species}}, upsert=True)
+                except Exception:
+                    current_app.logger.exception('Failed to ensure fish mapping during sampling')
 
-                    # Create a pond_event record for sampling (best-effort)
+                # pond_event for sample
+                try:
+                    pe = mr.pond_event
+                    event_doc = {'pond_id': dto.pondId, 'event_type': 'sample', 'details': extra.get('details', {}), 'samples': data.get('samples') if isinstance(data.get('samples'), list) else None, 'count': int(dto.sampleSize) if getattr(dto, 'sampleSize', None) is not None else None, 'user_key': dto.recordedBy}
                     try:
-                        pe = mr.pond_event
-                        event_doc = {
-                            'pond_id': dto.pondId,
-                            'event_type': 'sample',
-                            'details': extra.get('details', {}),
-                            'samples': data.get('samples') if isinstance(data.get('samples'), list) else None,
-                            'count': int(dto.sampleSize) if getattr(dto, 'sampleSize', None) is not None else None,
-                            'created_at': None,
-                            'user_key': dto.recordedBy
-                        }
-                        try:
-                            pe.create(event_doc)
-                        except Exception:
-                            mr.get_collection('pond_events').insert_one(event_doc)
+                        pe.create(event_doc)
                     except Exception:
-                        current_app.logger.exception('Failed to create pond_event for sampling')
+                        mr.get_collection('pond_events').insert_one(event_doc)
+                except Exception:
+                    current_app.logger.exception('Failed to create pond_event for sampling')
 
-                    # Record fish_activity for sampling (samples array if present)
+                # fish_activity for sample
+                try:
+                    from fin_server.repository.fish_activity_repository import FishActivityRepository
+                    far = FishActivityRepository()
+                    activity_doc = {'account_key': payload.get('account_key'), 'pond_id': dto.pondId, 'fish_id': dto.species, 'event_type': 'sample', 'count': int(dto.sampleSize) if getattr(dto, 'sampleSize', None) is not None else None, 'user_key': dto.recordedBy, 'details': extra.get('details', {}), 'samples': data.get('samples') if isinstance(data.get('samples'), list) else None}
                     try:
-                        from fin_server.repository.fish_activity_repository import FishActivityRepository
-                        far = FishActivityRepository()
-                        activity_doc = {
-                            'account_key': payload.get('account_key'),
-                            'pond_id': dto.pondId,
-                            'fish_id': dto.species,
-                            'event_type': 'sample',
-                            'count': int(dto.sampleSize) if getattr(dto, 'sampleSize', None) is not None else None,
-                            'user_key': dto.recordedBy,
-                            'details': extra.get('details', {}),
-                            'samples': data.get('samples') if isinstance(data.get('samples'), list) else None
-                        }
-                        try:
-                            far.create(activity_doc)
-                        except Exception:
-                            mr.get_collection('fish_activity').insert_one(activity_doc)
+                        far.create(activity_doc)
                     except Exception:
-                        current_app.logger.exception('Failed to record fish_activity for sampling')
-                    # Decrement current_stock in pond for sampled species and remove depleted entries
-                    try:
-                        ponds_coll = mr.get_collection('ponds')
-                        sample_count = int(dto.sampleSize) if getattr(dto, 'sampleSize', None) is not None else 0
-                        if sample_count:
-                            try:
-                                res = ponds_coll.update_one({'pond_id': dto.pondId, 'current_stock.species': dto.species}, {'$inc': {'current_stock.$.quantity': -sample_count}})
-                            except Exception:
-                                # fallback: manual read-modify-write
-                                pond = ponds_coll.find_one({'pond_id': dto.pondId})
-                                if pond:
-                                    cs = pond.get('current_stock') or []
-                                    changed = False
-                                    for s in cs:
-                                        if s.get('species') == dto.species:
-                                            try:
-                                                s['quantity'] = int(s.get('quantity', 0) or 0) - sample_count
-                                            except Exception:
-                                                s['quantity'] = (s.get('quantity') or 0) - sample_count
-                                            changed = True
-                                            break
-                                    if changed:
-                                        # remove depleted entries
-                                        cs = [s for s in cs if (s.get('quantity') or 0) > 0]
-                                        ponds_coll.update_one({'pond_id': dto.pondId}, {'$set': {'current_stock': cs}})
-                            # After decrement attempt, ensure no negative qty entries
-                            try:
-                                ponds_coll.update_one({'pond_id': dto.pondId}, {'$pull': {'current_stock': {'quantity': {'$lte': 0}}}})
-                            except Exception:
-                                pass
-                    except Exception:
-                        current_app.logger.exception('Failed to decrement pond current_stock for sampling')
-        except Exception:
-            current_app.logger.exception('Unexpected error during sampling post-processing')
+                        mr.get_collection('fish_activity').insert_one(activity_doc)
+                except Exception:
+                    current_app.logger.exception('Failed to record fish_activity for sampling')
+
+                # decrement pond.current_stock using StockRepository
+                try:
+                    from fin_server.repository.stock_repository import StockRepository
+                    sr = StockRepository()
+                    sr.remove_stock_from_pond(payload.get('account_key'), dto.pondId, dto.species, int(dto.sampleSize) if getattr(dto, 'sampleSize', None) is not None else 0, recorded_by=dto.recordedBy, create_event=False, create_activity=False, create_analytics=False)
+                except Exception:
+                    current_app.logger.exception('Failed to decrement pond current_stock for sampling (via StockRepository)')
+
+                # analytics negative batch for sample
+                try:
+                    from fin_server.repository.fish_analytics_repository import FishAnalyticsRepository
+                    fa = FishAnalyticsRepository()
+                    fish_age = extra.get('fish_age_in_month') or extra.get('fish_age')
+                    sample_count = int(dto.sampleSize) if getattr(dto, 'sampleSize', None) is not None else 0
+                    if sample_count:
+                        event_id = f"{payload.get('account_key')}-{dto.species}-sample-{inserted_id}"
+                        fa.add_batch(dto.species, -int(sample_count), int(fish_age) if fish_age is not None else 0, account_key=payload.get('account_key'), event_id=event_id, fish_weight=getattr(dto, 'averageWeight', None), pond_id=dto.pondId)
+                except Exception:
+                    current_app.logger.exception('Failed to add analytics batch for sampling')
+
+            except Exception:
+                current_app.logger.exception('Unexpected error during sampling post-processing')
 
         return respond_success(dto.to_dict(), status=201)
     except UnauthorizedError as ue:
