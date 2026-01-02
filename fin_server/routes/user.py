@@ -417,6 +417,8 @@ def api_list_users():
             }
             out.append(user_obj)
         return respond_success({'users': out})
+    except UnauthorizedError as ue:
+        return respond_error(str(ue), status=401)
     except Exception:
         current_app.logger.exception('Error in api_list_users')
         return respond_error('Server error', status=500)
@@ -443,6 +445,8 @@ def api_get_user(user_id):
             'managerId': uu.get('manager_id')
         }
         return respond_success({'user': user_obj})
+    except UnauthorizedError as ue:
+        return respond_error(str(ue), status=401)
     except Exception:
         current_app.logger.exception('Error in api_get_user')
         return respond_error('Server error', status=500)
@@ -473,6 +477,8 @@ def api_create_user():
             'managerId': out.get('manager_id')
         }
         return respond_success({'user': user_obj})
+    except UnauthorizedError as ue:
+        return respond_error(str(ue), status=401)
     except Exception:
         current_app.logger.exception('Error in api_create_user')
         return respond_error('Server error', status=500)
@@ -484,6 +490,8 @@ def api_patch_user(user_id):
         data = request.get_json(force=True)
         res = user_repo.update({'user_key': user_id, 'account_key': payload.get('account_key')}, data)
         return respond_success({'updated': True})
+    except UnauthorizedError as ue:
+        return respond_error(str(ue), status=401)
     except Exception:
         current_app.logger.exception('Error in api_patch_user')
         return respond_error('Server error', status=500)
@@ -494,6 +502,8 @@ def api_delete_user(user_id):
         payload = get_request_payload()
         res = user_repo.delete({'user_key': user_id, 'account_key': payload.get('account_key')})
         return respond_success({'deleted': True})
+    except UnauthorizedError as ue:
+        return respond_error(str(ue), status=401)
     except Exception:
         current_app.logger.exception('Error in api_delete_user')
         return respond_error('Server error', status=500)

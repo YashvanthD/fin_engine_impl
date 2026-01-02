@@ -3,6 +3,7 @@ from fin_server.repository.mongo_helper import MongoRepositorySingleton
 from fin_server.utils.helpers import respond_success, respond_error, normalize_doc
 from fin_server.security.authentication import get_auth_payload
 from fin_server.dto.feeding_dto import FeedingRecordDTO
+from fin_server.exception.UnauthorizedError import UnauthorizedError
 
 feeding_bp = Blueprint('feeding', __name__, url_prefix='/feeding')
 repo = MongoRepositorySingleton.get_instance()
@@ -32,6 +33,8 @@ def create_feeding_route():
             inserted_id = str(r.inserted_id)
         dto.id = inserted_id
         return respond_success(dto.to_dict(), status=201)
+    except UnauthorizedError as ue:
+        return respond_error(str(ue), status=401)
     except Exception:
         current_app.logger.exception('Error in create_feeding_route')
         return respond_error('Server error', status=500)
@@ -62,6 +65,8 @@ def list_feeding_route():
                 fo['id'] = fo.get('_id')
                 out.append(fo)
         return respond_success(out)
+    except UnauthorizedError as ue:
+        return respond_error(str(ue), status=401)
     except Exception:
         current_app.logger.exception('Error in list_feeding_route')
         return respond_error('Server error', status=500)

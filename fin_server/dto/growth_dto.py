@@ -88,6 +88,39 @@ class GrowthRecordDTO:
             'recorded_by': self.recordedBy,
             'notes': self.notes
         }
+        # Persist sampling-specific metadata if present in extra
+        # - type -> type
+        # - totalAmount -> total_cost (so older code that checks total_cost/cost_amount works)
+        # - costUnit / cost_unit -> cost_unit
+        if isinstance(self.extra, dict):
+            ta = None
+            # accept camelCase or snake_case keys
+            if 'totalAmount' in self.extra and self.extra.get('totalAmount') not in (None, ''):
+                ta = self.extra.get('totalAmount')
+            elif 'total_amount' in self.extra and self.extra.get('total_amount') not in (None, ''):
+                ta = self.extra.get('total_amount')
+            if ta is not None and 'total_cost' not in doc and 'cost_amount' not in doc:
+                try:
+                    doc['total_cost'] = float(ta)
+                except Exception:
+                    doc['total_cost'] = ta
+
+            # cost unit
+            cu = None
+            if 'costUnit' in self.extra and self.extra.get('costUnit') not in (None, ''):
+                cu = self.extra.get('costUnit')
+            elif 'cost_unit' in self.extra and self.extra.get('cost_unit') not in (None, ''):
+                cu = self.extra.get('cost_unit')
+            if cu is not None and 'cost_unit' not in doc:
+                doc['cost_unit'] = cu
+
+            # type
+            t = None
+            if 'type' in self.extra and self.extra.get('type') not in (None, ''):
+                t = self.extra.get('type')
+            if t is not None and 'type' not in doc:
+                doc['type'] = t
+
         for k, v in (self.extra or {}).items():
             if k not in doc:
                 doc[k] = v

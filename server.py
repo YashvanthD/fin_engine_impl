@@ -63,7 +63,9 @@ def create_app() -> Flask:
     separately via configure_auth_from_env().
     """
     app = Flask(__name__, template_folder='templates')
-    CORS(app)
+    # Enable CORS for all routes and all origins by default (allow '*')
+    CORS(app, resources={r"/*": {"origins": "*"}})
+
     # Register canonical blueprints (keep resource endpoints grouped)
     app.register_blueprint(auth_bp)
     app.register_blueprint(user_bp)

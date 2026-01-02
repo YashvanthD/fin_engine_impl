@@ -138,6 +138,8 @@ def create_task():
             return respond_success(task_dto.to_dict(), status=201)
         except Exception:
             return respond_success({'task_id': task_id}, status=201)
+    except UnauthorizedError as ue:
+        return respond_error(str(ue), status=401)
     except Exception as e:
         logging.exception("Error in create_task")
         return respond_error('Server error', status=500)
@@ -217,8 +219,8 @@ def get_tasks():
                 meta['unread'] += 1
             task_objs.append(tdict)
         return respond_success({'meta': meta, 'tasks': task_objs})
-    except UnauthorizedError as e:
-        return respond_error(str(e), status=401)
+    except UnauthorizedError as ue:
+        return respond_error(str(ue), status=401)
     except Exception as e:
         logging.exception("Error in get_tasks")
         return respond_error('Server error', status=500)
@@ -243,8 +245,8 @@ def get_task(task_id):
             task['_id'] = str(task.get('_id'))
             task['id'] = task.get('task_id') or task['_id']
             return respond_success(task)
-    except UnauthorizedError as e:
-        return respond_error(str(e), status=401)
+    except UnauthorizedError as ue:
+        return respond_error(str(ue), status=401)
     except Exception:
         logging.exception('Error in get_task')
         return respond_error('Server error', status=500)
@@ -331,6 +333,8 @@ def update_task(task_id):
             return respond_success(td.to_dict())
         except Exception:
             return respond_success({'updated': bool(updated)})
+    except UnauthorizedError as ue:
+        return respond_error(str(ue), status=401)
     except Exception:
         logging.exception("Error in update_task")
         return respond_error('Server error', status=500)
@@ -349,8 +353,8 @@ def delete_task(task_id):
             if not deleted and task.get('_id'):
                 deleted = task_repo.delete({'_id': task.get('_id')})
         return respond_success({'deleted': bool(deleted)})
-    except UnauthorizedError as e:
-        return respond_error(str(e), status=401)
+    except UnauthorizedError as ue:
+        return respond_error(str(ue), status=401)
     except Exception:
         logging.exception('Error in delete_task')
         return respond_error('Server error', status=500)
@@ -396,6 +400,8 @@ def move_task(task_id):
             return respond_success(td.to_dict())
         except Exception:
             return respond_success({'updated': bool(updated)})
+    except UnauthorizedError as ue:
+        return respond_error(str(ue), status=401)
     except Exception:
         logging.exception('Error in move_task')
         return respond_error('Server error', status=500)
