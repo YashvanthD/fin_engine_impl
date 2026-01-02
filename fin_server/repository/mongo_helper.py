@@ -66,6 +66,10 @@ class MongoRepositorySingleton:
             from fin_server.repository.expenses_repository import ExpensesRepository
         except Exception:
             ExpensesRepository = None
+        try:
+            from fin_server.repository.transactions_repository import TransactionsRepository
+        except Exception:
+            TransactionsRepository = None
         # New optional repositories for frontend compatibility (import defensively)
         try:
             from fin_server.repository.feeding_repository import FeedingRepository
@@ -90,6 +94,7 @@ class MongoRepositorySingleton:
         # fish_mapping repository expects an already-created collection
         self.fish_mapping = FishMappingRepository(self.get_collection('fish_mapping', db))
         self.expenses = ExpensesRepository(db) if ExpensesRepository else None
+        self.transactions = TransactionsRepository(db) if TransactionsRepository else None
         # NotificationQueueRepository expects a db instance (it will fetch/create its collection)
         self.notification_queue = NotificationQueueRepository(db)
         current_app_logger = logging.getLogger('fin_server.mongo_helper')
@@ -113,6 +118,21 @@ class MongoRepositorySingleton:
             db['fish_mapping'].create_index([('account_key', 1)], unique=True, name='fish_mapping_account_key')
             # ponds: pond_id
             db['ponds'].create_index([('pond_id', 1)], unique=True, name='ponds_pond_id')
+            # transactions: transaction_id, account_key, created_at
+            try:
+                db['transactions'].create_index([('transaction_id', 1)], unique=False, name='transactions_transaction_id')
+                db['transactions'].create_index([('account_key', 1), ('created_at', -1)], name='transactions_account_created_at')
+            except Exception:
+                logging.exception('Failed to create transactions indexes')
+            # expenses: transaction_ref, transaction_id, account_key, pond_id, invoice_no
+            try:
+                db['expenses'].create_index([('transaction_ref', 1)], unique=False, name='expenses_transaction_ref')
+                db['expenses'].create_index([('transaction_id', 1)], unique=False, name='expenses_transaction_id')
+                db['expenses'].create_index([('account_key', 1), ('created_at', -1)], name='expenses_account_created_at')
+                db['expenses'].create_index([('pond_id', 1), ('created_at', -1)], name='expenses_pond_created_at')
+                db['expenses'].create_index([('invoice_no', 1)], unique=False, name='expenses_invoice_no')
+            except Exception:
+                logging.exception('Failed to create expenses indexes')
             logging.info('Ensured recommended DB indexes')
         except Exception as e:
             logging.exception(f'Error creating indexes: {e}')

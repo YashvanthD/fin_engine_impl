@@ -110,6 +110,12 @@ def create_sampling_route():
             except Exception:
                 buy_count = None
         is_buy = (tx in ('buy', 'purchase')) or (buy_count is not None and tx == '')
+        # If this is a buy/purchase sampling, persist the total_count in DTO extra so it is stored and returned
+        try:
+            if is_buy and buy_count is not None:
+                dto.extra['total_count'] = int(buy_count)
+        except Exception:
+            current_app.logger.exception('Failed to set dto.extra["total_count"]')
 
         # Best-effort post-processing operations
         mr = MongoRepositorySingleton.get_instance()
@@ -154,6 +160,7 @@ def create_sampling_route():
                     current_app.logger.exception('Failed to update/create fish record for buy')
 
                 # expenses
+                total_amt = None
                 try:
                     expenses_repo = mr.expenses
                     total_amt = None
@@ -173,11 +180,35 @@ def create_sampling_route():
                         except Exception:
                             total_amt = None
                     if expenses_repo and total_amt is not None:
-                        expense_doc = {'pond_id': dto.pondId, 'species': dto.species, 'category': 'buy', 'amount': total_amt, 'currency': extra.get('currency') or 'INR', 'notes': extra.get('notes'), 'recorded_by': dto.recordedBy, 'account_key': payload.get('account_key')}
+                        # Build a richer expense document with fields commonly used
+                        expense_doc = {
+                            'pond_id': dto.pondId,
+                            'species': dto.species,
+                            'category': extra.get('category') or 'buy',
+                            'type': extra.get('type') or extra.get('transactionType') or 'buy',
+                            'amount': total_amt,
+                            'currency': extra.get('currency') or 'INR',
+                            'notes': extra.get('notes') or extra.get('description'),
+                            'recorded_by': dto.recordedBy,
+                            'account_key': payload.get('account_key'),
+                            'creditor': extra.get('creditor') or extra.get('credited_to') or extra.get('vendor'),
+                            'debited': extra.get('debited') or extra.get('debited_to'),
+                            'transaction_id': extra.get('transaction_id') or extra.get('transactionId') or extra.get('tx_id'),
+                            'gst': extra.get('gst'),
+                            'tax': extra.get('tax'),
+                            'payment_method': extra.get('payment_method') or extra.get('paymentMethod'),
+                            'invoice_no': extra.get('invoice_no') or extra.get('invoiceNo') or extra.get('invoice'),
+                            'vendor': extra.get('vendor')
+                        }
                         try:
+                            # ExpensesRepository.create will also create a transaction and attach a transaction_ref when available
                             expenses_repo.create(expense_doc)
                         except Exception:
-                            mr.get_collection('expenses').insert_one(expense_doc)
+                            # fallback to direct insert if repository unavailable
+                            try:
+                                mr.get_collection('expenses').insert_one(expense_doc)
+                            except Exception:
+                                current_app.logger.exception('Failed to insert expense document')
                 except Exception:
                     current_app.logger.exception('Failed to insert expense record for buy')
 
@@ -208,7 +239,10 @@ def create_sampling_route():
                 try:
                     from fin_server.repository.stock_repository import StockRepository
                     sr = StockRepository()
-                    sr.add_stock_to_pond(payload.get('account_key'), dto.pondId, dto.species, buy_count, average_weight=getattr(dto, 'averageWeight', None), sampling_id=dto.extra.get('sampling_id') or inserted_id, recorded_by=dto.recordedBy, create_event=False, create_activity=False, create_analytics=False, create_expense=False)
+                    ok = sr.add_stock_transactional(payload.get('account_key'), dto.pondId, dto.species, buy_count, average_weight=getattr(dto, 'averageWeight', None), sampling_id=dto.extra.get('sampling_id') or inserted_id, recorded_by=dto.recordedBy, expense_amount=total_amt, timeout_seconds=3)
+                    if not ok:
+                        # fallback to non-transactional update
+                        sr.add_stock_to_pond(payload.get('account_key'), dto.pondId, dto.species, buy_count, average_weight=getattr(dto, 'averageWeight', None), sampling_id=dto.extra.get('sampling_id') or inserted_id, recorded_by=dto.recordedBy, create_event=False, create_activity=False, create_analytics=False, create_expense=True, expense_amount=total_amt)
                 except Exception:
                     current_app.logger.exception('Failed to update pond current_stock for buy (via StockRepository)')
 

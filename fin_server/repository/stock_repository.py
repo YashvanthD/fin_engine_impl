@@ -118,7 +118,25 @@ class StockRepository:
             # 6) optional expense
             if create_expense and self.expenses is not None:
                 try:
-                    exp = {'pond_id': pond_id, 'species': species, 'category': 'buy', 'amount': float(expense_amount) if expense_amount is not None else None, 'recorded_by': recorded_by, 'account_key': account_key, 'created_at': get_time_date_dt(include_time=True)}
+                    exp = {
+                        'pond_id': pond_id,
+                        'species': species,
+                        'category': 'buy',
+                        'type': 'buy',
+                        'amount': float(expense_amount) if expense_amount is not None else None,
+                        'currency': 'INR',
+                        'recorded_by': recorded_by,
+                        'account_key': account_key,
+                        'creditor': None,
+                        'debited': None,
+                        'transaction_id': None,
+                        'gst': None,
+                        'tax': None,
+                        'payment_method': None,
+                        'invoice_no': None,
+                        'vendor': None,
+                        'created_at': get_time_date_dt(include_time=True)
+                    }
                     try:
                         self.expenses.insert_one(exp)
                     except Exception:
@@ -139,6 +157,171 @@ class StockRepository:
         except Exception:
             logging.exception('Unexpected error in add_stock_to_pond')
             return False
+
+    def add_stock_transactional(self, account_key, pond_id, species, count, average_weight=None, sampling_id=None, recorded_by=None, expense_amount=None, timeout_seconds: int = 3):
+        """Perform add-stock flow inside a MongoDB transaction with a timeout.
+
+        This creates a transaction ledger record, an expense (with transaction_ref), updates pond.current_stock and fish.current_stock,
+        and optionally writes activity/analytics. If the transaction does not complete within timeout_seconds it will be aborted.
+        Returns True on success, False on failure.
+        """
+        db = self.db
+        client = None
+        try:
+            client = db.client
+        except Exception:
+            client = None
+
+        # If client or sessions are not available, fallback to non-transactional add
+        if client is None:
+            logging.warning('Mongo client not available for transactions; falling back to non-transactional add_stock_to_pond')
+            return self.add_stock_to_pond(account_key, pond_id, species, count, average_weight=average_weight, sampling_id=sampling_id, recorded_by=recorded_by, create_event=True, create_activity=True, create_analytics=True, create_expense=True, expense_amount=expense_amount)
+
+        # Prepare docs
+        expense_doc = {
+            'pond_id': pond_id,
+            'species': species,
+            'category': 'buy',
+            'type': 'buy',
+            'amount': float(expense_amount) if expense_amount is not None else None,
+            'currency': 'INR',
+            'notes': None,
+            'recorded_by': recorded_by,
+            'account_key': account_key,
+            'creditor': None,
+            'debited': None,
+            'transaction_id': None,
+            'gst': None,
+            'tax': None,
+            'payment_method': None,
+            'invoice_no': None,
+            'vendor': None,
+            'created_at': None
+        }
+
+        session = None
+        timer = None
+        try:
+            with client.start_session() as session:
+                # start transaction
+                session.start_transaction()
+
+                # set up a timer to abort the transaction if it exceeds timeout_seconds
+                import threading
+                def _abort():
+                    try:
+                        logging.error('Transaction timed out; aborting')
+                        session.abort_transaction()
+                    except Exception:
+                        logging.exception('Failed to abort transaction on timeout')
+
+                timer = threading.Timer(timeout_seconds, _abort)
+                timer.start()
+
+                # 1) create transaction ledger entry
+                try:
+                    from fin_server.repository.transactions_repository import TransactionsRepository
+                    tr = TransactionsRepository(self.db)
+                    tx_payload = {
+                        'transaction_id': None,
+                        'type': 'expense',
+                        'subtype': 'buy',
+                        'amount': expense_doc.get('amount'),
+                        'currency': expense_doc.get('currency'),
+                        'account_key': account_key,
+                        'pond_id': pond_id,
+                        'species': species,
+                        'creditor': None,
+                        'debited': None,
+                        'payment_method': None,
+                        'invoice_no': None,
+                        'gst': None,
+                        'tax': None,
+                        'recorded_by': recorded_by
+                    }
+                    tx_res = tr.collection.insert_one(tx_payload, session=session)
+                    tx_id = getattr(tx_res, 'inserted_id', None)
+                except Exception:
+                    logging.exception('Failed to create transaction inside session')
+                    session.abort_transaction()
+                    return False
+
+                # 2) create expense referencing transaction
+                try:
+                    expense_doc['transaction_ref'] = str(tx_id)
+                    expense_doc['created_at'] = get_time_date_dt(include_time=True)
+                    self.expenses.insert_one(expense_doc, session=session)
+                except Exception:
+                    logging.exception('Failed to insert expense inside session')
+                    session.abort_transaction()
+                    return False
+
+                # 3) update pond.current_stock atomically
+                try:
+                    res = self.ponds.update_one({'pond_id': pond_id, 'current_stock.species': species}, {'$inc': {'current_stock.$.quantity': int(count)}, '$set': {'current_stock.$.average_weight': average_weight}}, session=session)
+                    if not res.matched_count:
+                        stock_doc = {
+                            'stock_id': sampling_id or f'stock-{get_time_date_dt(include_time=True).strftime("%Y%m%d%H%M%S")}',
+                            'species': species,
+                            'quantity': int(count),
+                            'average_weight': average_weight,
+                            'stocking_date': get_time_date_dt(include_time=True)
+                        }
+                        self.ponds.update_one({'pond_id': pond_id}, {'$push': {'current_stock': stock_doc}}, session=session)
+                except Exception:
+                    logging.exception('Failed to update pond.current_stock inside session')
+                    session.abort_transaction()
+                    return False
+
+                # 4) update fish.current_stock
+                try:
+                    q = {'$or': [{'species_code': species}, {'_id': species}]}
+                    f = self.fish.find_one(q, session=session)
+                    if f:
+                        self.fish.update_one({'_id': f.get('_id')}, {'$inc': {'current_stock': int(count)}}, session=session)
+                    else:
+                        fish_doc = {'_id': species, 'species_code': species, 'common_name': species, 'current_stock': int(count)}
+                        self.fish.insert_one(fish_doc, session=session)
+                except Exception:
+                    logging.exception('Failed to update fish.current_stock inside session')
+                    session.abort_transaction()
+                    return False
+
+                # 5) optionally insert activity and analytics (best-effort but within transaction)
+                try:
+                    act = {'account_key': account_key, 'pond_id': pond_id, 'fish_id': species, 'event_type': 'buy', 'count': int(count), 'user_key': recorded_by, 'created_at': get_time_date_dt(include_time=True)}
+                    self.fish_activity.insert_one(act, session=session)
+                except Exception:
+                    logging.exception('Failed to insert fish_activity inside session')
+                    # do not abort for activity failure; continue
+
+                try:
+                    batch = {'_id': f'{account_key}-{species}-{pond_id}-{get_time_date_dt(include_time=True).strftime("%Y%m%d%H%M%S%f")}', 'species_id': species, 'count': int(count), 'fish_age_in_month': 0, 'date_added': get_time_date_dt(include_time=True), 'account_key': account_key, 'pond_id': pond_id}
+                    if average_weight is not None:
+                        batch['fish_weight'] = average_weight
+                    self.fish_analytics.insert_one(batch, session=session)
+                except Exception:
+                    logging.exception('Failed to insert fish_analytics inside session')
+                    # do not abort for analytics failure
+
+                # commit
+                try:
+                    session.commit_transaction()
+                except Exception:
+                    logging.exception('Failed to commit transaction')
+                    try:
+                        session.abort_transaction()
+                    except Exception:
+                        pass
+                    return False
+
+                return True
+        finally:
+            if timer:
+                try:
+                    timer.cancel()
+                except Exception:
+                    pass
 
     def remove_stock_from_pond(self, account_key, pond_id, species, count, recorded_by=None, create_event=True, create_activity=True, create_analytics=True):
         """Remove `count` fish of `species` from pond.current_stock (sampling, sell, remove).

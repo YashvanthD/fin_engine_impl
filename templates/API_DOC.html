@@ -1336,7 +1336,168 @@
 curl "http://localhost:5000/api/sampling/history?pondId=POND123&limit=5"</pre></div>
                 </div>
             </div>
-        </div>
+
+            <!-- Expenses and Transactions Section -->
+            <div class="section-header" onclick="toggleSection('section-financials')">
+                <h3>Financials</h3>
+                <span class="pill">expenses, transactions</span>
+            </div>
+            <div id="section-financials" class="section-body">
+
+                <!-- Expenses -->
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard('card-expenses-list')">
+                        <div class="endpoint"><span class="method method-get">GET</span> /expenses</div>
+                        <span class="card-toggle">▾ details</span>
+                    </div>
+                    <div id="card-expenses-list" class="card-body">
+                        <div class="small">List expenses for the authenticated account. Supports filtering by date range, pond, species and transaction_ref.</div>
+                        <table class="fields-table">
+                            <tr><th>Query</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                            <tr><td>startDate / start_date / from</td><td>datetime|string|epoch</td><td>No</td><td>Start of created_at range</td></tr>
+                            <tr><td>endDate / end_date / to</td><td>datetime|string|epoch</td><td>No</td><td>End of created_at range</td></tr>
+                            <tr><td>pondId / pond_id</td><td>string</td><td>No</td><td>Filter by pond</td></tr>
+                            <tr><td>species</td><td>string</td><td>No</td><td>Filter by species</td></tr>
+                            <tr><td>transaction_ref</td><td>string</td><td>No</td><td>Filter by linked transaction id</td></tr>
+                            <tr><td>limit</td><td>int</td><td>No</td><td>Max rows returned (default 50)</td></tr>
+                        </table>
+                        <div class="example small"><strong>Response (200):</strong> Array of expense records. Keys include <code>id</code>, <code>amount</code>, <code>currency</code>, <code>category</code>, <code>notes</code>, <code>transaction_ref</code>, <code>created_at</code>.</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard('card-expenses-create')">
+                        <div class="endpoint"><span class="method method-post">POST</span> /expenses</div>
+                        <span class="card-toggle">▾ details</span>
+                    </div>
+                    <div id="card-expenses-create" class="card-body">
+                        <div class="small">Create an expense for the authenticated account. The repository will create a canonical transaction entry and set <code>transaction_ref</code> on the expense.</div>
+                        <table class="fields-table">
+                            <tr><th>Body field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                            <tr><td>amount</td><td>float</td><td>Yes</td><td>Expense amount</td></tr>
+                            <tr><td>currency</td><td>string</td><td>No</td><td>ISO currency code (default INR)</td></tr>
+                            <tr><td>category / type</td><td>string</td><td>No</td><td>e.g. <code>buy</code>, <code>feed</code>, <code>maintenance</code></td></tr>
+                            <tr><td>pondId / pond_id</td><td>string</td><td>No</td><td>Linked pond</td></tr>
+                            <tr><td>species</td><td>string</td><td>No</td><td>Linked species</td></tr>
+                            <tr><td>creditor</td><td>string</td><td>No</td><td>Vendor or payee</td></tr>
+                            <tr><td>debited</td><td>string</td><td>No</td><td>Account debited</td></tr>
+                            <tr><td>transaction_id</td><td>string</td><td>No</td><td>External transaction id (optional)</td></tr>
+                            <tr><td>gst / tax</td><td>float</td><td>No</td><td>Tax fields</td></tr>
+                            <tr><td>payment_method</td><td>string</td><td>No</td><td>e.g. <code>cash</code>, <code>bank_transfer</code></td></tr>
+                            <tr><td>invoice_no</td><td>string</td><td>No</td><td>Invoice number</td></tr>
+                            <tr><td>notes</td><td>string</td><td>No</td><td>Free-form notes</td></tr>
+                        </table>
+                        <div class="curl"><strong>Request:</strong><br><pre>curl -X POST "http://localhost:5000/expenses" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -d '{"amount":2000, "category":"buy", "pondId":"926203-001", "species":"TILAPIA", "creditor":"Supplier A", "transactionId":"TXN-123"}'</pre></div>
+                        <div class="example small"><strong>Response (201):</strong> Created expense document (includes <code>transaction_ref</code> linking to the ledger entry).</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard('card-expenses-item')">
+                        <div class="endpoint"><span class="method method-get">GET</span> /expenses/&lt;expense_id&gt;</div>
+                        <span class="card-toggle">▾ details</span>
+                    </div>
+                    <div id="card-expenses-item" class="card-body">
+                        <div class="small">Retrieve a single expense by its Mongo _id or by <code>transaction_ref</code> (pass the transaction id string).</div>
+                        <div class="curl small"><strong>Example:</strong><br><pre>curl -H "Authorization: Bearer ACCESS_TOKEN" "http://localhost:5000/expenses/640f1a..."</pre></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard('card-expenses-update')">
+                        <div class="endpoint"><span class="method method-put">PUT</span> /expenses/&lt;expense_id&gt;</div>
+                        <span class="card-toggle">▾ details</span>
+                    </div>
+                    <div id="card-expenses-update" class="card-body">
+                        <div class="small">Update an expense (account-scoped). The repository prevents direct modification of <code>transaction_ref</code> — to change ledger data update the transaction instead.</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard('card-expenses-delete')">
+                        <div class="endpoint"><span class="method method-delete">DELETE</span> /expenses/&lt;expense_id&gt;</div>
+                        <span class="card-toggle">▾ details</span>
+                    </div>
+                    <div id="card-expenses-delete" class="card-body">
+                        <div class="small">Deletes an expense by id or transaction_ref (account-scoped).</div>
+                    </div>
+                </div>
+
+                <!-- Transactions -->
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard('card-transactions-list')">
+                        <div class="endpoint"><span class="method method-get">GET</span> /transactions</div>
+                        <span class="card-toggle">▾ details</span>
+                    </div>
+                    <div id="card-transactions-list" class="card-body">
+                        <div class="small">List ledger transactions (expenses, income, transfers). Use filters to narrow results.</div>
+                        <table class="fields-table">
+                            <tr><th>Query</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                            <tr><td>startDate / start_date / from</td><td>datetime|string|epoch</td><td>No</td><td>Start of created_at range</td></tr>
+                            <tr><td>endDate / end_date / to</td><td>datetime|string|epoch</td><td>No</td><td>End of created_at range</td></tr>
+                            <tr><td>pondId / pond_id</td><td>string</td><td>No</td><td>Filter by pond</td></tr>
+                            <tr><td>species</td><td>string</td><td>No</td><td>Filter by species</td></tr>
+                            <tr><td>type</td><td>string</td><td>No</td><td>Ledger type: <code>expense</code>, <code>income</code>, <code>transfer</code>, etc.</td></tr>
+                            <tr><td>limit</td><td>int</td><td>No</td><td>Max rows returned (default 50)</td></tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard('card-transactions-create')">
+                        <div class="endpoint"><span class="method method-post">POST</span> /transactions</div>
+                        <span class="card-toggle">▾ details</span>
+                    </div>
+                    <div id="card-transactions-create" class="card-body">
+                        <div class="small">Create a transaction ledger entry (manual entries). For expenses prefer creating via <code>/expenses</code> which creates both transaction and domain expense and links them.</div>
+                        <table class="fields-table">
+                            <tr><th>Body</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                            <tr><td>amount</td><td>float</td><td>Yes</td><td>Amount</td></tr>
+                            <tr><td>currency</td><td>string</td><td>No</td><td>ISO code</td></tr>
+                            <tr><td>type</td><td>string</td><td>No</td><td>e.g. expense, income</td></tr>
+                            <tr><td>subtype / category</td><td>string</td><td>No</td><td>More specific classification</td></tr>
+                            <tr><td>account_key</td><td>string</td><td>No</td><td>Defaults to caller's account</td></tr>
+                            <tr><td>pond_id</td><td>string</td><td>No</td><td>Optional pond context</td></tr>
+                            <tr><td>related_id</td><td>string</td><td>No</td><td>Link to expense/sampling id</td></tr>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard('card-transactions-item')">
+                        <div class="endpoint"><span class="method method-get">GET</span> /transactions/&lt;tx_id&gt;</div>
+                        <span class="card-toggle">▾ details</span>
+                    </div>
+                    <div id="card-transactions-item" class="card-body">
+                        <div class="small">Retrieve a transaction by its Mongo _id or by external <code>transaction_id</code>.</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard('card-transactions-update')">
+                        <div class="endpoint"><span class="method method-put">PUT</span> /transactions/&lt;tx_id&gt;</div>
+                        <span class="card-toggle">▾ details</span>
+                    </div>
+                    <div id="card-transactions-update" class="card-body">
+                        <div class="small">Update a ledger transaction (account-scoped). Use this to correct amounts, status or metadata.</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" onclick="toggleCard('card-transactions-delete')">
+                        <div class="endpoint"><span class="method method-delete">DELETE</span> /transactions/&lt;tx_id&gt;</div>
+                        <span class="card-toggle">▾ details</span>
+                    </div>
+                    <div id="card-transactions-delete" class="card-body">
+                        <div class="small">Delete a ledger transaction (account-scoped). Deleting a transaction does not automatically delete the linked expense — update expense.transaction_ref as needed.</div>
+                    </div>
+                </div>
+
+            </div>
+
     </div>
 
     <div class="note small">Note: Server normalizes MongoDB types in responses — ObjectId -> string, datetime -> ISO string. You can click each section title to expand/collapse groups, and click "details" on each endpoint to view or hide full request/response documentation.</div>
