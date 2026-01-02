@@ -5,7 +5,7 @@ from fin_server.utils.helpers import _to_iso_if_epoch, normalize_doc
 class GrowthRecordDTO:
     def __init__(self, id: Optional[str], pondId: str, species: str, samplingDate: str, sampleSize: int,
                  averageWeight: float, averageLength: float, survivalRate: float, feedConversionRatio: float,
-                 recordedBy: Optional[str], notes: Optional[str], extra: Dict[str, Any] = None):
+                 cost: float, recordedBy: Optional[str], notes: Optional[str], extra: Dict[str, Any] = None):
         self.id = id
         self.pondId = pondId
         self.species = species
@@ -15,6 +15,7 @@ class GrowthRecordDTO:
         self.averageLength = float(averageLength) if averageLength is not None else None
         self.survivalRate = float(survivalRate) if survivalRate is not None else None
         self.feedConversionRatio = float(feedConversionRatio) if feedConversionRatio is not None else None
+        self.cost = float(cost) if cost is not None else None
         self.recordedBy = recordedBy
         self.notes = notes
         self.extra = extra or {}
@@ -32,6 +33,7 @@ class GrowthRecordDTO:
             averageLength=d.get('average_length') or d.get('averageLength'),
             survivalRate=d.get('survival_rate') or d.get('survivalRate'),
             feedConversionRatio=d.get('feed_conversion_ratio') or d.get('feedConversionRatio'),
+            cost=d.get('cost') or d.get('cost_amount') or d.get('total_cost'),
             recordedBy=d.get('recordedBy') or d.get('recorded_by'),
             notes=d.get('notes'),
             extra={k: v for k, v in d.items()}
@@ -49,6 +51,7 @@ class GrowthRecordDTO:
             averageLength=payload.get('averageLength') or payload.get('average_length'),
             survivalRate=payload.get('survivalRate') or payload.get('survival_rate'),
             feedConversionRatio=payload.get('feedConversionRatio') or payload.get('feed_conversion_ratio'),
+            cost=payload.get('cost') or payload.get('cost_amount') or payload.get('total_cost'),
             recordedBy=payload.get('recordedBy') or payload.get('recorded_by'),
             notes=payload.get('notes'),
             extra={k: v for k, v in payload.items()}
@@ -65,6 +68,7 @@ class GrowthRecordDTO:
             'averageLength': self.averageLength,
             'survivalRate': self.survivalRate,
             'feedConversionRatio': self.feedConversionRatio,
+            'cost': self.cost,
             'recordedBy': self.recordedBy,
             'notes': self.notes,
             **self.extra
@@ -80,6 +84,7 @@ class GrowthRecordDTO:
             'average_length': self.averageLength,
             'survival_rate': self.survivalRate,
             'feed_conversion_ratio': self.feedConversionRatio,
+            'cost': self.cost,
             'recorded_by': self.recordedBy,
             'notes': self.notes
         }

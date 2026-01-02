@@ -188,8 +188,15 @@ def list_ponds():
     if status != 200:
         return resp_obj, status
     body = resp_obj.get_json() or {}
-    data = body.get('data') or {}
-    ponds = data.get('data') or data.get('ponds') or []
+    # api_list_ponds returns { success: True, data: <list|dict>, ... }
+    data = body.get('data') or body.get('ponds') or {}
+    # data may be a list (the typical API payload) or a dict containing nested keys
+    if isinstance(data, list):
+        ponds = data
+    elif isinstance(data, dict):
+        ponds = data.get('data') or data.get('ponds') or []
+    else:
+        ponds = []
     return respond_success({'ponds': ponds})
 
 
