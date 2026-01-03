@@ -1,18 +1,27 @@
-from flask import Blueprint, request, current_app
-from datetime import datetime
 import zoneinfo
+from datetime import datetime
 
+from flask import Blueprint, request, current_app
+
+from fin_server.dto.pond_dto import PondDTO
 from fin_server.exception.UnauthorizedError import UnauthorizedError
-from fin_server.repository.pond_repository import PondRepository
+# Use the new mongo helper manager
+from fin_server.repository.mongo_helper import get_collection
+# fish-related repositories (canonical imports)
 from fin_server.security.authentication import get_auth_payload
 from fin_server.utils.helpers import get_request_payload, parse_pagination
 from fin_server.utils.helpers import normalize_doc, respond_success, respond_error
 from fin_server.utils.time_utils import get_time_date_dt
-from fin_server.dto.pond_dto import PondDTO
 
+# module-level singletons/repo instances
+
+fish_repo_class = get_collection('fish')
+fish_activity_class = get_collection('fish_activity')
+fish_analytics_class = get_collection('fish_analytics')
+pond_event_class = get_collection('pond_event')
+pond_repository = get_collection('pond')
 pond_bp = Blueprint('pond', __name__, url_prefix='/pond')
 IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
-pond_repository = PondRepository()
 
 @pond_bp.route('', methods=['OPTIONS'])
 def pond_options_root():
@@ -207,14 +216,11 @@ def pond_fish_options(pond_id):
         payload = get_auth_payload(request)
         account_key = payload.get('account_key')
         # find mapped fish ids
-        from fin_server.repository.mongo_helper import MongoRepositorySingleton
-        fish_mapping = MongoRepositorySingleton.get_instance().fish_mapping
+        fish_mapping = mongo_repo_singleton.fish_mapping
         mapping = fish_mapping.find_one({'account_key': account_key})
         fish_ids = mapping.get('fish_ids', []) if mapping else []
         # return basic fish entities
-        from fin_server.repository.fish_repository import FishRepository
-        fr = FishRepository()
-        fish_list = fr.find({'_id': {'$in': fish_ids}}) if fish_ids else []
+        fish_list = fish_repo_class.find({'_id': {'$in': fish_ids}}) if fish_ids else []
         # transform to simple dropdown format
         options = [{'id': f['_id'], 'species_code': f.get('species_code'), 'common_name': f.get('common_name')} for f in fish_list]
         return respond_success({'pondId': pond_id, 'options': options})
@@ -237,8 +243,7 @@ def pond_activity(pond_id):
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
 
-        from fin_server.repository.fish_activity_repository import FishActivityRepository
-        repo = FishActivityRepository()
+        repo = fish_activity_class
 
         query = {'pond_id': pond_id}
         if fish_id:
@@ -307,13 +312,9 @@ def pond_history(pond_id):
         limit = int(q.get('limit', 100))
         skip = int(q.get('skip', 0))
 
-        from fin_server.repository.pond_event_repository import PondEventRepository
-        from fin_server.repository.fish_activity_repository import FishActivityRepository
-        from fin_server.repository.fish_analytics_repository import FishAnalyticsRepository
-
-        pond_event_repo = PondEventRepository()
-        fish_activity_repo = FishActivityRepository()
-        fish_analytics_repo = FishAnalyticsRepository()
+        pond_event_repo = pond_event_class()
+        fish_activity_repo = fish_activity_class()
+        fish_analytics_repo = fish_analytics_class()
 
         # helper to parse dates
         def _parse_dt(s):

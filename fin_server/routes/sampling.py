@@ -1,5 +1,6 @@
 from flask import Blueprint, request, current_app
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
+from fin_server.repository.mongo_helper import get_collection
+from fin_server.routes.pond_event import fish_activity_repo
 from fin_server.utils.helpers import respond_success, respond_error, normalize_doc, parse_iso_or_epoch
 from fin_server.security.authentication import get_auth_payload
 from fin_server.exception.UnauthorizedError import UnauthorizedError
@@ -9,9 +10,19 @@ from fin_server.utils.generator import generate_sampling_id
 from fin_server.utils.validation import compute_total_amount_from_payload
 from fin_server.utils.threading_util import submit_task
 
-sampling_bp = Blueprint('sampling', __name__, url_prefix='/sampling')
-repo = MongoRepositorySingleton.get_instance()
+from fin_server.repository.fish.fish_analytics_repository import FishAnalyticsRepository
+from fin_server.repository.fish.fish_activity_repository import FishActivityRepository
+from fin_server.repository.fish.stock_repository import StockRepository
 
+
+
+sampling_bp = Blueprint('sampling', __name__, url_prefix='/sampling')
+
+sampling_repo = get_collection('sampling')
+pond_repo = get_collection('pond')
+fish_repo = get_collection('fish')
+expenses_repo = get_collection('expenses')
+pond_event_repo = get_collection('pond_event')
 
 @sampling_bp.route('', methods=['POST'])
 @sampling_bp.route('/', methods=['POST'])
@@ -50,12 +61,11 @@ def create_sampling_route():
 
         # Persist sampling
         try:
-            res = dto.save(repo=repo, collection_name='sampling')
+            res = dto.save(repo=sampling_repo)
             inserted_id = getattr(res, 'inserted_id', res)
             inserted_id = str(inserted_id) if inserted_id is not None else None
         except Exception:
-            sr = repo.get_collection('sampling')
-            rr = sr.insert_one(dto.to_db_doc())
+            rr = sampling_repo.insert_one(dto.to_db_doc())
             inserted_id = str(rr.inserted_id)
         dto.id = inserted_id
 
@@ -121,51 +131,46 @@ def create_sampling_route():
             current_app.logger.exception('Failed to set dto.extra["total_count"]')
 
         # Best-effort post-processing operations
-        mr = MongoRepositorySingleton.get_instance()
         # 1) Buy handling
         if is_buy and buy_count and buy_count > 0:
             try:
                 # pond metadata increment
                 try:
-                    pond_repo = mr.pond
                     pond_repo.atomic_update_metadata(dto.pondId, inc_fields={'fish_count': buy_count})
                 except Exception:
                     current_app.logger.exception('Failed to atomic update pond metadata for buy')
 
                 # pond event
                 try:
-                    pe = mr.pond_event
                     event_doc = {'pond_id': dto.pondId, 'event_type': 'buy', 'details': {'species': dto.species, 'count': buy_count, 'cost_unit': extra.get('costUnit') or extra.get('cost_unit'), 'total_amount': extra.get('totalAmount') or extra.get('total_amount')}, 'recorded_by': dto.recordedBy}
                     try:
-                        pe.create(event_doc)
+                        pond_event_repo.create(event_doc)
                     except Exception:
-                        mr.get_collection('pond_events').insert_one(event_doc)
+                        get_collection('pond_event').insert_one(event_doc)
                 except Exception:
                     current_app.logger.exception('Failed to create pond_event for buy')
 
                 # fish repo update/create
                 try:
-                    fish_repo = mr.fish
                     existing = fish_repo.find_one({'species_code': dto.species})
                     if existing:
                         try:
                             fish_repo.update({'_id': existing.get('_id')}, {'current_stock': (existing.get('current_stock', 0) or 0) + buy_count})
                         except Exception:
                             # best-effort direct update
-                            mr.get_collection('fish').update_one({'_id': existing.get('_id')}, {'$inc': {'current_stock': buy_count}})
+                            fish_repo.update_one({'_id': existing.get('_id')}, {'$inc': {'current_stock': buy_count}})
                     else:
                         fish_doc = {'_id': dto.species, 'species_code': dto.species, 'common_name': dto.species, 'current_stock': buy_count, 'account_key': payload.get('account_key')}
                         try:
                             fish_repo.create(fish_doc)
                         except Exception:
-                            mr.get_collection('fish').insert_one(fish_doc)
+                            fish_repo.insert_one(fish_doc)
                 except Exception:
                     current_app.logger.exception('Failed to update/create fish record for buy')
 
                 # expenses
                 total_amt = None
                 try:
-                    expenses_repo = mr.expenses
                     total_amt = None
                     if 'totalAmount' in extra:
                         try:
@@ -236,7 +241,7 @@ def create_sampling_route():
                         except Exception:
                             # fallback to direct insert if repository unavailable
                             try:
-                                mr.get_collection('expenses').insert_one(expense_doc)
+                                expenses_repo.insert_one(expense_doc)
                             except Exception:
                                 current_app.logger.exception('Failed to insert expense document')
                 except Exception:
@@ -244,7 +249,6 @@ def create_sampling_route():
 
                 # analytics batch (positive)
                 try:
-                    from fin_server.repository.fish_analytics_repository import FishAnalyticsRepository
                     fa = FishAnalyticsRepository()
                     fish_age = extra.get('fish_age_in_month') or extra.get('fish_age')
                     fish_weight = getattr(dto, 'averageWeight', None)
@@ -255,13 +259,12 @@ def create_sampling_route():
 
                 # fish_activity
                 try:
-                    from fin_server.repository.fish_activity_repository import FishActivityRepository
                     far = FishActivityRepository()
                     activity_doc = {'account_key': payload.get('account_key'), 'pond_id': dto.pondId, 'fish_id': dto.species, 'event_type': 'buy', 'count': buy_count, 'details': extra.get('details') or {}, 'user_key': dto.recordedBy}
                     try:
                         far.create(activity_doc)
                     except Exception:
-                        mr.get_collection('fish_activity').insert_one(activity_doc)
+                        fish_activity_repo.insert_one(activity_doc)
                 except Exception:
                     current_app.logger.exception('Failed to record fish_activity for buy')
 
@@ -270,7 +273,6 @@ def create_sampling_route():
                 try:
                     def _run_stock_update(account_key, pond_id, species, count, average_weight, sampling_id_val, recorded_by_val, expense_amount_val):
                         try:
-                            from fin_server.repository.stock_repository import StockRepository
                             sr = StockRepository()
                             ok_inner = sr.add_stock_transactional(account_key, pond_id, species, count, average_weight=average_weight, sampling_id=sampling_id_val, recorded_by=recorded_by_val, expense_amount=expense_amount_val, timeout_seconds=3)
                             if not ok_inner:
@@ -300,9 +302,8 @@ def create_sampling_route():
 @sampling_bp.route('/<pond_id>', methods=['GET'])
 def list_sampling_for_pond_route(pond_id):
     try:
-        sr = repo.get_collection('sampling')
         # Query canonical pond_id field
-        recs = list(sr.find({'pond_id': pond_id}).sort('created_at', -1))
+        recs = list(sampling_repo.find({'pond_id': pond_id}).sort('created_at', -1))
         out = []
         for r in recs:
             ro = normalize_doc(r)
@@ -359,8 +360,7 @@ def get_sampling_history():
         if date_query:
             q['sampling_date'] = date_query
 
-        sr = repo.get_collection('sampling')
-        cursor = sr.find(q).sort([('sampling_date', -1), ('created_at', -1)]).limit(limit)
+        cursor = sampling_repo.find(q).sort([('sampling_date', -1), ('created_at', -1)]).limit(limit)
         recs = list(cursor)
         out = []
         for r in recs:
@@ -382,7 +382,6 @@ def update_sampling_route(sampling_id):
     try:
         payload = get_auth_payload(request)
         data = request.get_json(force=True)
-        coll = repo.get_collection('sampling')
 
         # Try to resolve sampling by _id (ObjectId) or by sampling_id field
         query = None
@@ -393,10 +392,10 @@ def update_sampling_route(sampling_id):
             # not an ObjectId
             query = {'sampling_id': sampling_id}
 
-        existing = coll.find_one(query)
+        existing = sampling_repo.find_one(query)
         if not existing:
             # Try alternative: direct sampling_id match
-            existing = coll.find_one({'sampling_id': sampling_id})
+            existing = sampling_repo.find_one({'sampling_id': sampling_id})
         if not existing:
             return respond_error('Sampling record not found', status=404)
 
@@ -468,11 +467,11 @@ def update_sampling_route(sampling_id):
 
         # Apply update
         try:
-            res = coll.update_one({'_id': existing.get('_id')}, {'$set': update_fields})
+            res = sampling_repo.update_one({'_id': existing.get('_id')}, {'$set': update_fields})
         except Exception:
             return respond_error('Failed to update sampling record', status=500)
 
-        updated = coll.find_one({'_id': existing.get('_id')})
+        updated = sampling_repo.find_one({'_id': existing.get('_id')})
         # Normalize and try to use DTO for response
         ro = normalize_doc(updated)
         try:

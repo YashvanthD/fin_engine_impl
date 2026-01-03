@@ -1,12 +1,11 @@
 from fin_server.repository.base_repository import BaseRepository
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
 from bson import ObjectId
 
 class TaskRepository(BaseRepository):
-    def __init__(self, db=None, collection_name="tasks"):
-        self.collection_name = collection_name
-        print("Initializing TaskRepository, collection:", self.collection_name)
-        self.collection = MongoRepositorySingleton.get_collection(self.collection_name, db)
+    def __init__(self, db, collection="task"):
+        self.collection_name = collection
+        print(f"Initializing {self.collection_name} collection:")
+        self.collection = db[collection]
 
     def create(self, data):
         # Ensure user_key is used for consistency

@@ -81,7 +81,6 @@ class TransactionDTO:
                 pass
         if collection is not None:
             return collection.insert_one(doc)
-        from fin_server.repository.mongo_helper import MongoRepositorySingleton
-        coll = MongoRepositorySingleton.get_instance().get_collection(collection_name)
+        from fin_server.repository.mongo_helper import get_collection
+        coll = get_collection(collection_name)
         return coll.insert_one(doc)
-

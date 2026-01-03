@@ -1,10 +1,10 @@
 from fin_server.utils.time_utils import get_time_date_dt
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
 
 class NotificationQueueRepository:
-    def __init__(self, db=None, collection_name="notifications_queue"):
-        self.collection_name = collection_name
-        self.collection = MongoRepositorySingleton.get_collection(self.collection_name, db)
+    def __init__(self, db, collection="notification_queue"):
+        self.collection_name = collection
+        print(f"Initializing {self.collection_name} collection:")
+        self.collection = db[collection]
 
     def enqueue(self, notification):
         notification['status'] = 'pending'

@@ -1,13 +1,12 @@
 from fin_server.repository.base_repository import BaseRepository
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
 import logging
 from fin_server.utils.time_utils import get_time_date_dt
 
 class PondRepository(BaseRepository):
-    def __init__(self, db=None, collection_name="ponds"):
-        self.collection_name = collection_name
-        print("Initializing PondRepository, collection:", self.collection_name)
-        self.collection = MongoRepositorySingleton.get_collection(self.collection_name, db)
+    def __init__(self, db, collection="pond"):
+        self.collection_name = collection
+        print(f"Initializing {self.collection_name} collection:")
+        self.collection = db[collection]
 
     def create(self, data):
         logging.info(f"Inserting pond data: {data}")
@@ -35,11 +34,6 @@ class PondRepository(BaseRepository):
         return {'$or': [{'pond_id': pond_id}, {'_id': pond_id}]}
 
     def atomic_update_metadata(self, pond_id, inc_fields=None, set_fields=None, unset_fields=None):
-        """Perform an atomic update on pond metadata using $inc/$set/$unset.
-        inc_fields: dict of fields to increment
-        set_fields: dict of fields to set
-        unset_fields: dict of fields to unset
-        """
         update = {}
         if inc_fields:
             update['$inc'] = inc_fields
@@ -49,5 +43,4 @@ class PondRepository(BaseRepository):
             update['$unset'] = unset_fields
         if not update:
             return None
-        # Use a query that matches by pond_id or _id so both insertion styles are supported
         return self.collection.update_one(self._pond_query(pond_id), update, upsert=False)

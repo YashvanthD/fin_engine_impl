@@ -1,12 +1,14 @@
 from flask import Blueprint, request, current_app
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
+
+from fin_server.repository.mongo_helper import get_collection
 from fin_server.utils.helpers import respond_success, respond_error, normalize_doc
 from fin_server.security.authentication import get_auth_payload
 from fin_server.dto.feeding_dto import FeedingRecordDTO
 from fin_server.exception.UnauthorizedError import UnauthorizedError
 
 feeding_bp = Blueprint('feeding', __name__, url_prefix='/feeding')
-repo = MongoRepositorySingleton.get_instance()
+
+feeding_repo = get_collection('feeding')
 
 @feeding_bp.route('/', methods=['POST'])
 def create_feeding_route():
@@ -19,7 +21,7 @@ def create_feeding_route():
         dto.recordedBy = payload.get('user_key')
         # Persist using DTO helper
         try:
-            res = dto.save(repo=repo, collection_name='feeding')
+            res = dto.save(repo=feeding_repo)
             # repo.create may return inserted id or pymongo result
             try:
                 inserted_id = getattr(res, 'inserted_id', res)
@@ -28,8 +30,7 @@ def create_feeding_route():
             inserted_id = str(inserted_id) if inserted_id is not None else None
         except Exception:
             # fallback to direct collection insert
-            fr = repo.get_collection('feeding')
-            r = fr.insert_one(dto.to_db_doc())
+            r = feeding_repo.insert_one(dto.to_db_doc())
             inserted_id = str(r.inserted_id)
         dto.id = inserted_id
         return respond_success(dto.to_dict(), status=201)
@@ -48,10 +49,9 @@ def list_feeding_route():
         if pondId:
             q['pondId'] = pondId
         try:
-            feeds = repo.feeding.find(q)
+            feeds = feeding_repo.find(q)
         except Exception:
-            fr = repo.get_collection('feeding')
-            feeds = list(fr.find(q).sort('created_at', -1))
+            feeds = list(feeding_repo.find(q).sort('created_at', -1))
         out = []
         for f in feeds:
             # normalize doc and convert via DTO
@@ -74,8 +74,7 @@ def list_feeding_route():
 @feeding_bp.route('/pond/<pond_id>', methods=['GET'])
 def feeding_by_pond_route(pond_id):
     try:
-        fr = repo.get_collection('feeding')
-        feeds = list(fr.find({'pondId': pond_id}).sort('created_at', -1))
+        feeds = list(feeding_repo.find({'pondId': pond_id}).sort('created_at', -1))
         out = []
         for f in feeds:
             fo = normalize_doc(f)

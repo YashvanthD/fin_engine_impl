@@ -1,197 +1,200 @@
 from flask import Blueprint, request, current_app
+from fin_server.repository.mongo_helper import get_collection
+from fin_server.utils.helpers import respond_success, respond_error, get_request_payload
+from werkzeug.exceptions import Unauthorized, Forbidden
 from bson import ObjectId
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
-from fin_server.security.authentication import get_auth_payload
-from fin_server.exception.UnauthorizedError import UnauthorizedError
-from fin_server.utils.helpers import respond_success, respond_error, normalize_doc, parse_iso_or_epoch
 
 expenses_bp = Blueprint('expenses', __name__, url_prefix='/expenses')
-repo_singleton = MongoRepositorySingleton.get_instance()
 
 
-@expenses_bp.route('', methods=['OPTIONS'])
-def expenses_options_root():
-    return current_app.make_default_options_response()
+expense_repo = get_collection('expenses')
+
+@expenses_bp.route('', methods=['POST'])
+def create_expense():
+    try:
+        payload = get_request_payload(request)
+        data = request.get_json(force=True)
+        if not expense_repo:
+            return respond_error('Expenses repository not available', status=500)
+        # minimal validation: amount and pond/account
+        inserted = expense_repo.create_expense(data)
+        return respond_success({'data': {'expenseId': str(inserted)}}, status=201)
+    except (Unauthorized, Forbidden) as ue:
+        return respond_error(str(ue), status=getattr(ue, 'code', 401))
+    except Exception as e:
+        current_app.logger.exception('Failed to create expense')
+        return respond_error('Server error', status=500)
 
 
 @expenses_bp.route('', methods=['GET'])
 def list_expenses():
     try:
-        payload = get_auth_payload(request)
-        args = request.args or {}
-        start_raw = args.get('startDate') or args.get('start_date') or args.get('from')
-        end_raw = args.get('endDate') or args.get('end_date') or args.get('to')
-        pond = args.get('pondId') or args.get('pond_id') or args.get('pond')
-        species = args.get('species')
-        tx_ref = args.get('transaction_ref') or args.get('transactionRef')
-        try:
-            limit = int(args.get('limit', 50))
-            if limit < 1:
-                limit = 50
-        except Exception:
-            limit = 50
-
+        payload = get_request_payload(request)
         q = {}
-        acct = payload.get('account_key')
-        if acct:
-            q['account_key'] = acct
-        if pond:
-            q['pond_id'] = pond
-        if species:
-            q['species'] = species
-        if tx_ref:
-            q['transaction_ref'] = tx_ref
-
-        # date range on created_at
-        start_dt = parse_iso_or_epoch(start_raw)
-        end_dt = parse_iso_or_epoch(end_raw)
-        if start_dt or end_dt:
-            date_q = {}
-            if start_dt is not None:
-                date_q['$gte'] = start_dt
-            if end_dt is not None:
-                date_q['$lte'] = end_dt
-            q['created_at'] = date_q
-
-        coll = repo_singleton.get_collection('expenses')
-        cursor = coll.find(q).sort([('created_at', -1)]).limit(limit)
-        recs = list(cursor)
-        out = [normalize_doc(r) for r in recs]
-        return respond_success(out)
-    except UnauthorizedError as ue:
-        return respond_error(str(ue), status=401)
+        account = request.args.get('account_key')
+        if account:
+            q['account_key'] = account
+        res = expense_repo.find_expenses(q)
+        return respond_success({'data': res})
+    except (Unauthorized, Forbidden) as ue:
+        return respond_error(str(ue), status=getattr(ue, 'code', 401))
     except Exception:
-        current_app.logger.exception('Error in list_expenses')
+        current_app.logger.exception('Failed to list expenses')
         return respond_error('Server error', status=500)
 
 
-@expenses_bp.route('', methods=['POST'])
-def create_expense():
+@expenses_bp.route('/<expense_id>/pay', methods=['POST'])
+def pay_expense(expense_id):
     try:
-        payload = get_auth_payload(request)
-        data = request.get_json(force=True)
-        # attach recorded_by/account_key from token if not present
-        data['recorded_by'] = data.get('recorded_by') or payload.get('user_key')
-        data['account_key'] = data.get('account_key') or payload.get('account_key')
-        # Use repository to create (it will create transaction and attach transaction_ref when available)
-        expenses_repo = repo_singleton.expenses
-        if expenses_repo:
-            res = expenses_repo.create(data)
-            inserted_id = getattr(res, 'inserted_id', None)
-            doc = repo_singleton.get_collection('expenses').find_one({'_id': inserted_id})
-            return respond_success(normalize_doc(doc), status=201)
-        else:
-            # fallback direct insert
-            coll = repo_singleton.get_collection('expenses')
-            rr = coll.insert_one(data)
-            doc = coll.find_one({'_id': rr.inserted_id})
-            return respond_success(normalize_doc(doc), status=201)
-    except UnauthorizedError as ue:
-        return respond_error(str(ue), status=401)
-    except Exception:
-        current_app.logger.exception('Error in create_expense')
-        return respond_error('Server error', status=500)
-
-
-@expenses_bp.route('/<expense_id>', methods=['GET'])
-def get_expense(expense_id):
-    try:
-        payload = get_auth_payload(request)
-        coll = repo_singleton.get_collection('expenses')
-        query = None
-        try:
-            query = {'_id': ObjectId(expense_id)}
-        except Exception:
-            query = {'transaction_ref': expense_id}
-        doc = coll.find_one(query)
-        if not doc:
+        payload = get_request_payload(request)
+        body = request.get_json(force=True)
+        # create payment and optionally a transaction
+        exp = expense_repo.find_expense({'_id': expense_id})
+        if not exp:
             return respond_error('Expense not found', status=404)
-        # enforce account scoping
-        acct = payload.get('account_key')
-        if acct and doc.get('account_key') and doc.get('account_key') != acct:
-            return respond_error('Not authorized', status=403)
-        return respond_success(normalize_doc(doc))
-    except UnauthorizedError as ue:
-        return respond_error(str(ue), status=401)
+        payment_doc = body.get('payment') if isinstance(body, dict) else {}
+        tx_doc = body.get('transaction') if isinstance(body, dict) else None
+        pay_id, tx_id = expense_repo.create_payment_and_transaction(payment_doc, tx_doc)
+        # mark expense paid
+        expense_repo.update_expense({'_id': exp['_id']}, {'status': 'paid', 'paymentId': pay_id})
+        return respond_success({'data': {'paymentId': str(pay_id), 'transactionId': str(tx_id) if tx_id else None}})
+    except (Unauthorized, Forbidden) as ue:
+        return respond_error(str(ue), status=getattr(ue, 'code', 401))
     except Exception:
-        current_app.logger.exception('Error in get_expense')
+        current_app.logger.exception('Failed to pay expense')
         return respond_error('Server error', status=500)
 
 
-@expenses_bp.route('/<expense_id>', methods=['PUT'])
-def update_expense(expense_id):
+@expenses_bp.route('/transactions', methods=['POST'])
+def create_transaction():
     try:
-        payload = get_auth_payload(request)
-        data = request.get_json(force=True)
-        coll = repo_singleton.get_collection('expenses')
-        query = None
-        try:
-            query = {'_id': ObjectId(expense_id)}
-        except Exception:
-            query = {'transaction_ref': expense_id}
-        existing = coll.find_one(query)
-        if not existing:
-            return respond_error('Expense not found', status=404)
-        acct = payload.get('account_key')
-        if acct and existing.get('account_key') and existing.get('account_key') != acct:
-            return respond_error('Not authorized', status=403)
-        # prevent changing transaction_ref directly
-        data.pop('transaction_ref', None)
-        coll.update_one({'_id': existing.get('_id')}, {'$set': data})
-        updated = coll.find_one({'_id': existing.get('_id')})
-        return respond_success(normalize_doc(updated))
-    except UnauthorizedError as ue:
-        return respond_error(str(ue), status=401)
+        payload = get_request_payload(request)
+        tx = request.get_json(force=True)
+        tx_repo = expense_repo.transactions
+        if not tx_repo:
+            return respond_error('Transactions repository not available', status=500)
+        tid = tx_repo.create_transaction(tx)
+        return respond_success({'data': {'transactionId': str(tid)}}, status=201)
+    except (Unauthorized, Forbidden) as ue:
+        return respond_error(str(ue), status=getattr(ue, 'code', 401))
     except Exception:
-        current_app.logger.exception('Error in update_expense')
+        current_app.logger.exception('Failed to create transaction')
         return respond_error('Server error', status=500)
 
 
-@expenses_bp.route('/<expense_id>', methods=['DELETE'])
-def delete_expense(expense_id):
+@expenses_bp.route('/payments', methods=['POST'])
+def create_payment():
     try:
-        payload = get_auth_payload(request)
-        coll = repo_singleton.get_collection('expenses')
-        try:
-            query = {'_id': ObjectId(expense_id)}
-        except Exception:
-            query = {'transaction_ref': expense_id}
-        existing = coll.find_one(query)
-        if not existing:
-            return respond_error('Expense not found', status=404)
-        acct = payload.get('account_key')
-        if acct and existing.get('account_key') and existing.get('account_key') != acct:
-            return respond_error('Not authorized', status=403)
-        coll.delete_one({'_id': existing.get('_id')})
-        return respond_success({'deleted': True})
-    except UnauthorizedError as ue:
-        return respond_error(str(ue), status=401)
+        payload = get_request_payload(request)
+        payment = request.get_json(force=True)
+        pay_repo = expense_repo.payments
+        if not pay_repo:
+            return respond_error('Payments repository not available', status=500)
+        res = pay_repo.create_payment(payment)
+        return respond_success({'data': {'paymentId': str(res.inserted_id)}}, status=201)
+    except (Unauthorized, Forbidden) as ue:
+        return respond_error(str(ue), status=getattr(ue, 'code', 401))
     except Exception:
-        current_app.logger.exception('Error in delete_expense')
+        current_app.logger.exception('Failed to create payment')
         return respond_error('Server error', status=500)
 
 
-# API blueprint for /api/expenses
+@expenses_bp.route('/payments/<payment_id>', methods=['GET'])
+def get_payment(payment_id):
+    try:
+        payload = get_request_payload(request)
+        pay = expense_repo.payments.find_one({'_id': ObjectId(payment_id)})
+        if not pay:
+            return respond_error('Payment not found', status=404)
+        return respond_success({'data': pay})
+    except (Unauthorized, Forbidden) as ue:
+        return respond_error(str(ue), status=getattr(ue, 'code', 401))
+    except Exception:
+        current_app.logger.exception('Failed to fetch payment')
+        return respond_error('Server error', status=500)
+
+
+@expenses_bp.route('/bank_statements/import', methods=['POST'])
+def import_bank_statement():
+    try:
+        payload = get_request_payload(request)
+        body = request.get_json(force=True)
+        bs_repo = expense_repo.bank_statements
+        sl_repo = expense_repo.statement_lines
+        if not bs_repo or not sl_repo:
+            return respond_error('Bank statements repositories not available', status=500)
+        stmt = body.get('statement')
+        lines = body.get('lines', [])
+        res = bs_repo.create(stmt)
+        if lines:
+            # attach bankStatementId
+            for l in lines:
+                l['bankStatementId'] = res.inserted_id
+            sl_repo.insert_many(lines)
+        return respond_success({'data': {'bankStatementId': str(res.inserted_id)}})
+    except (Unauthorized, Forbidden) as ue:
+        return respond_error(str(ue), status=getattr(ue, 'code', 401))
+    except Exception:
+        current_app.logger.exception('Failed to import bank statement')
+        return respond_error('Server error', status=500)
+
+
+@expenses_bp.route('/reconcile/by-external', methods=['POST'])
+def reconcile_by_external():
+    try:
+        payload = get_request_payload(request)
+        body = request.get_json(force=True)
+        bank_account_id = body.get('bankAccountId')
+        external_ref = body.get('externalRef')
+        if not bank_account_id or not external_ref:
+            return respond_error('bankAccountId and externalRef are required', status=400)
+        matches = expense_repo.reconcile_by_external_ref(ObjectId(bank_account_id) if not isinstance(bank_account_id, ObjectId) else bank_account_id, external_ref)
+        # convert ids to strings for response
+        out = []
+        for line, payment in matches:
+            out.append({'lineId': str(line.get('_id')), 'paymentId': str(payment.get('_id'))})
+        return respond_success({'data': out})
+    except (Unauthorized, Forbidden) as ue:
+        return respond_error(str(ue), status=getattr(ue, 'code', 401))
+    except Exception:
+        current_app.logger.exception('Failed to reconcile')
+        return respond_error('Server error', status=500)
+
+
+# API blueprint alias
 from flask import Blueprint as _Blueprint
-expenses_api_bp = _Blueprint('expenses_api', __name__, url_prefix='/api')
 
-@expenses_api_bp.route('/expenses', methods=['GET'])
-def api_list_expenses():
-    return list_expenses()
+expenses_api_bp = _Blueprint('expenses_api', __name__, url_prefix='/api')
 
 @expenses_api_bp.route('/expenses', methods=['POST'])
 def api_create_expense():
     return create_expense()
 
-@expenses_api_bp.route('/expenses/<expense_id>', methods=['GET'])
-def api_get_expense(expense_id):
-    return get_expense(expense_id)
+@expenses_api_bp.route('/expenses', methods=['GET'])
+def api_list_expenses():
+    return list_expenses()
 
-@expenses_api_bp.route('/expenses/<expense_id>', methods=['PUT'])
-def api_update_expense(expense_id):
-    return update_expense(expense_id)
+@expenses_api_bp.route('/expenses/<expense_id>/pay', methods=['POST'])
+def api_pay_expense(expense_id):
+    return pay_expense(expense_id)
 
-@expenses_api_bp.route('/expenses/<expense_id>', methods=['DELETE'])
-def api_delete_expense(expense_id):
-    return delete_expense(expense_id)
+# Additional API endpoints
+@expenses_api_bp.route('/transactions', methods=['POST'])
+def api_create_transaction():
+    return create_transaction()
 
+@expenses_api_bp.route('/payments', methods=['POST'])
+def api_create_payment():
+    return create_payment()
+
+@expenses_api_bp.route('/payments/<payment_id>', methods=['GET'])
+def api_get_payment(payment_id):
+    return get_payment(payment_id)
+
+@expenses_api_bp.route('/bank_statements/import', methods=['POST'])
+def api_import_bank_statement():
+    return import_bank_statement()
+
+@expenses_api_bp.route('/reconcile/by-external', methods=['POST'])
+def api_reconcile_by_external():
+    return reconcile_by_external()

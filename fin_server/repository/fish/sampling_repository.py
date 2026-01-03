@@ -1,12 +1,11 @@
 from fin_server.repository.base_repository import BaseRepository
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
 from fin_server.utils.time_utils import get_time_date_dt
 
 class SamplingRepository(BaseRepository):
-    def __init__(self, db=None, collection_name="sampling"):
-        self.collection_name = collection_name
-        print("Initializing SamplingRepository, collection:", self.collection_name)
-        self.collection = MongoRepositorySingleton.get_collection(self.collection_name, db)
+    def __init__(self, db, collection="sampling"):
+        self.collection_name = collection
+        print(f"Initializing {self.collection_name} collection:")
+        self.collection = db[collection]
 
     def create(self, data):
         doc = dict(data)

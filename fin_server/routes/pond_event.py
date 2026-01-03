@@ -1,28 +1,26 @@
-from flask import Blueprint, request, current_app
-from fin_server.repository.pond_event_repository import PondEventRepository
-from fin_server.repository.pond_repository import PondRepository
-from fin_server.repository.fish_analytics_repository import FishAnalyticsRepository
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
-from fin_server.exception.UnauthorizedError import UnauthorizedError
-from fin_server.utils.helpers import respond_error, respond_success, get_request_payload, normalize_doc
-from bson import ObjectId
-from datetime import datetime
 import zoneinfo
+from datetime import datetime
 
-from fin_server.repository.fish_activity_repository import FishActivityRepository
-from fin_server.utils.validation import validate_pond_event_payload
+from bson import ObjectId
+from flask import Blueprint, request, current_app
+
 from fin_server.dto.pond_event_dto import PondEventDTO
+from fin_server.exception.UnauthorizedError import UnauthorizedError
+from fin_server.repository.mongo_helper import get_collection
+from fin_server.utils.helpers import respond_error, respond_success, get_request_payload, normalize_doc
 from fin_server.utils.time_utils import get_time_date_dt
+from fin_server.utils.validation import validate_pond_event_payload
 
 pond_event_bp = Blueprint('pond_event', __name__, url_prefix='/pond_event')
 
 IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
 
-pond_event_repository = PondEventRepository()
-pond_repository = PondRepository()
-fish_analytics_repository = FishAnalyticsRepository()
-fish_mapping_repo = MongoRepositorySingleton.get_instance().fish_mapping
-fish_activity_repo = FishActivityRepository()
+fish_mapping_repo = get_collection('fish_mapping')
+fish_activity_repo = get_collection('fish_activity')
+pond_repository = get_collection('pond')
+pond_event_repository = get_collection('pond_event')
+fish_analytics_repository = get_collection('fish_analytics')
+
 
 def update_pond_metadata(pond_id, fish_id, count, event_type):
     # Use repository atomic helper for clarity

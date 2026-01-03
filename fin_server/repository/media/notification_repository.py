@@ -1,13 +1,12 @@
 from fin_server.repository.base_repository import BaseRepository
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
 from fin_server.utils.time_utils import get_time_date_dt
 import logging
 
 class NotificationRepository(BaseRepository):
-    def __init__(self, db=None, collection_name="notifications"):
-        self.collection_name = collection_name
-        print("Initializing NotificationRepository, collection:", self.collection_name)
-        self.collection = MongoRepositorySingleton.get_collection(self.collection_name, db)
+    def __init__(self, db, collection="notification"):
+        self.collection_name = collection
+        print(f"Initializing {self.collection_name} collection:")
+        self.collection = db[collection]
 
     def create(self, data):
         data['created_at'] = get_time_date_dt(include_time=True)

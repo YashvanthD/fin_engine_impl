@@ -1,5 +1,7 @@
 import logging
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
+
+from fin_server.repository.expenses import TransactionsRepository
+from fin_server.repository.mongo_helper import get_collection
 from fin_server.utils.time_utils import get_time_date_dt
 
 logger = logging.getLogger('fin_server.repository.stock_repository')
@@ -13,16 +15,15 @@ class StockRepository:
     """
 
     def __init__(self, db=None):
-        self.db = db or MongoRepositorySingleton.get_db()
-        self.ponds = MongoRepositorySingleton.get_collection('ponds', self.db)
-        self.pond_events = MongoRepositorySingleton.get_collection('pond_events', self.db)
-        self.fish = MongoRepositorySingleton.get_collection('fish', self.db)
-        self.fish_activity = MongoRepositorySingleton.get_collection('fish_activity', self.db)
-        self.fish_analytics = MongoRepositorySingleton.get_collection('fish_analytics', self.db)
-        self.fish_mapping = MongoRepositorySingleton.get_collection('fish_mapping', self.db)
+        self.ponds = get_collection('pond')
+        self.pond_events = get_collection('pond_events')
+        self.fish = get_collection('fish')
+        self.fish_activity = get_collection('fish_activity')
+        self.fish_analytics = get_collection('fish_analytics')
+        self.fish_mapping = get_collection('fish_mapping')
         # expenses collection may or may not be present
         try:
-            self.expenses = MongoRepositorySingleton.get_collection('expenses', self.db)
+            self.expenses = get_collection('expenses')
         except Exception:
             self.expenses = None
 
@@ -259,7 +260,6 @@ class StockRepository:
 
                     # create transaction ledger entry
                     try:
-                        from fin_server.repository.transactions_repository import TransactionsRepository
                         tr = TransactionsRepository(self.db)
                         tx_payload = {
                             'transaction_id': None,
@@ -316,7 +316,7 @@ class StockRepository:
                                 if average_weight is not None:
                                     s['average_weight'] = average_weight
                                 updated = True
-                                logger.info('Decremented stock for pond=%s species=%s old_quantity=%s new_quantity=%s', pond_id, species, old_q, s['quantity'])
+                                # logger.info('Decremented stock for pond=%s species=%s old_quantity=%s new_quantity=%s', pond_id, species, old_q, s['quantity'])
                                 break
                         if not updated:
                             stock_doc = {

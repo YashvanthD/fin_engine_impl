@@ -1,6 +1,7 @@
 from flask import Blueprint, request, current_app
-from fin_server.repository.task_repository import TaskRepository
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
+from fin_server.repository.media.task_repository import TaskRepository
+from fin_server.repository.mongo_helper import get_collection
+# Initialize mongo manager first and provide its DB to repositories
 from fin_server.security.authentication import UnauthorizedError
 from fin_server.utils.generator import resolve_user, get_time_date
 from fin_server.utils.helpers import get_request_payload, respond_error, respond_success
@@ -12,10 +13,10 @@ from datetime import datetime
 from fin_server.dto.task_dto import TaskDTO
 
 
-# Task repository and related singletons
-task_repo = TaskRepository()
-repo = MongoRepositorySingleton.get_instance()
-user_repo = repo.user
+# Initialize mongo manager and repositories, then construct repo-backed TaskRepository
+
+task_repo = get_collection('task')
+user_repo = get_collection('users')
 
 task_bp = Blueprint('task', __name__, url_prefix='/task')
 

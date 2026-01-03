@@ -1,17 +1,13 @@
-import random
 import base64
+import random
 import time
 
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
-from fin_server.security.authentication import AuthSecurity
-from fin_server.utils.time_utils import get_time_date_dt
+from fin_server.repository.mongo_helper import get_collection
 from fin_server.requests.subscription import default_subscription
-
-repo = MongoRepositorySingleton.get_instance()
-user_repo = repo.user
-
 from fin_server.security.authentication import AuthSecurity
-from fin_server.utils.time_utils import get_time_date, get_time_date_dt
+from fin_server.utils.time_utils import get_time_date_dt, get_time_date as _get_time_date
+
+user_repo = get_collection('users')
 
 
 def generate_key(length=6):
@@ -119,3 +115,6 @@ def get_default_end_date(current_time=None):
         current_time = time.time()
     end_epoch = int(current_time) + 86400
     return time.strftime('%Y-%m-%d', time.localtime(end_epoch))
+
+# Re-export get_time_date for callers that import it from this module
+get_time_date = _get_time_date

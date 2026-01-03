@@ -1,8 +1,8 @@
 import time
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
 
-repo = MongoRepositorySingleton.get_instance()
-user_repo = repo.user
+from fin_server.repository.mongo_helper import get_collection
+
+user_repo = get_collection('users')
 
 class UserDTO:
     # Class-level cache: user_key -> UserDTO

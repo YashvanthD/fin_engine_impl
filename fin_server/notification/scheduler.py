@@ -3,7 +3,7 @@ import threading
 from datetime import datetime
 from fin_server.utils.time_utils import get_time_date
 from .worker import NotificationWorker
-from fin_server.repository.task_repository import TaskRepository
+from fin_server.repository.media.task_repository import TaskRepository
 import logging
 
 class TaskScheduler:

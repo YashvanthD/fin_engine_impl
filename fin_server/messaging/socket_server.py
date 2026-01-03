@@ -1,15 +1,18 @@
-from flask_socketio import SocketIO, emit, join_room, leave_room, disconnect
-from flask import request
-from threading import Thread
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
-from fin_server.security.authentication import AuthSecurity, UnauthorizedError
 import logging
+from threading import Thread
+
+from flask import request
+from flask_socketio import SocketIO, emit, join_room, disconnect
+
+from fin_server.repository.mongo_helper import get_collection
+from fin_server.security.authentication import AuthSecurity
 
 # Flask app should be passed in from server.py
 socketio = SocketIO(async_mode='threading', cors_allowed_origins="*")
 
-notification_queue_repo = MongoRepositorySingleton.get_instance().notification_queue
-user_repo = MongoRepositorySingleton.get_instance().user
+
+notification_queue_repo = get_collection('notification_queue')
+user_repo = get_collection('users')
 
 def authenticate_socket(token):
     try:
@@ -80,4 +83,3 @@ def notification_worker():
 def start_notification_worker():
     t = Thread(target=notification_worker, daemon=True)
     t.start()
-

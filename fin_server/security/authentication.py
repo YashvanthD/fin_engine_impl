@@ -1,5 +1,7 @@
 from jose import jwt, JWTError
 from datetime import timedelta, datetime
+
+from fin_server.repository.mongo_helper import get_collection
 from fin_server.utils.time_utils import get_time_date_dt, now_std
 import base64
 from cryptography.hazmat.primitives import serialization
@@ -8,7 +10,8 @@ from cryptography.hazmat.backends import default_backend
 import hashlib
 import time
 from fin_server.exception.UnauthorizedError import UnauthorizedError
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
+
+user_repo = get_collection('users')
 
 class AuthSecurity:
     secret_key = None
@@ -143,7 +146,7 @@ class AuthSecurity:
     @classmethod
     def _user_repo(cls):
         """Convenience accessor for the UserRepository singleton."""
-        return MongoRepositorySingleton.get_instance().user
+        return user_repo
 
     @classmethod
     def validate(cls, repository, collection_name, token: str) -> bool:

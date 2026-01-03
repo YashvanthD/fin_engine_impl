@@ -1,11 +1,10 @@
 from fin_server.repository.base_repository import BaseRepository
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
 
 class UserRepository(BaseRepository):
-    def __init__(self, db=None, collection_name="users"):
-        self.collection_name = collection_name
-        print("Initializing User, collection:", self.collection_name)
-        self.collection = MongoRepositorySingleton.get_collection(self.collection_name, db)
+    def __init__(self, db, collection="users"):
+        self.collection_name = collection
+        print(f"Initializing {self.collection_name} collection:")
+        self.collection = db[collection]
 
     def create(self, data):
         # Check for duplicate user_key before insert

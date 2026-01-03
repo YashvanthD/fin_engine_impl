@@ -1,12 +1,13 @@
 from flask import Blueprint, request, current_app
 from bson import ObjectId
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
+from fin_server.repository.mongo_helper import init_repositories, get_manager
 from fin_server.security.authentication import get_auth_payload
 from fin_server.exception.UnauthorizedError import UnauthorizedError
 from fin_server.utils.helpers import respond_success, respond_error, normalize_doc, parse_iso_or_epoch
 
 transactions_bp = Blueprint('transactions', __name__, url_prefix='/transactions')
-repo_singleton = MongoRepositorySingleton.get_instance()
+
+repo_singleton = get_manager()
 
 
 @transactions_bp.route('', methods=['OPTIONS'])
@@ -187,4 +188,3 @@ def api_update_transaction(tx_id):
 @transactions_api_bp.route('/transactions/<tx_id>', methods=['DELETE'])
 def api_delete_transaction(tx_id):
     return delete_transaction(tx_id)
-

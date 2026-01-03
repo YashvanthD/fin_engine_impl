@@ -1,6 +1,10 @@
 from typing import Optional, Dict, Any
+
+from fin_server.repository.mongo_helper import get_collection
 from fin_server.utils.helpers import _to_iso_if_epoch, normalize_doc
 from fin_server.utils.time_utils import get_time_date_dt
+
+
 
 
 class FeedingRecordDTO:
@@ -17,6 +21,11 @@ class FeedingRecordDTO:
         self.recordedBy = recordedBy
         self.notes = notes
         self.extra = extra or {}
+        # default collection (use manager helper)
+        try:
+            self.coll = get_collection('feeding', create_if_missing=True)
+        except Exception:
+            self.coll = None
 
     @classmethod
     def from_doc(cls, doc: Dict[str, Any]):
@@ -110,12 +119,9 @@ class FeedingRecordDTO:
             return collection.insert_one(doc)
         # fallback: try to get collection from singleton
         try:
-            from fin_server.repository.mongo_helper import MongoRepositorySingleton
-            singleton = MongoRepositorySingleton.get_instance()
-            coll = singleton.get_collection(collection_name or 'feeding')
             if upsert and doc.get('_id'):
-                return coll.update_one({'_id': doc.get('_id')}, {'$set': doc}, upsert=True)
-            return coll.insert_one(doc)
+                return self.coll.update_one({'_id': doc.get('_id')}, {'$set': doc}, upsert=True)
+            return self.coll.insert_one(doc)
         except Exception as e:
             raise
 
@@ -127,8 +133,8 @@ class FeedingRecordDTO:
                 collection = repo.get_collection(collection_name)
             if collection is not None:
                 return collection.update_one(filter_query, {'$set': update_fields})
-            from fin_server.repository.mongo_helper import MongoRepositorySingleton
-            coll = MongoRepositorySingleton.get_instance().get_collection(collection_name or 'feeding')
+            # fallback to module helper
+            coll = get_collection(collection_name or 'feeding', create_if_missing=True)
             return coll.update_one(filter_query, {'$set': update_fields})
         except Exception:
             raise

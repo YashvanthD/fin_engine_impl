@@ -2,14 +2,14 @@
 
 Usage: run this script once against your DB (ensure MONGO_URI and MONGO_DB are set to the target DB).
 """
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
-from fin_server.repository.transactions_repository import TransactionsRepository
+from fin_server.repository.expenses import TransactionsRepository
+from fin_server.repository.mongo_helper import get_db
 import logging
 
 logging.basicConfig(level=logging.INFO)
 
 def main(limit=1000):
-    db = MongoRepositorySingleton.get_db()
+    db = get_db()
     coll = db['expenses']
     tr_repo = TransactionsRepository(db)
     q = {'transaction_ref': {'$exists': False}}

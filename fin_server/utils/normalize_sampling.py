@@ -1,5 +1,7 @@
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
+from fin_server.repository.mongo_helper import init_repositories, get_collection
 from fin_server.utils.helpers import normalize_doc
+
+
 
 
 def is_empty(v):
@@ -22,8 +24,7 @@ def normalize_sampling_docs(limit=None):
 
     Returns count of updated documents.
     """
-    mr = MongoRepositorySingleton.get_instance()
-    coll = mr.get_collection('sampling')
+    coll = get_collection('sampling', create_if_missing=True)
     query = {}
     cursor = coll.find(query).limit(limit) if limit else coll.find(query)
     updated = 0
@@ -86,4 +87,3 @@ def normalize_sampling_docs(limit=None):
 if __name__ == '__main__':
     n = normalize_sampling_docs()
     print(f"Normalized {n} sampling documents")
-

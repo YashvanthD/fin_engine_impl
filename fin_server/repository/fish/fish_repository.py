@@ -1,13 +1,15 @@
-from fin_server.repository.base_repository import BaseRepository
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
 import logging
+
+from fin_server.repository.base_repository import BaseRepository
+from fin_server.repository.mongo_helper import get_collection
 from fin_server.utils.time_utils import get_time_date_dt
 
+
 class FishRepository(BaseRepository):
-    def __init__(self, db=None, collection_name="fish"):
-        self.collection_name = collection_name
-        print("Initializing FishRepository, collection:", self.collection_name)
-        self.collection = MongoRepositorySingleton.get_collection(self.collection_name, db)
+    def __init__(self, db, collection="fish"):
+        self.collection_name = collection
+        print(f"Initializing {self.collection_name} collection:")
+        self.collection = db[collection]
 
     def create(self, data):
         logging.info(f"Inserting fish data: {data}")
@@ -96,29 +98,9 @@ class FishRepository(BaseRepository):
 
     # New: iterate over fish already in DB and map them to analytics/mapping
     def map_existing_fish(self, account_key=None, dry_run=True, limit=None):
-        """Map fish documents already present in the DB into `fish_analytics` and `fish_mapping`.
+        analytics_repo = get_collection('fish_analytics')
+        mapping_repo = get_collection('fish_mapping')
 
-        - If dry_run=True: do not perform any writes, return processed counts and sample mapped docs.
-        - If dry_run=False: upsert analytics and mapping documents for each fish.
-        - `account_key` if provided overrides per-fish account selection; otherwise `species_code` or `_id` is used.
-        - `limit` optionally restricts the number of records processed.
-
-        This function will try to read fish docs from the collection; if DB access fails it falls back to the local JSON fixture.
-        """
-        # Prepare repos
-        try:
-            mr = MongoRepositorySingleton.get_instance()
-            analytics_repo = mr.fish_analytics
-            mapping_repo = mr.fish_mapping
-        except Exception:
-            from fin_server.repository.fish_analytics_repository import FishAnalyticsRepository
-            from fin_server.repository.fish_mapping_repository import FishMappingRepository
-            analytics_repo = FishAnalyticsRepository()
-            mapping_col = MongoRepositorySingleton.get_collection('fish_mapping')
-            mapping_repo = FishMappingRepository(mapping_col)
-
-        # Load fish documents strictly from DB. If DB access fails, return an error -
-        # the source of truth should be the DB and users can add missing fish via the API.
         fish_docs = []
         try:
             query_cursor = self.collection.find({})
@@ -133,19 +115,16 @@ class FishRepository(BaseRepository):
         for rec in fish_docs:
             norm = self._normalize_doc(rec)
             acct = account_key or norm.get('species_code') or norm.get('_id')
-            # analytics
             try:
                 if not dry_run:
                     analytics_repo.create_or_update_from_fish(norm, account_key=acct)
                 mapped = analytics_repo.map_fish_to_analytics(norm, account_key=acct)
             except Exception as e:
                 mapped = {'error': str(e), 'fish_id': norm.get('_id')}
-            # mapping
             try:
                 if not dry_run:
                     mapping_repo.create_or_update_mapping(norm)
             except Exception:
-                # ignore mapping failures
                 pass
 
             samples.append(mapped)

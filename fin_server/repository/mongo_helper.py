@@ -1,138 +1,115 @@
+from typing import Optional, Any, Dict
 from pymongo import MongoClient
+from pymongo.database import Database
 import os
 import logging
+import importlib
+import json
 
 
-class MongoRepositorySingleton:
+logger = logging.getLogger(__name__)
+
+class MongoRepo:
     _instance = None
-    _db_instance = None
+    _client = None
+    _mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+    _is_initialized = False
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(MongoRepo, cls).__new__(cls)
+            cls._client = MongoClient(cls._mongo_uri)
+            cls._is_initialized = True
+        return cls._instance
+
+    def __init__(self):
+
+        self.user_db_name = 'user_db'
+        self.media_db_name = 'media_db'
+        self.expenses_db_name = 'expenses_db'
+        self.fish_db_name = 'fish_db'
+        self.analytics_db_name = 'analytics_db'
+
+        self.user_db = self._client[self.user_db_name]
+        self.media_db = self._client[self.media_db_name]
+        self.expenses_db = self._client[self.expenses_db_name]
+        self.fish_db = self._client[self.fish_db_name]
+        self.analytics_db = self._client[self.analytics_db_name]
+
+        #  USER DB REPOSITORIES
+        self.users: Any = None
+        self.fish_mapping: Any = None
+
+        # MEDIA DB REPOSITORIES
+        self.message: Any = None
+        self.notification: Any = None
+        self.notification_queue: Any = None
+        self.task: Any = None
+
+        # FISH DB REPOSITORIES
+        self.fish: Any = None
+        self.pond: Any = None
+        self.pond_event: Any = None
+        self.fish_analytics: Any = None
+        self.fish_activity = None
+        self.feedback: Any = None
+        self.feedback_queue: Any = None
+        self.sampling: Any = None
+
+        # EXPENSE/TRANSACTION DB REPOSITORIES
+        self.expenses: Any = None
+        self.transactions: Any = None
+        self.feeding: Any = None
+
+
+    def init_repositories(self):
+        from fin_server.repository.expenses import TransactionsRepository
+        from fin_server.repository.expenses_repository import ExpensesRepository
+        from fin_server.repository.fish import FishRepository, FishActivityRepository, PondEventRepository, PondRepository, \
+            FishAnalyticsRepository, SamplingRepository, FeedingRepository
+        from fin_server.repository.media import MessageRepository, NotificationRepository, NotificationQueueRepository, \
+            TaskRepository
+        from fin_server.repository.user import UserRepository, FishMappingRepository
+        # USER DB REPOSITORIES
+        self.users = UserRepository(self.user_db)
+        self.fish_mapping = FishMappingRepository(self.user_db)
+
+        # MEDIA DB REPOSITORIES
+        self.message = MessageRepository(self.media_db)
+        self.notification = NotificationRepository(self.media_db)
+        self.notification_queue = NotificationQueueRepository(self.media_db)
+        self.task = TaskRepository(self.media_db)
+
+        # FISH DB REPOSITORIES
+        self.fish = FishRepository(self.fish_db)
+        self.fish_activity = FishActivityRepository(self.fish_db)
+        self.fish_analytics = FishAnalyticsRepository(self.fish_db)
+        self.pond = PondRepository(self.fish_db)
+        self.pond_event = PondEventRepository(self.fish_db)
+        self.sampling = SamplingRepository(self.fish_db)
+
+        # EXPENSE/TRANSACTION DB REPOSITORIES
+        self.expenses = ExpensesRepository(self.expenses_db)
+        self.transactions = TransactionsRepository(self.expenses_db)
+        self.feeding = FeedingRepository(self.expenses_db)
 
     @classmethod
-    def get_db(cls):
-        """Singleton utility to get the MongoDB database object.
-
-        Uses the MONGO_URI and MONGO_DB environment variables. For local
-        development, defaults to mongodb://localhost:27017 and database
-        'user_db' if not explicitly set. In production you should always
-        set MONGO_URI and MONGO_DB securely via environment.
-        """
-        if cls._db_instance is not None:
-            return cls._db_instance
-        mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017')
-        db_name = os.getenv('MONGO_DB', 'user_db')
-        logging.info(f"[MongoRepositorySingleton] Connecting to MongoDB URI: {mongo_uri}, DB: {db_name}")
-        client = MongoClient(mongo_uri)
-        cls._db_instance = client[db_name]
-        return cls._db_instance
-
-    @classmethod
-    def get_collection(cls, collection_name, db=None):
-        """
-        Get a collection from the database, creating it if it does not exist.
-        Logs creation and errors. Returns the collection object.
-        """
-        if db is None:
-            db = cls.get_db()
-        try:
-            if collection_name not in db.list_collection_names():
-                db.create_collection(collection_name)
-                logging.info(f"Created '{collection_name}' collection in DB.")
-        except Exception as e:
-            logging.warning(f"Error ensuring '{collection_name}' collection exists: {e}")
-        return db[collection_name]
+    def is_initialized(cls):
+        return cls._is_initialized
 
     @classmethod
     def get_instance(cls):
-        return cls.__new__(cls)
-
-    def __new__(cls):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            print("Initializing MongoRepositorySingleton instance.")
-            cls._instance._init_repositories()
+            cls._instance = cls()
+            cls._instance.init_repositories()
         return cls._instance
 
-    def _init_repositories(self):
-        from fin_server.repository.fish_repository import FishRepository
-        from fin_server.repository.pond_repository import PondRepository
-        from fin_server.repository.pond_event_repository import PondEventRepository
-        from fin_server.repository.user_repository import UserRepository
-        from fin_server.repository.task_repository import TaskRepository
-        from fin_server.repository.message_repository import MessageRepository
-        from fin_server.repository.notification_repository import NotificationRepository
-        from fin_server.repository.notification_queue_repository import NotificationQueueRepository
-        from .fish_mapping_repository import FishMappingRepository
-        try:
-            from fin_server.repository.expenses_repository import ExpensesRepository
-        except Exception:
-            ExpensesRepository = None
-        try:
-            from fin_server.repository.transactions_repository import TransactionsRepository
-        except Exception:
-            TransactionsRepository = None
-        # New optional repositories for frontend compatibility (import defensively)
-        try:
-            from fin_server.repository.feeding_repository import FeedingRepository
-        except Exception:
-            FeedingRepository = None
-        try:
-            from fin_server.repository.sampling_repository import SamplingRepository
-        except Exception:
-            SamplingRepository = None
 
-        db = self.get_db()
-        self.fish = FishRepository(db)
-        self.pond = PondRepository(db)
-        self.pond_event = PondEventRepository(db)
-        self.user = UserRepository(db)
-        self.task = TaskRepository(db)
-        self.message = MessageRepository(db)
-        self.notification = NotificationRepository(db)
-        # optional repositories (only initialize if available)
-        self.feeding = FeedingRepository(db) if FeedingRepository else None
-        self.sampling = SamplingRepository(db) if SamplingRepository else None
-        # fish_mapping repository expects an already-created collection
-        self.fish_mapping = FishMappingRepository(self.get_collection('fish_mapping', db))
-        self.expenses = ExpensesRepository(db) if ExpensesRepository else None
-        self.transactions = TransactionsRepository(db) if TransactionsRepository else None
-        # NotificationQueueRepository expects a db instance (it will fetch/create its collection)
-        self.notification_queue = NotificationQueueRepository(db)
-        current_app_logger = logging.getLogger('fin_server.mongo_helper')
-        current_app_logger.debug('Initialized notification_queue repository with DB instance')
-        # Ensure recommended indexes for performance
-        try:
-            self._ensure_indexes(db)
-        except Exception as e:
-            logging.exception(f'Failed to ensure DB indexes: {e}')
+def get_collection(collection_name: str) -> Any:
+    mongo_repo = MongoRepo.get_instance()
+    # Don't need to init_repositories again; already handled in get_instance.
+    coll = getattr(mongo_repo, collection_name, None)
+    if coll is None:
+        raise ValueError(f"Database '{collection_name}' not found in MongoRepo")
+    return coll
 
-    def _ensure_indexes(self, db):
-        """Create recommended indexes used by query paths (idempotent)."""
-        try:
-            # pond_events: quick lookup by pond_id and created_at
-            db['pond_events'].create_index([('pond_id', 1), ('created_at', -1)], name='pond_events_pond_created_at')
-            # fish_activity: pond + fish + created_at
-            db['fish_activity'].create_index([('pond_id', 1), ('fish_id', 1), ('created_at', -1)], name='fish_activity_pond_fish_created_at')
-            # fish_analytics: species and account + date
-            db['fish_analytics'].create_index([('species_id', 1), ('account_key', 1), ('date_added', -1)], name='fish_analytics_species_account_date')
-            # fish_mapping: account_key
-            db['fish_mapping'].create_index([('account_key', 1)], unique=True, name='fish_mapping_account_key')
-            # ponds: pond_id
-            db['ponds'].create_index([('pond_id', 1)], unique=True, name='ponds_pond_id')
-            # transactions: transaction_id, account_key, created_at
-            try:
-                db['transactions'].create_index([('transaction_id', 1)], unique=False, name='transactions_transaction_id')
-                db['transactions'].create_index([('account_key', 1), ('created_at', -1)], name='transactions_account_created_at')
-            except Exception:
-                logging.exception('Failed to create transactions indexes')
-            # expenses: transaction_ref, transaction_id, account_key, pond_id, invoice_no
-            try:
-                db['expenses'].create_index([('transaction_ref', 1)], unique=False, name='expenses_transaction_ref')
-                db['expenses'].create_index([('transaction_id', 1)], unique=False, name='expenses_transaction_id')
-                db['expenses'].create_index([('account_key', 1), ('created_at', -1)], name='expenses_account_created_at')
-                db['expenses'].create_index([('pond_id', 1), ('created_at', -1)], name='expenses_pond_created_at')
-                db['expenses'].create_index([('invoice_no', 1)], unique=False, name='expenses_invoice_no')
-            except Exception:
-                logging.exception('Failed to create expenses indexes')
-            logging.info('Ensured recommended DB indexes')
-        except Exception as e:
-            logging.exception(f'Error creating indexes: {e}')

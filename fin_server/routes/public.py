@@ -1,10 +1,10 @@
 from flask import Blueprint, request, current_app
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
-from fin_server.utils.helpers import respond_error, respond_success
+
 from fin_server.dto.fish_dto import FishDTO
+from fin_server.utils.helpers import respond_error, respond_success
 
 public_bp = Blueprint('public', __name__, url_prefix='/public')
-repo = MongoRepositorySingleton.get_instance()
+
 
 @public_bp.route('/health', methods=['GET'])
 def health_check():
@@ -29,7 +29,7 @@ def health_check():
 def get_company_public(account_key):
     """Public endpoint: return minimal company info for given account_key (no auth required)."""
     try:
-        company = repo.user.get_collection('companies').find_one({'account_key': account_key})
+        company = repo.get_collection('companies').find_one({'account_key': account_key})
         if not company:
             return respond_error('Company not found', status=404)
         # Build minimal response

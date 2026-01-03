@@ -222,8 +222,8 @@ class GrowthRecordDTO:
             if upsert and doc.get('_id'):
                 return collection.replace_one({'_id': doc['_id']}, doc, upsert=True)
             return collection.insert_one(doc)
-        from fin_server.repository.mongo_helper import MongoRepositorySingleton
-        coll = MongoRepositorySingleton.get_instance().get_collection(collection_name)
+        from fin_server.repository.mongo_helper import get_collection
+        coll = get_collection(collection_name)
         if upsert and doc.get('_id'):
             return coll.replace_one({'_id': doc['_id']}, doc, upsert=True)
         return coll.insert_one(doc)
@@ -235,6 +235,6 @@ class GrowthRecordDTO:
             collection = repo.get_collection(collection_name)
         if collection is not None:
             return collection.update_one(filter_query, {'$set': update_fields})
-        from fin_server.repository.mongo_helper import MongoRepositorySingleton
-        coll = MongoRepositorySingleton.get_instance().get_collection(collection_name)
+        from fin_server.repository.mongo_helper import get_collection
+        coll = get_collection(collection_name)
         return coll.update_one(filter_query, {'$set': update_fields})

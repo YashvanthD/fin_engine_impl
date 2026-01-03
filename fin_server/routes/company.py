@@ -3,11 +3,11 @@ from flask import Blueprint, request, current_app
 from fin_server.utils.helpers import respond_success, respond_error
 
 from fin_server.security.authentication import AuthSecurity
-from fin_server.utils.generator import generate_key, build_user, build_refresh, get_current_timestamp, epoch_to_datetime
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
+from fin_server.utils.generator import build_user, get_current_timestamp, epoch_to_datetime
+from fin_server.repository.mongo_helper import get_collection, get_collection
 from fin_server.dto.company_dto import CompanyDTO
-repo = MongoRepositorySingleton.get_instance()
-user_repo = repo.user
+
+user_repo = get_collection('users')
 
 import os
 import hmac
@@ -142,8 +142,8 @@ def get_company(account_key):
         payload = AuthSecurity.decode_token(token)
         if payload.get('account_key') != account_key:
             return respond_error('Unauthorized', status=403)
-        # Companies are stored in a separate collection; use MongoRepositorySingleton to access it
-        coll = repo.get_collection('companies')
+        # Companies are stored in a separate collection; use helper to access it
+        coll = get_collection('companies')
         company = coll.find_one({'account_key': account_key})
         if not company:
             return respond_error('Company not found', status=404)
@@ -176,7 +176,7 @@ def update_company(account_key):
         user_key = payload.get('user_key')
         if payload.get('account_key') != account_key or 'admin' not in roles:
             return respond_error('Unauthorized', status=403)
-        coll = repo.get_collection('companies')
+        coll = get_collection('companies')
         company = coll.find_one({'account_key': account_key})
         if not company:
             return respond_error('Company not found', status=404)
@@ -216,7 +216,7 @@ def get_company_public(account_key):
     current_app.logger.debug('GET /api/v1/company/public/%s called', account_key)
     try:
         # Use companies collection for company lookup
-        coll = repo.get_collection('companies')
+        coll = get_collection('companies')
         company = coll.find_one({'account_key': account_key})
         if not company:
             return respond_error('Company not found', status=404)

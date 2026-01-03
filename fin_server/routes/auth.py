@@ -1,17 +1,17 @@
-import datetime
-import os
-import hmac
-import time
 import base64
+import datetime
+import hmac
+import logging
+import os
+import time
 
 from flask import Blueprint, request, current_app
-import logging
 
-from fin_server.security.authentication import AuthSecurity, get_auth_payload
-from fin_server.repository.mongo_helper import MongoRepositorySingleton
 from fin_server.dto.user_dto import UserDTO
-from fin_server.utils.helpers import respond_success, respond_error, normalize_doc
+from fin_server.repository.mongo_helper import get_collection
+from fin_server.security.authentication import AuthSecurity, get_auth_payload
 from fin_server.utils.generator import build_user
+from fin_server.utils.helpers import respond_success, respond_error, normalize_doc
 from fin_server.utils.validation import validate_signup, validate_signup_user, build_signup_login_response
 
 # In production, MASTER_ADMIN_PASSWORD must be provided via environment variables.
@@ -48,9 +48,7 @@ def _check_password_migrating(plain: str, stored: str):
 # Blueprint for auth routes
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
-# Define repo and user_repo variables
-repo = MongoRepositorySingleton.get_instance()
-user_repo = repo.user
+user_repo = get_collection('users')
 
 # Authentication Endpoints
 @auth_bp.route('/signup', methods=['POST'])
@@ -615,9 +613,9 @@ def api_auth_me():
         payload = get_auth_payload(request)
         user = None
         try:
-            from fin_server.repository.mongo_helper import MongoRepositorySingleton
-            repo = MongoRepositorySingleton.get_instance()
-            user = repo.user.find_one({'user_key': payload.get('user_key'), 'account_key': payload.get('account_key')})
+            from fin_server.repository.mongo_helper import get_collection
+            user_repo = get_collection('users')
+            user = user_repo.find_one({'user_key': payload.get('user_key'), 'account_key': payload.get('account_key')})
         except Exception:
             current_app.logger.exception('Error fetching user in api_auth_me')
         if not user:
@@ -640,12 +638,12 @@ def api_auth_refresh():
         try:
             payload = AuthSecurity.decode_token(refresh_token)
             user_key = payload.get('user_key')
-            from fin_server.repository.mongo_helper import MongoRepositorySingleton
-            repo = MongoRepositorySingleton.get_instance()
-            user = repo.user.find_one({'user_key': user_key})
+            from fin_server.repository.mongo_helper import get_collection
+            user_repo = get_collection('users')
+            user = user_repo.find_one({'user_key': user_key})
             if not user:
                 return respond_error('User not found', status=404)
-            valid = AuthSecurity.validate_refresh_token(repo.user, 'users', user_key, refresh_token)
+            valid = AuthSecurity.validate_refresh_token(user_repo, 'users', user_key, refresh_token)
             if not valid:
                 return respond_error('Invalid or expired refresh token', status=401)
             access_token = AuthSecurity.encode_token({'user_key': user_key, 'account_key': user.get('account_key'), 'roles': user.get('roles', []), 'type': 'access'})
