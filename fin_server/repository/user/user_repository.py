@@ -2,9 +2,10 @@ from fin_server.repository.base_repository import BaseRepository
 
 class UserRepository(BaseRepository):
     def __init__(self, db, collection="users"):
+        # Delegate to BaseRepository to set self.collection
+        super().__init__(db=db, collection_name=collection)
         self.collection_name = collection
         print(f"Initializing {self.collection_name} collection:")
-        self.collection = db[collection]
 
     def create(self, data):
         # Check for duplicate user_key before insert
@@ -15,10 +16,9 @@ class UserRepository(BaseRepository):
                 raise ValueError(f"Duplicate user_key '{user_key}' not allowed.")
         return str(self.collection.insert_one(data).inserted_id)
 
-    def find(self, query=None):
-        if query is None:
-            query = {}
-        return list(self.collection.find(query))
+    def find(self, query=None, *args, **kwargs):
+        # Return a list for backward compatibility; callers that need a cursor can use find_many or the BaseRepository.find()
+        return self.find_many(query)
 
     def find_one(self, query):
         return self.collection.find_one(query)

@@ -6,7 +6,7 @@ class FishAnalyticsRepository:
     def __init__(self, db=None, collection_name="fish_analytics"):
         self.collection_name = collection_name
         print("Initializing FishAnalyticsRepository, collection:", self.collection_name)
-        self.collection = get_collection(self.collection_name, create_if_missing=(db is None)) if db is None else db[collection_name]
+        self.collection = get_collection(self.collection_name) if db is None else db[collection_name]
 
     def add_batch(self, species_id, count, fish_age_in_month, date_added=None, account_key=None, event_id=None, fish_weight=None, pond_id=None):
         if not date_added:

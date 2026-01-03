@@ -1,20 +1,18 @@
 from flask import Blueprint, request, current_app
-from fin_server.repository.mongo_helper import get_collection
-from fin_server.routes.pond_event import fish_activity_repo
-from fin_server.utils.helpers import respond_success, respond_error, normalize_doc, parse_iso_or_epoch
-from fin_server.security.authentication import get_auth_payload
-from fin_server.exception.UnauthorizedError import UnauthorizedError
+
 from fin_server.dto.growth_dto import GrowthRecordDTO
-
-from fin_server.utils.generator import generate_sampling_id
-from fin_server.utils.validation import compute_total_amount_from_payload
-from fin_server.utils.threading_util import submit_task
-
-from fin_server.repository.fish.fish_analytics_repository import FishAnalyticsRepository
+from fin_server.exception.UnauthorizedError import UnauthorizedError
 from fin_server.repository.fish.fish_activity_repository import FishActivityRepository
+from fin_server.repository.fish.fish_analytics_repository import FishAnalyticsRepository
 from fin_server.repository.fish.stock_repository import StockRepository
-
-
+from fin_server.repository.mongo_helper import get_collection
+from fin_server.routes.fish import fish_analytics_repo
+from fin_server.routes.pond_event import fish_activity_repo
+from fin_server.security.authentication import get_auth_payload
+from fin_server.utils.generator import generate_sampling_id
+from fin_server.utils.helpers import respond_success, respond_error, normalize_doc, parse_iso_or_epoch
+from fin_server.utils.threading_util import submit_task
+from fin_server.utils.validation import compute_total_amount_from_payload
 
 sampling_bp = Blueprint('sampling', __name__, url_prefix='/sampling')
 
@@ -41,256 +39,105 @@ def create_sampling_route():
         dto.extra.setdefault('type', 'sampling')
 
         # Ensure sampling_id exists
-        try:
-            if not dto.extra.get('sampling_id'):
-                dto.extra['sampling_id'] = generate_sampling_id()
-        except Exception:
-            current_app.logger.exception('Failed to generate sampling id')
+        if not dto.extra.get('sampling_id'):
+            dto.extra['sampling_id'] = generate_sampling_id()
 
         # Compute total amount if not provided
-        total_amount = None
-        try:
-            total_amount = compute_total_amount_from_payload(data, dto)
-            if total_amount is not None:
-                try:
-                    dto.extra['totalAmount'] = total_amount
-                except Exception:
-                    dto.extra['totalAmount'] = total_amount
-        except Exception:
-            current_app.logger.exception('Failed to compute total amount')
+        total_amount = compute_total_amount_from_payload(data, dto)
+        if total_amount is not None:
+            dto.extra['totalAmount'] = total_amount
 
         # Persist sampling
-        try:
-            res = dto.save(repo=sampling_repo)
-            inserted_id = getattr(res, 'inserted_id', res)
-            inserted_id = str(inserted_id) if inserted_id is not None else None
-        except Exception:
-            rr = sampling_repo.insert_one(dto.to_db_doc())
-            inserted_id = str(rr.inserted_id)
-        dto.id = inserted_id
+        res = dto.save(repo=sampling_repo)
+        inserted_id = getattr(res, 'inserted_id', res)
+        dto.id = str(inserted_id) if inserted_id is not None else None
 
         # Detect buy vs sample
         extra = dto.extra or {}
-        try:
-            # Sampling API is treated as buy-only. Determine buy_count from payload or DTO.
-            is_buy = True
-            buy_count = None
-            # Prefer explicit canonical total_count in extra (snake_case) then camelCase
-            if 'total_count' in extra and extra.get('total_count') not in (None, ''):
-                try:
-                    buy_count = int(float(extra.get('total_count')))
-                except Exception:
-                    buy_count = None
-            elif 'totalCount' in extra and extra.get('totalCount') not in (None, ''):
-                try:
-                    buy_count = int(float(extra.get('totalCount')))
-                except Exception:
-                    buy_count = None
+        # Sampling API is treated as buy-only. Use canonical fields only.
+        is_buy = True
+        buy_count = None
+        if 'total_count' in extra:
+            buy_count = int(extra['total_count'])
+        elif 'totalCount' in extra:
+            buy_count = int(extra['totalCount'])
+        elif getattr(dto, 'sampleSize', None) is not None:
+            buy_count = int(dto.sampleSize)
 
-            # Fallback: look inside dto.extra if present
-            if buy_count is None and isinstance(dto.extra, dict):
-                if 'total_count' in dto.extra and dto.extra.get('total_count') not in (None, ''):
-                    try:
-                        buy_count = int(float(dto.extra.get('total_count')))
-                    except Exception:
-                        buy_count = None
-                elif 'totalCount' in dto.extra and dto.extra.get('totalCount') not in (None, ''):
-                    try:
-                        buy_count = int(float(dto.extra.get('totalCount')))
-                    except Exception:
-                        buy_count = None
-
-            # Final fallback: older count-like fields and DTO sampleSize (but sampleSize is test only)
-            if buy_count is None:
-                count_keys = ['buy_count', 'bought', 'count', 'quantity']
-                for ck in count_keys:
-                    if ck in extra and extra.get(ck) is not None:
-                        try:
-                            buy_count = int(float(extra.get(ck)))
-                            break
-                        except Exception:
-                            continue
-            if buy_count is None and dto is not None:
-                for attr in ('sampleSize', 'sample_size'):
-                    val = getattr(dto, attr, None)
-                    if val is not None:
-                        try:
-                            buy_count = int(float(val))
-                            break
-                        except Exception:
-                            continue
-        except Exception:
-            current_app.logger.exception('Failed to determine buy count')
-            is_buy = True
-            buy_count = None
         # If this is a buy/purchase sampling, persist the total_count in DTO extra so it is stored and returned
-        try:
-            if is_buy and buy_count is not None:
-                dto.extra['total_count'] = int(buy_count)
-        except Exception:
-            current_app.logger.exception('Failed to set dto.extra["total_count"]')
+        if is_buy and buy_count is not None:
+            dto.extra['total_count'] = int(buy_count)
 
         # Best-effort post-processing operations
         # 1) Buy handling
         if is_buy and buy_count and buy_count > 0:
-            try:
-                # pond metadata increment
-                try:
-                    pond_repo.atomic_update_metadata(dto.pondId, inc_fields={'fish_count': buy_count})
-                except Exception:
-                    current_app.logger.exception('Failed to atomic update pond metadata for buy')
+            # pond metadata increment
+            pond_repo.atomic_update_metadata(dto.pondId, inc_fields={'fish_count': buy_count})
 
-                # pond event
-                try:
-                    event_doc = {'pond_id': dto.pondId, 'event_type': 'buy', 'details': {'species': dto.species, 'count': buy_count, 'cost_unit': extra.get('costUnit') or extra.get('cost_unit'), 'total_amount': extra.get('totalAmount') or extra.get('total_amount')}, 'recorded_by': dto.recordedBy}
-                    try:
-                        pond_event_repo.create(event_doc)
-                    except Exception:
-                        get_collection('pond_event').insert_one(event_doc)
-                except Exception:
-                    current_app.logger.exception('Failed to create pond_event for buy')
+            # pond event
+            event_doc = {
+                'pond_id': dto.pondId,
+                'event_type': 'buy',
+                'details': {'species': dto.species, 'count': buy_count, 'cost_unit': extra.get('costUnit') or extra.get('cost_unit'), 'total_amount': extra.get('totalAmount') or extra.get('total_amount')},
+                'recorded_by': dto.recordedBy
+            }
+            pond_event_repo.create(event_doc)
 
-                # fish repo update/create
-                try:
-                    existing = fish_repo.find_one({'species_code': dto.species})
-                    if existing:
-                        try:
-                            fish_repo.update({'_id': existing.get('_id')}, {'current_stock': (existing.get('current_stock', 0) or 0) + buy_count})
-                        except Exception:
-                            # best-effort direct update
-                            fish_repo.update_one({'_id': existing.get('_id')}, {'$inc': {'current_stock': buy_count}})
-                    else:
-                        fish_doc = {'_id': dto.species, 'species_code': dto.species, 'common_name': dto.species, 'current_stock': buy_count, 'account_key': payload.get('account_key')}
-                        try:
-                            fish_repo.create(fish_doc)
-                        except Exception:
-                            fish_repo.insert_one(fish_doc)
-                except Exception:
-                    current_app.logger.exception('Failed to update/create fish record for buy')
+            # fish repo update/create
+            existing = fish_repo.find_one({'species_code': dto.species})
+            if existing:
+                fish_repo.update({'_id': existing.get('_id')}, {'current_stock': (existing.get('current_stock', 0) or 0) + buy_count})
+            else:
+                fish_doc = {'_id': dto.species, 'species_code': dto.species, 'common_name': dto.species, 'current_stock': buy_count, 'account_key': payload.get('account_key')}
+                fish_repo.create(fish_doc)
 
-                # expenses
-                total_amt = None
-                try:
-                    total_amt = None
-                    if 'totalAmount' in extra:
-                        try:
-                            total_amt = float(extra.get('totalAmount'))
-                        except Exception:
-                            total_amt = None
-                    elif 'total_amount' in extra:
-                        try:
-                            total_amt = float(extra.get('total_amount'))
-                        except Exception:
-                            total_amt = None
-                    elif getattr(dto, 'cost', None) is not None:
-                        try:
-                            total_amt = float(dto.cost) * float(buy_count)
-                        except Exception:
-                            total_amt = None
-                    if expenses_repo and total_amt is not None:
-                        # Build a richer expense document with requested defaults for fish buys
-                        # Defaults: type='fish', action='buy', payment_method='cash', category='asset'
-                        metadata = {}
-                        # promote common metadata fields from extra or DTO
-                        metadata['species'] = extra.get('species') or getattr(dto, 'species', None)
-                        metadata['description'] = extra.get('description') or extra.get('notes') or getattr(dto, 'notes', None)
-                        # optional free-form note/reasons
-                        if extra.get('note') is not None:
-                            metadata['note'] = extra.get('note')
-                        if extra.get('reasons') is not None:
-                            metadata['reasons'] = extra.get('reasons')
-                        # preserve any explicit type in metadata (not to confuse top-level 'type')
-                        if extra.get('type') is not None:
-                            metadata['type'] = extra.get('type')
-                        # include any other explicit metadata keys (best-effort)
-                        for k in ('fish_age_in_month', 'sampling_id', 'batch_id'):
-                            if extra.get(k) is not None:
-                                metadata[k] = extra.get(k)
+            # expenses
+            total_amt = None
+            if 'totalAmount' in extra:
+                total_amt = float(extra.get('totalAmount'))
+            elif getattr(dto, 'cost', None) is not None:
+                total_amt = float(dto.cost) * float(buy_count)
+            if expenses_repo and total_amt is not None:
+                expense_doc = {
+                    'pond_id': dto.pondId,
+                    'amount': total_amt,
+                    'currency': extra.get('currency') or 'INR',
+                    'payment_method': extra.get('payment_method') or 'cash',
+                    'notes': extra.get('notes') or getattr(dto, 'notes', None),
+                    'recorded_by': dto.recordedBy,
+                    'account_key': payload.get('account_key'),
+                    # domain metadata
+                    'category': extra.get('category') or 'asset',
+                    'action': extra.get('action') or 'buy',
+                    'type': extra.get('type') or 'fish'
+                }
+                # strip none
+                expense_doc = {k: v for k, v in expense_doc.items() if v is not None}
+                # Use the ExpensesRepository API (create_expense). Fail fast if not available.
+                if not hasattr(expenses_repo, 'create_expense'):
+                    # This is a strict change: require the higher-level expenses API
+                    raise RuntimeError('Expenses repository missing create_expense API')
+                expenses_repo.create_expense(expense_doc)
 
-                        # Clean metadata: remove None entries
-                        metadata = {k: v for k, v in metadata.items() if v is not None}
-                        # Build expense doc and remove None entries before persisting
-                        expense_doc = {
-                            'pond_id': dto.pondId,
-                            # top-level classification fields
-                            'category': extra.get('category') or 'asset',
-                            'action': extra.get('action') or 'buy',
-                            'type': extra.get('type') or 'fish',
-                            'amount': total_amt,
-                            'currency': extra.get('currency') or 'INR',
-                            # payment method default to 'cash' if not provided
-                            'payment_method': extra.get('payment_method') or extra.get('paymentMethod') or 'cash',
-                            'notes': extra.get('notes') or extra.get('description') or getattr(dto, 'notes', None),
-                            'recorded_by': dto.recordedBy,
-                            'account_key': payload.get('account_key'),
-                            'creditor': extra.get('creditor') or extra.get('credited_to') or extra.get('vendor'),
-                            'debited': extra.get('debited') or extra.get('debited_to'),
-                            'transaction_id': extra.get('transaction_id') or extra.get('transactionId') or extra.get('tx_id'),
-                            'gst': extra.get('gst'),
-                            'tax': extra.get('tax'),
-                            'invoice_no': extra.get('invoice_no') or extra.get('invoiceNo') or extra.get('invoice'),
-                            'vendor': extra.get('vendor'),
-                        }
-                        if metadata:
-                            expense_doc['metadata'] = metadata
-                        # Strip None values so we don't store nulls
-                        expense_doc = {k: v for k, v in expense_doc.items() if v is not None}
-                        try:
-                            # ExpensesRepository.create will also create a transaction and attach a transaction_ref when available
-                            expenses_repo.create(expense_doc)
-                        except Exception:
-                            # fallback to direct insert if repository unavailable
-                            try:
-                                expenses_repo.insert_one(expense_doc)
-                            except Exception:
-                                current_app.logger.exception('Failed to insert expense document')
-                except Exception:
-                    current_app.logger.exception('Failed to insert expense record for buy')
+            # analytics batch (positive)
+            fish_age = extra.get('fish_age_in_month') or extra.get('fish_age')
+            fish_weight = getattr(dto, 'averageWeight', None)
+            event_id = f"{payload.get('account_key')}-{dto.species}-{dto.pondId}-{dto.id}"
+            fish_analytics_repo.add_batch(dto.species, int(buy_count), int(fish_age) if fish_age is not None else 0, account_key=payload.get('account_key'), event_id=event_id, fish_weight=fish_weight if fish_weight is not None else None, pond_id=dto.pondId)
 
-                # analytics batch (positive)
-                try:
-                    fa = FishAnalyticsRepository()
-                    fish_age = extra.get('fish_age_in_month') or extra.get('fish_age')
-                    fish_weight = getattr(dto, 'averageWeight', None)
-                    event_id = f"{payload.get('account_key')}-{dto.species}-{dto.pondId}-{inserted_id}"
-                    fa.add_batch(dto.species, int(buy_count), int(fish_age) if fish_age is not None else 0, account_key=payload.get('account_key'), event_id=event_id, fish_weight=fish_weight if fish_weight is not None else None, pond_id=dto.pondId)
-                except Exception:
-                    current_app.logger.exception('Failed to add analytics batch for buy')
+            # fish_activity
+            activity_doc = {'account_key': payload.get('account_key'), 'pond_id': dto.pondId, 'fish_id': dto.species, 'event_type': 'buy', 'count': buy_count, 'details': extra.get('details') or {}, 'user_key': dto.recordedBy}
+            fish_activity_repo.create(activity_doc)
 
-                # fish_activity
-                try:
-                    far = FishActivityRepository()
-                    activity_doc = {'account_key': payload.get('account_key'), 'pond_id': dto.pondId, 'fish_id': dto.species, 'event_type': 'buy', 'count': buy_count, 'details': extra.get('details') or {}, 'user_key': dto.recordedBy}
-                    try:
-                        far.create(activity_doc)
-                    except Exception:
-                        fish_activity_repo.insert_one(activity_doc)
-                except Exception:
-                    current_app.logger.exception('Failed to record fish_activity for buy')
+            # update pond.current_stock using reusable StockRepository asynchronously
+            def _run_stock_update(account_key, pond_id, species, count, average_weight, sampling_id_val, recorded_by_val, expense_amount_val):
+                sr = StockRepository()
+                ok_inner = sr.add_stock_transactional(account_key, pond_id, species, count, average_weight=average_weight, sampling_id=sampling_id_val, recorded_by=recorded_by_val, expense_amount=expense_amount_val, timeout_seconds=3)
+                if not ok_inner:
+                    sr.add_stock_to_pond(account_key, pond_id, species, count, average_weight=average_weight, sampling_id=sampling_id_val, recorded_by=recorded_by_val, create_event=False, create_activity=False, create_analytics=False, create_expense=True, expense_amount=expense_amount_val)
 
-                # update pond.current_stock using reusable StockRepository
-                # Run stock update asynchronously so transaction (HTTP response) returns fast.
-                try:
-                    def _run_stock_update(account_key, pond_id, species, count, average_weight, sampling_id_val, recorded_by_val, expense_amount_val):
-                        try:
-                            sr = StockRepository()
-                            ok_inner = sr.add_stock_transactional(account_key, pond_id, species, count, average_weight=average_weight, sampling_id=sampling_id_val, recorded_by=recorded_by_val, expense_amount=expense_amount_val, timeout_seconds=3)
-                            if not ok_inner:
-                                # fallback to non-transactional update
-                                sr.add_stock_to_pond(account_key, pond_id, species, count, average_weight=average_weight, sampling_id=sampling_id_val, recorded_by=recorded_by_val, create_event=False, create_activity=False, create_analytics=False, create_expense=True, expense_amount=expense_amount_val)
-                        except Exception:
-                            current_app.logger.exception('Failed background stock update')
-
-                    sampling_id_val = dto.extra.get('sampling_id') or inserted_id
-                    try:
-                        submit_task(_run_stock_update, payload.get('account_key'), dto.pondId, dto.species, buy_count, getattr(dto, 'averageWeight', None), sampling_id_val, dto.recordedBy, total_amt)
-                    except Exception:
-                        current_app.logger.exception('Failed to schedule background stock update (executor)')
-                except Exception:
-                    current_app.logger.exception('Failed to schedule background stock update')
-
-            except Exception:
-                current_app.logger.exception('Unexpected error during buy post-processing')
+            sampling_id_val = dto.extra.get('sampling_id') or dto.id
+            submit_task(_run_stock_update, payload.get('account_key'), dto.pondId, dto.species, buy_count, getattr(dto, 'averageWeight', None), sampling_id_val, dto.recordedBy, total_amt)
 
         return respond_success(dto.to_dict(), status=201)
     except UnauthorizedError as ue:

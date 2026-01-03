@@ -1,5 +1,6 @@
 from typing import Optional, Dict, Any
 from fin_server.utils.helpers import _to_iso_if_epoch, normalize_doc
+from fin_server.utils.normalizers import first_present
 
 
 class GrowthRecordDTO:
@@ -25,16 +26,16 @@ class GrowthRecordDTO:
         d = normalize_doc(doc)
         return cls(
             id=str(d.get('_id')) if d.get('_id') else d.get('id'),
-            pondId=d.get('pondId') or d.get('pond_id') or d.get('pond'),
-            species=d.get('species') or d.get('species_code'),
-            samplingDate=d.get('sampling_date') or d.get('samplingDate'),
-            sampleSize=d.get('sample_size') or d.get('sampleSize'),
-            averageWeight=d.get('average_weight') or d.get('averageWeight'),
-            averageLength=d.get('average_length') or d.get('averageLength'),
-            survivalRate=d.get('survival_rate') or d.get('survivalRate'),
-            feedConversionRatio=d.get('feed_conversion_ratio') or d.get('feedConversionRatio'),
-            cost=d.get('cost') or d.get('cost_amount') or d.get('total_cost'),
-            recordedBy=d.get('recordedBy') or d.get('recorded_by'),
+            pondId=first_present(d, ['pondId', 'pond_id', 'pond']),
+            species=first_present(d, ['species', 'species_code']),
+            samplingDate=first_present(d, ['sampling_date', 'samplingDate']),
+            sampleSize=first_present(d, ['sample_size', 'sampleSize']),
+            averageWeight=first_present(d, ['average_weight', 'averageWeight']),
+            averageLength=first_present(d, ['average_length', 'averageLength']),
+            survivalRate=first_present(d, ['survival_rate', 'survivalRate']),
+            feedConversionRatio=first_present(d, ['feed_conversion_ratio', 'feedConversionRatio']),
+            cost=first_present(d, ['cost', 'cost_amount', 'total_cost']),
+            recordedBy=first_present(d, ['recordedBy', 'recorded_by']),
             notes=d.get('notes'),
             extra={k: v for k, v in d.items()}
         )
@@ -43,16 +44,16 @@ class GrowthRecordDTO:
     def from_request(cls, payload: Dict[str, Any]):
         return cls(
             id=payload.get('id') or payload.get('_id'),
-            pondId=payload.get('pondId') or payload.get('pond_id') or payload.get('pond'),
-            species=payload.get('species') or payload.get('species_code'),
-            samplingDate=payload.get('samplingDate') or payload.get('sampling_date'),
-            sampleSize=payload.get('sampleSize') or payload.get('sample_size'),
-            averageWeight=payload.get('averageWeight') or payload.get('average_weight'),
-            averageLength=payload.get('averageLength') or payload.get('average_length'),
-            survivalRate=payload.get('survivalRate') or payload.get('survival_rate'),
-            feedConversionRatio=payload.get('feedConversionRatio') or payload.get('feed_conversion_ratio'),
-            cost=payload.get('cost') or payload.get('cost_amount') or payload.get('total_cost'),
-            recordedBy=payload.get('recordedBy') or payload.get('recorded_by'),
+            pondId=first_present(payload, ['pondId', 'pond_id', 'pond']),
+            species=first_present(payload, ['species', 'species_code']),
+            samplingDate=first_present(payload, ['samplingDate', 'sampling_date']),
+            sampleSize=first_present(payload, ['sampleSize', 'sample_size']),
+            averageWeight=first_present(payload, ['averageWeight', 'average_weight']),
+            averageLength=first_present(payload, ['averageLength', 'average_length']),
+            survivalRate=first_present(payload, ['survivalRate', 'survival_rate']),
+            feedConversionRatio=first_present(payload, ['feedConversionRatio', 'feed_conversion_ratio']),
+            cost=first_present(payload, ['cost', 'cost_amount', 'total_cost']),
+            recordedBy=first_present(payload, ['recordedBy', 'recorded_by']),
             notes=payload.get('notes'),
             extra={k: v for k, v in payload.items()}
         )
@@ -205,34 +206,26 @@ class GrowthRecordDTO:
         if 'created_at' not in doc:
             doc['created_at'] = get_time_date_dt(include_time=True)
         if repo is not None:
-            try:
-                if hasattr(repo, 'create'):
-                    return repo.create(doc)
-            except Exception:
-                pass
-            try:
+            if hasattr(repo, 'create'):
+                return repo.create(doc)
+            # If repo exposes insert_one directly (collection adapter), use it
+            if hasattr(repo, 'insert_one'):
+                return repo.insert_one(doc)
+            # Otherwise attempt to get a collection from repo
+            if hasattr(repo, 'get_collection'):
                 coll = repo.get_collection(collection_name)
-                if coll:
-                    if upsert and doc.get('_id'):
-                        return coll.replace_one({'_id': doc['_id']}, doc, upsert=True)
-                    return coll.insert_one(doc)
-            except Exception:
-                pass
+                return coll.insert_one(doc)
         if collection is not None:
-            if upsert and doc.get('_id'):
-                return collection.replace_one({'_id': doc['_id']}, doc, upsert=True)
             return collection.insert_one(doc)
         from fin_server.repository.mongo_helper import get_collection
         coll = get_collection(collection_name)
-        if upsert and doc.get('_id'):
-            return coll.replace_one({'_id': doc['_id']}, doc, upsert=True)
         return coll.insert_one(doc)
 
     def update(self, filter_query: Dict[str, Any], update_fields: Dict[str, Any], collection=None, repo=None, collection_name: Optional[str] = 'sampling'):
         if repo is not None and hasattr(repo, 'update'):
             return repo.update(filter_query, update_fields)
-        if collection is None and repo is not None and hasattr(repo, 'get_collection'):
-            collection = repo.get_collection(collection_name)
+        if repo is not None and hasattr(repo, 'update_one'):
+            return repo.update_one(filter_query, {'$set': update_fields})
         if collection is not None:
             return collection.update_one(filter_query, {'$set': update_fields})
         from fin_server.repository.mongo_helper import get_collection

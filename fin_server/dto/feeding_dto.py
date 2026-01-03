@@ -23,7 +23,7 @@ class FeedingRecordDTO:
         self.extra = extra or {}
         # default collection (use manager helper)
         try:
-            self.coll = get_collection('feeding', create_if_missing=True)
+            self.coll = get_collection('feeding')
         except Exception:
             self.coll = None
 
@@ -134,7 +134,7 @@ class FeedingRecordDTO:
             if collection is not None:
                 return collection.update_one(filter_query, {'$set': update_fields})
             # fallback to module helper
-            coll = get_collection(collection_name or 'feeding', create_if_missing=True)
+            coll = get_collection(collection_name or 'feeding')
             return coll.update_one(filter_query, {'$set': update_fields})
         except Exception:
             raise

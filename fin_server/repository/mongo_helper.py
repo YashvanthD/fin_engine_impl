@@ -113,3 +113,18 @@ def get_collection(collection_name: str) -> Any:
         raise ValueError(f"Database '{collection_name}' not found in MongoRepo")
     return coll
 
+
+class CollectionAdapter:
+    def __init__(self, collection):
+        self._coll = collection
+
+    def find(self, query=None, *args, **kwargs):
+        if query is None:
+            query = {}
+        # Return the raw pymongo Cursor so callers can chain sort/limit
+        return self._coll.find(query, *args, **kwargs)
+
+    def find_many(self, query=None, *args, **kwargs):
+        if query is None:
+            query = {}
+        return list(self._coll.find(query, *args, **kwargs))

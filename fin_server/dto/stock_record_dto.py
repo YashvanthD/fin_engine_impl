@@ -20,7 +20,7 @@ class StockRecordDTO:
         self.expectedHarvestDate = _to_iso_if_epoch(expectedHarvestDate) if expectedHarvestDate is not None else None
         self.extra = extra or {}
         try:
-            self.stock_coll = get_collection('ponds', create_if_missing=True)
+            self.stock_coll = get_collection('ponds')
         except Exception:
             self.stock_coll = None
 
