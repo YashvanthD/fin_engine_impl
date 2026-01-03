@@ -3,7 +3,7 @@ from fin_server.security.authentication import get_auth_payload
 from fin_server.exception.UnauthorizedError import UnauthorizedError
 from datetime import datetime, timezone
 import zoneinfo
-from werkzeug.exceptions import Forbidden
+from werkzeug.exceptions import Forbidden, Unauthorized
 
 
 def respond_error(message_or_dict, status=400):
@@ -451,8 +451,8 @@ def get_request_payload(req=None, required_role: str = None, account_key: str = 
         payload = get_auth_payload(req)
     except UnauthorizedError as e:
         current_app.logger.warning(f'Auth failure: {e}')
-        # Preserve project-specific UnauthorizedError so existing code paths catch it
-        raise UnauthorizedError(str(e))
+        # Raise Werkzeug Unauthorized so Flask will return HTTP 401 (and our global handler can format JSON)
+        raise Unauthorized(str(e))
 
     # Authorization checks (optional)
     try:

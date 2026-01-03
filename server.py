@@ -19,6 +19,8 @@ from fin_server.security.authentication import AuthSecurity
 from fin_server.notification.scheduler import TaskScheduler
 from fin_server.messaging.socket_server import socketio, start_notification_worker
 from fin_server.utils.metrics import collector as metrics_collector
+from fin_server.utils.helpers import respond_error
+from werkzeug.exceptions import Unauthorized, Forbidden
 import logging
 
 try:
@@ -91,6 +93,23 @@ def create_app() -> Flask:
     app.register_blueprint(expenses_api_bp)
 
     logging.basicConfig(level=logging.INFO)
+
+    # Global error handlers: return JSON error payloads for auth/permission failures
+    @app.errorhandler(Unauthorized)
+    def _handle_unauthorized(exc):
+        try:
+            return respond_error(str(exc), status=401)
+        except Exception:
+            app.logger.exception('Failed to handle Unauthorized')
+            return respond_error('Unauthorized', status=401)
+
+    @app.errorhandler(Forbidden)
+    def _handle_forbidden(exc):
+        try:
+            return respond_error(str(exc), status=403)
+        except Exception:
+            app.logger.exception('Failed to handle Forbidden')
+            return respond_error('Forbidden', status=403)
 
     # Middleware: record request start time and capture metrics in after_request
     @app.before_request

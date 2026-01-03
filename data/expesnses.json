@@ -1,0 +1,321 @@
+{
+  "Infrastructure": {
+    "Land": {
+      "Purchase or Lease": {},
+      "Property Taxes": {},
+      "Site Preparation": {},
+      "Access Roads": {},
+      "Fencing": {},
+      "Drainage & Waterways": {},
+      "Security Lighting": {}
+    },
+    "Buildings": {
+      "Hatchery": {},
+      "Quarantine": {},
+      "Feed Storage": {},
+      "Workshop": {},
+      "Office": {},
+      "Processing Shed": {},
+      "Cold Room & Freezers": {},
+      "Staff Facilities": {}
+    },
+    "Culture System": {
+      "Ponds": {
+        "Excavation": {},
+        "Liners & Geotextile": {},
+        "Inlet/Outlet Structures": {},
+        "Sluice Gates": {}
+      },
+      "Cages": {
+        "Net Pens": {},
+        "Moorings & Anchors": {},
+        "Walkways & Platforms": {},
+        "Boats": {}
+      },
+      "RAS/Tanks": {
+        "Tanks & Raceways": {},
+        "Mechanical Filters (Drum)": {},
+        "Biofilters": {},
+        "Pumps & Valves": {},
+        "UV/Ozone": {},
+        "Degassing Towers": {},
+        "Oxygen Cones/Generators": {}
+      }
+    },
+    "Water Supply & Treatment": {
+      "Wells/Boreholes": {},
+      "Intake Screens": {},
+      "Piping & Valves": {},
+      "Filtration": {},
+      "Disinfection": {},
+      "Storage Tanks": {}
+    },
+    "Aeration & Oxygenation": {
+      "Blowers": {},
+      "Paddlewheels": {},
+      "Diffusers": {},
+      "Oxygen Generators": {},
+      "Compressors": {}
+    },
+    "Power & Backup": {
+      "Electrical Connection": {},
+      "Generators": {},
+      "Fuel Storage": {},
+      "Solar": {},
+      "UPS": {}
+    },
+    "Monitoring & Control": {
+      "Meters & Sensors": {},
+      "SCADA/Automation": {},
+      "Data Loggers": {}
+    },
+    "Security & Access": {
+      "Perimeter Fencing": {},
+      "Lighting": {},
+      "Cameras": {},
+      "Access Control": {}
+    }
+  },
+  "Human Resources": {
+    "Salaries": {},
+    "Wages & Overtime": {},
+    "Benefits": {
+      "Health Insurance": {},
+      "Retirement": {},
+      "Life & Disability": {},
+      "Wellness": {}
+    },
+    "Payroll Taxes & Contributions": {},
+    "Recruiting": {
+      "Job Ads": {},
+      "Agency Fees": {},
+      "Background Checks": {},
+      "Relocation": {}
+    },
+    "Training & Certifications": {},
+    "Uniforms & PPE": {},
+    "Contractors & Temp Labor": {}
+  },
+  "Operational": {
+    "Utilities": {
+      "Electricity": {},
+      "Water": {},
+      "Fuel": {},
+      "Telecom & Internet": {}
+    },
+    "Maintenance": {
+      "Equipment Repair": {},
+      "Preventive Maintenance": {},
+      "Spare Parts": {},
+      "Net Repairs": {},
+      "Liner Patching": {},
+      "Calibration": {}
+    },
+    "Feeding": {
+      "Starter Feed": {},
+      "Grower Feed": {},
+      "Finisher Feed": {},
+      "Additives/Probiotics/Vitamins": {},
+      "Binders": {},
+      "Lime/Salt/Zeolite": {}
+    },
+    "Medical Care": {
+      "Veterinary Services": {},
+      "Diagnostics": {},
+      "Vaccines & Medications": {},
+      "Disinfectants": {}
+    },
+    "Biosecurity": {
+      "Footbaths": {},
+      "Sanitation Supplies": {},
+      "Quarantine Operations": {}
+    },
+    "Water Quality Testing": {
+      "Dissolved Oxygen": {},
+      "pH": {},
+      "Ammonia": {},
+      "Nitrite": {},
+      "Nitrate": {},
+      "Salinity/Conductivity": {},
+      "ORP": {},
+      "Turbidity": {},
+      "Test Kits": {},
+      "Calibration Standards": {}
+    },
+    "Harvest": {
+      "Nets & Seines": {},
+      "Grading Equipment": {},
+      "Harvest Pumps": {},
+      "Baskets & Crates": {},
+      "Ice": {}
+    },
+    "Processing": {
+      "Stunning & Bleeding": {},
+      "Filleting": {},
+      "Packaging": {},
+      "Vacuum Sealers": {},
+      "Labels": {}
+    },
+    "Cold Chain": {
+      "Ice Machines": {},
+      "Chillers": {},
+      "Freezers": {},
+      "Cold Rooms": {},
+      "Refrigerated Transport": {}
+    },
+    "Transportation": {
+      "Logistics": {
+        "Live-Haul Tanks": {},
+        "Third-Party Haulage": {},
+        "Market Stall Fees": {},
+        "Transport Permits": {}
+      },
+      "Fuel": {},
+      "Distribution": {
+        "Wholesale": {},
+        "Retail": {},
+        "Export": {}
+      }
+    },
+    "Supplies": {
+      "Nets": {},
+      "Baskets": {},
+      "Chemicals": {},
+      "Cleaning Supplies": {},
+      "Office Supplies": {}
+    },
+    "Equipment": {
+      "Pumps": {},
+      "Blowers": {},
+      "Generators": {},
+      "Feeders (Manual/Auto)": {},
+      "Boats & Vehicles": {},
+      "Tools": {},
+      "Safety Gear": {}
+    },
+    "Waste & Effluent Management": {
+      "Settling Ponds": {},
+      "Sludge Handling": {},
+      "Filters": {},
+      "Compliance Sampling": {},
+      "Disposal": {}
+    },
+    "Predator Control": {
+      "Bird Nets": {},
+      "Deterrents": {},
+      "Screens": {}
+    }
+  },
+  "Hatchery & Stock": {
+    "Fingerlings/Post-Larvae": {},
+    "Broodstock": {},
+    "Hatchery Inputs": {
+      "Artemia": {},
+      "Microalgae": {},
+      "Incubators": {},
+      "Larval Feeds": {}
+    },
+    "Quarantine Costs": {},
+    "Health Certificates": {},
+    "Genetic/Selective Breeding": {}
+  },
+  "Compliance & Regulatory": {
+    "Permits & Licenses": {
+      "Aquaculture License": {},
+      "Water Rights": {},
+      "Discharge/Effluent Permits": {},
+      "Business License": {},
+      "Export Documentation": {}
+    },
+    "Certifications": {
+      "HACCP": {},
+      "ASC": {},
+      "BAP": {},
+      "ISO": {}
+    },
+    "Audits & Inspections": {},
+    "Environmental Monitoring": {
+      "EIA/Impact Assessment": {},
+      "Water Sampling": {},
+      "Reporting": {}
+    }
+  },
+  "Insurance": {
+    "Property": {},
+    "General Liability": {},
+    "Stock Mortality": {},
+    "Workers' Compensation": {},
+    "Business Interruption": {},
+    "Marine Insurance": {}
+  },
+  "Finance & Treasury": {
+    "Interest Expense": {},
+    "Bank Service Charges": {},
+    "Loan Origination Fees": {},
+    "Foreign Exchange Costs": {},
+    "Merchant/Payment Processing Fees": {},
+    "Lease Interest": {},
+    "Bad Debt Expense": {}
+  },
+  "Taxes & Government Charges": {
+    "Income Taxes": {},
+    "Sales/VAT/GST": {},
+    "Payroll Taxes": {},
+    "Property Taxes": {},
+    "Business Rates/Fees": {},
+    "Franchise Taxes": {},
+    "Customs & Import Duties": {}
+  },
+  "IT & Software": {
+    "Farm Management Software": {},
+    "Sensor/Telemetry Subscriptions": {},
+    "Accounting/ERP": {},
+    "CRM": {},
+    "Cloud Services": {},
+    "Data Storage & Backup": {},
+    "Cybersecurity Tools": {}
+  },
+  "Sales & Marketing": {
+    "Branding": {},
+    "Advertising": {},
+    "PR & Communications": {},
+    "Market Research": {},
+    "Samples & Promotions": {},
+    "Channel Commissions": {},
+    "Trade Shows & Sponsorships": {},
+    "Packaging Design": {},
+    "Website & Ecommerce": {}
+  },
+  "Professional Services": {
+    "Accounting & Audit": {},
+    "Legal": {},
+    "Tax Advisory": {},
+    "Consulting": {}
+  },
+  "R&D & Product Development": {
+    "Prototyping & Trials": {},
+    "Compliance Testing": {},
+    "IP/Patents": {},
+    "Tooling & Molds": {}
+  },
+  "Admin & Office": {
+    "Office Rent": {},
+    "Office Utilities": {},
+    "Office Supplies": {},
+    "Postage & Shipping Supplies": {},
+    "Memberships & Dues": {},
+    "Board Governance": {}
+  },
+  "Contingency & Reserves": {
+    "Disease Outbreak Reserve": {},
+    "Emergency Harvest": {},
+    "Spare Aeration Capacity": {},
+    "Disaster Recovery Fund": {}
+  },
+  "Non-Cash Expenses": {
+    "Depreciation": {},
+    "Amortization": {},
+    "Stock-Based Compensation": {},
+    "Impairments & Write-Downs": {}
+  }
+}
