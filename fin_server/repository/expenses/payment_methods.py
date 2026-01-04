@@ -1,8 +1,18 @@
 from datetime import datetime, timezone
 
+from fin_server.repository.base_repository import BaseRepository
 
-class PaymentMethodsRepository:
+
+class PaymentMethodsRepository(BaseRepository):
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(cls, '_instance'):
+            cls._instance = super(PaymentMethodsRepository, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self, db):
+        super().__init__(db)
         self.coll = db['payment_methods']
         try:
             self.coll.create_index([('ownerId', 1), ('ownerType', 1)], name='pm_owner')

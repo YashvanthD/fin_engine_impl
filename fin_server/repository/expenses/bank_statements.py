@@ -1,8 +1,18 @@
 from datetime import datetime, timezone
 
+from fin_server.repository.base_repository import BaseRepository
 
-class BankStatementsRepository:
+
+class BankStatementsRepository(BaseRepository):
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(cls, '_instance'):
+            cls._instance = super(BankStatementsRepository, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self, db):
+        super().__init__(db)
         self.coll = db['bank_statements']
 
     def create(self, doc):

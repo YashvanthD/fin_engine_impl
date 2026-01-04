@@ -33,6 +33,45 @@ def generate_sampling_id():
     return f"SAMP-{ts}-{random.randint(1000,9999)}"
 
 
+def generate_stock_id(sampling_id: str = None) -> str:
+    """Generate a stable stock id.
+
+    - If a sampling_id is provided, prefer the form `stock-<sampling_id>` so callers can
+      easily link stock entries to samplings.
+    - Otherwise generate a timestamped id with microseconds for uniqueness.
+    """
+    if sampling_id:
+        # sanitize sampling_id to a short form if needed
+        s = str(sampling_id)
+        return f"stock-{s}"
+    ts = get_time_date_dt(include_time=True).strftime('%Y%m%d%H%M%S%f')
+    return f"stock-{ts}-{random.randint(100,999)}"
+
+
+def derive_stock_id_from_dto(dto: dict) -> str:
+    """Try to extract a stock_id from a DTO-like object or build one using sampling ids.
+
+    Accepts either a dict-like or an object with `extra`/`id` attributes.
+    """
+    # Try explicit extra.stock_id first
+    try:
+        extra = None
+        if isinstance(dto, dict):
+            extra = dto.get('extra') or {}
+            sid = dto.get('id') or dto.get('sampling_id')
+        else:
+            extra = getattr(dto, 'extra', None) or {}
+            sid = getattr(dto, 'id', None) or getattr(dto, 'sampling_id', None)
+        if isinstance(extra, dict) and extra.get('stock_id'):
+            return str(extra.get('stock_id'))
+        if sid:
+            return generate_stock_id(str(sid))
+    except Exception:
+        pass
+    # fallback
+    return generate_stock_id()
+
+
 def build_user(data, account_key=None):
     user_data = data.copy()
     user_data['account_key'] = account_key if account_key else generate_key(6)

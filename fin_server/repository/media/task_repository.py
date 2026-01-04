@@ -2,7 +2,15 @@ from fin_server.repository.base_repository import BaseRepository
 from bson import ObjectId
 
 class TaskRepository(BaseRepository):
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(cls, '_instance'):
+            cls._instance = super(TaskRepository, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self, db, collection="task"):
+        super().__init__(db)
         self.collection_name = collection
         print(f"Initializing {self.collection_name} collection:")
         self.collection = db[collection]

@@ -64,3 +64,36 @@ class BaseRepository:
         else:
             res = self.collection.delete_one(query)
         return getattr(res, 'deleted_count', None)
+
+    # --- Thin proxies for callers expecting raw collection methods ---
+    def insert_one(self, doc: Dict[str, Any], **kwargs):
+        if self.collection is None:
+            raise NotImplementedError('insert_one() requires collection to be set')
+        return self.collection.insert_one(doc, **kwargs)
+
+    def update_one(self, query: Dict[str, Any], update: Dict[str, Any], **kwargs):
+        if self.collection is None:
+            raise NotImplementedError('update_one() requires collection to be set')
+        return self.collection.update_one(query, update, **kwargs)
+
+    def update_many(self, query: Dict[str, Any], update: Dict[str, Any], **kwargs):
+        if self.collection is None:
+            raise NotImplementedError('update_many() requires collection to be set')
+        return self.collection.update_many(query, update, **kwargs)
+
+    def replace_one(self, query: Dict[str, Any], replacement: Dict[str, Any], **kwargs):
+        if self.collection is None:
+            raise NotImplementedError('replace_one() requires collection to be set')
+        return self.collection.replace_one(query, replacement, **kwargs)
+
+    def delete_one(self, query: Dict[str, Any], **kwargs):
+        if self.collection is None:
+            raise NotImplementedError('delete_one() requires collection to be set')
+        return self.collection.delete_one(query, **kwargs)
+
+    def delete_many(self, query: Dict[str, Any], **kwargs):
+        if self.collection is None:
+            raise NotImplementedError('delete_many() requires collection to be set')
+        return self.collection.delete_many(query, **kwargs)
+
+

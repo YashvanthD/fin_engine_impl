@@ -1,6 +1,13 @@
 from fin_server.repository.base_repository import BaseRepository
 
 class UserRepository(BaseRepository):
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(cls, '_instance'):
+            cls._instance = super(UserRepository, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self, db, collection="users"):
         # Delegate to BaseRepository to set self.collection
         super().__init__(db=db, collection_name=collection)

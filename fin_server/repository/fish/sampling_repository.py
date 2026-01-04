@@ -2,6 +2,13 @@ from fin_server.repository.base_repository import BaseRepository
 from fin_server.utils.time_utils import get_time_date_dt
 
 class SamplingRepository(BaseRepository):
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(cls, '_instance'):
+            cls._instance = super(SamplingRepository, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self, db, collection="sampling"):
         # Use BaseRepository to set self.collection
         super().__init__(db=db, collection_name=collection)

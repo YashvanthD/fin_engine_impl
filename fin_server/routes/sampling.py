@@ -2,8 +2,6 @@ from flask import Blueprint, request, current_app
 
 from fin_server.dto.growth_dto import GrowthRecordDTO
 from fin_server.exception.UnauthorizedError import UnauthorizedError
-from fin_server.repository.fish.fish_activity_repository import FishActivityRepository
-from fin_server.repository.fish.fish_analytics_repository import FishAnalyticsRepository
 from fin_server.repository.fish.stock_repository import StockRepository
 from fin_server.repository.mongo_helper import get_collection
 from fin_server.routes.fish import fish_analytics_repo
@@ -11,8 +9,8 @@ from fin_server.routes.pond_event import fish_activity_repo
 from fin_server.security.authentication import get_auth_payload
 from fin_server.utils.generator import generate_sampling_id
 from fin_server.utils.helpers import respond_success, respond_error, normalize_doc, parse_iso_or_epoch
-from fin_server.utils.threading_util import submit_task
 from fin_server.utils.validation import compute_total_amount_from_payload
+from fin_server.services.sampling_service import perform_buy_sampling
 
 sampling_bp = Blueprint('sampling', __name__, url_prefix='/sampling')
 
@@ -21,6 +19,7 @@ pond_repo = get_collection('pond')
 fish_repo = get_collection('fish')
 expenses_repo = get_collection('expenses')
 pond_event_repo = get_collection('pond_event')
+fish_mapping_repo = get_collection('fish_mapping')
 
 @sampling_bp.route('', methods=['POST'])
 @sampling_bp.route('/', methods=['POST'])
@@ -68,77 +67,27 @@ def create_sampling_route():
         if is_buy and buy_count is not None:
             dto.extra['total_count'] = int(buy_count)
 
-        # Best-effort post-processing operations
-        # 1) Buy handling
-        if is_buy and buy_count and buy_count > 0:
-            # pond metadata increment
-            pond_repo.atomic_update_metadata(dto.pondId, inc_fields={'fish_count': buy_count})
-
-            # pond event
-            event_doc = {
-                'pond_id': dto.pondId,
-                'event_type': 'buy',
-                'details': {'species': dto.species, 'count': buy_count, 'cost_unit': extra.get('costUnit') or extra.get('cost_unit'), 'total_amount': extra.get('totalAmount') or extra.get('total_amount')},
-                'recorded_by': dto.recordedBy
+        # Delegate the buy/sampling post-processing to the shared service
+        try:
+            repos = {
+                'sampling': sampling_repo,
+                'pond': pond_repo,
+                'fish': fish_repo,
+                'stock': StockRepository(),
+                'fish_activity': fish_activity_repo,
+                'fish_analytics': fish_analytics_repo,
+                'expenses': expenses_repo,
+                'fish_mapping': fish_mapping_repo,
+                'pond_event': pond_event_repo
             }
-            pond_event_repo.create(event_doc)
-
-            # fish repo update/create
-            existing = fish_repo.find_one({'species_code': dto.species})
-            if existing:
-                fish_repo.update({'_id': existing.get('_id')}, {'current_stock': (existing.get('current_stock', 0) or 0) + buy_count})
-            else:
-                fish_doc = {'_id': dto.species, 'species_code': dto.species, 'common_name': dto.species, 'current_stock': buy_count, 'account_key': payload.get('account_key')}
-                fish_repo.create(fish_doc)
-
-            # expenses
-            total_amt = None
-            if 'totalAmount' in extra:
-                total_amt = float(extra.get('totalAmount'))
-            elif getattr(dto, 'cost', None) is not None:
-                total_amt = float(dto.cost) * float(buy_count)
-            if expenses_repo and total_amt is not None:
-                expense_doc = {
-                    'pond_id': dto.pondId,
-                    'amount': total_amt,
-                    'currency': extra.get('currency') or 'INR',
-                    'payment_method': extra.get('payment_method') or 'cash',
-                    'notes': extra.get('notes') or getattr(dto, 'notes', None),
-                    'recorded_by': dto.recordedBy,
-                    'account_key': payload.get('account_key'),
-                    # domain metadata
-                    'category': extra.get('category') or 'asset',
-                    'action': extra.get('action') or 'buy',
-                    'type': extra.get('type') or 'fish'
-                }
-                # strip none
-                expense_doc = {k: v for k, v in expense_doc.items() if v is not None}
-                # Use the ExpensesRepository API (create_expense). Fail fast if not available.
-                if not hasattr(expenses_repo, 'create_expense'):
-                    # This is a strict change: require the higher-level expenses API
-                    raise RuntimeError('Expenses repository missing create_expense API')
-                expenses_repo.create_expense(expense_doc)
-
-            # analytics batch (positive)
-            fish_age = extra.get('fish_age_in_month') or extra.get('fish_age')
-            fish_weight = getattr(dto, 'averageWeight', None)
-            event_id = f"{payload.get('account_key')}-{dto.species}-{dto.pondId}-{dto.id}"
-            fish_analytics_repo.add_batch(dto.species, int(buy_count), int(fish_age) if fish_age is not None else 0, account_key=payload.get('account_key'), event_id=event_id, fish_weight=fish_weight if fish_weight is not None else None, pond_id=dto.pondId)
-
-            # fish_activity
-            activity_doc = {'account_key': payload.get('account_key'), 'pond_id': dto.pondId, 'fish_id': dto.species, 'event_type': 'buy', 'count': buy_count, 'details': extra.get('details') or {}, 'user_key': dto.recordedBy}
-            fish_activity_repo.create(activity_doc)
-
-            # update pond.current_stock using reusable StockRepository asynchronously
-            def _run_stock_update(account_key, pond_id, species, count, average_weight, sampling_id_val, recorded_by_val, expense_amount_val):
-                sr = StockRepository()
-                ok_inner = sr.add_stock_transactional(account_key, pond_id, species, count, average_weight=average_weight, sampling_id=sampling_id_val, recorded_by=recorded_by_val, expense_amount=expense_amount_val, timeout_seconds=3)
-                if not ok_inner:
-                    sr.add_stock_to_pond(account_key, pond_id, species, count, average_weight=average_weight, sampling_id=sampling_id_val, recorded_by=recorded_by_val, create_event=False, create_activity=False, create_analytics=False, create_expense=True, expense_amount=expense_amount_val)
-
-            sampling_id_val = dto.extra.get('sampling_id') or dto.id
-            submit_task(_run_stock_update, payload.get('account_key'), dto.pondId, dto.species, buy_count, getattr(dto, 'averageWeight', None), sampling_id_val, dto.recordedBy, total_amt)
-
+            # Run synchronously here (or spawn a background task if desired)
+            svc_res = perform_buy_sampling(dto, payload.get('account_key'), repos)
+            # Optionally attach expense id to DTO extra
+            if svc_res.get('expense_id'):
+                dto.extra['expense_id'] = svc_res.get('expense_id')
+        except Exception:
+            current_app.logger.exception('Error in perform_buy_sampling')
+            raise
         return respond_success(dto.to_dict(), status=201)
     except UnauthorizedError as ue:
         return respond_error(str(ue), status=401)
@@ -272,40 +221,78 @@ def update_sampling_route(sampling_id):
             if k in data:
                 update_fields[dbk] = data.get(k)
 
-        # handle totalAmount / total_amount -> total_cost
-        if 'totalAmount' in data:
-            try:
-                update_fields['total_cost'] = float(data.get('totalAmount'))
-            except Exception:
-                update_fields['total_cost'] = data.get('totalAmount')
-        elif 'total_amount' in data:
-            try:
-                update_fields['total_cost'] = float(data.get('total_amount'))
-            except Exception:
-                update_fields['total_cost'] = data.get('total_amount')
+        # Prepare delta handling for stock/expense when total_count or total_cost are being updated
+        delta_stock = None
+        delta_amount = None
+        old_total_count = None
+        old_total_cost = None
+        existing_extra = existing.get('extra') or {}
+        # source old values
+        try:
+            if 'total_count' in existing:
+                old_total_count = int(float(existing.get('total_count') or 0))
+            elif 'totalCount' in existing:
+                old_total_count = int(float(existing.get('totalCount') or 0))
+            elif isinstance(existing_extra, dict) and ('total_count' in existing_extra or 'totalCount' in existing_extra):
+                old_total_count = int(float(existing_extra.get('total_count') or existing_extra.get('totalCount') or 0))
+        except Exception:
+            old_total_count = None
+        try:
+            if 'total_cost' in existing:
+                old_total_cost = float(existing.get('total_cost') or 0)
+            elif 'totalAmount' in existing:
+                old_total_cost = float(existing.get('totalAmount') or 0)
+            elif isinstance(existing_extra, dict) and ('total_amount' in existing_extra or 'totalAmount' in existing_extra):
+                old_total_cost = float(existing_extra.get('total_amount') or existing_extra.get('totalAmount') or 0)
+        except Exception:
+            old_total_cost = None
 
-        # handle costUnit / cost_unit
-        if 'costUnit' in data:
-            update_fields['cost_unit'] = data.get('costUnit')
-        elif 'cost_unit' in data:
-            update_fields['cost_unit'] = data.get('cost_unit')
-
-        # handle totalCount / total_count -> total_count
+        # compute new values from incoming request
+        new_total_count = None
         if 'totalCount' in data:
             try:
-                update_fields['total_count'] = int(float(data.get('totalCount')))
+                new_total_count = int(float(data.get('totalCount')))
             except Exception:
-                update_fields['total_count'] = data.get('totalCount')
+                new_total_count = None
         elif 'total_count' in data:
             try:
-                update_fields['total_count'] = int(float(data.get('total_count')))
+                new_total_count = int(float(data.get('total_count')))
             except Exception:
-                update_fields['total_count'] = data.get('total_count')
+                new_total_count = None
+        elif isinstance(data.get('extra'), dict) and ('total_count' in data.get('extra') or 'totalCount' in data.get('extra')):
+            try:
+                new_total_count = int(float(data.get('extra').get('total_count') or data.get('extra').get('totalCount')))
+            except Exception:
+                new_total_count = None
 
-        # Allow updating extra fields passed inside an 'extra' object
-        if isinstance(data.get('extra'), dict):
-            for ek, ev in data.get('extra').items():
-                update_fields[ek] = ev
+        if new_total_count is not None and old_total_count is not None:
+            try:
+                delta_stock = int(new_total_count) - int(old_total_count)
+            except Exception:
+                delta_stock = None
+
+        # total cost delta
+        new_total_cost = None
+        if 'totalAmount' in data:
+            try:
+                new_total_cost = float(data.get('totalAmount'))
+            except Exception:
+                new_total_cost = None
+        elif 'total_cost' in data:
+            try:
+                new_total_cost = float(data.get('total_cost'))
+            except Exception:
+                new_total_cost = None
+        elif isinstance(data.get('extra'), dict) and ('totalAmount' in data.get('extra') or 'total_amount' in data.get('extra')):
+            try:
+                new_total_cost = float(data.get('extra').get('totalAmount') or data.get('extra').get('total_amount'))
+            except Exception:
+                new_total_cost = None
+        if new_total_cost is not None and old_total_cost is not None:
+            try:
+                delta_amount = float(new_total_cost) - float(old_total_cost)
+            except Exception:
+                delta_amount = None
 
         # Remove None-valued fields from updates (do not store nulls)
         update_fields = {k: v for k, v in update_fields.items() if v is not None}
@@ -318,11 +305,74 @@ def update_sampling_route(sampling_id):
         except Exception:
             return respond_error('Failed to update sampling record', status=500)
 
+        stock_id = None
+        # If there is a delta in stock, apply incremental update rather than re-processing a full buy
+        try:
+            if delta_stock and delta_stock != 0:
+                # resolve stock_id from existing sampling if present, else use sampling_id
+                stock_id = existing.get('stock_id') or (existing.get('extra') or {}).get('stock_id') or existing.get('sampling_id') or existing.get('_id')
+                # Use StockRepository transactional update when available
+                sr = StockRepository()
+                ok_tx = False
+                try:
+                    ok_tx = sr.add_stock_transactional(payload.get('account_key'), existing.get('pond_id') or existing.get('pondId') or payload.get('pond_id'), existing.get('species') or existing.get('species_code'), delta_stock, average_weight=update_fields.get('average_weight') or update_fields.get('averageWeight') or None, sampling_id=stock_id, recorded_by=payload.get('user_key'))
+                except Exception:
+                    ok_tx = False
+                if not ok_tx:
+                    # fallback to pond_repo.update_stock
+                    try:
+                        pond_repo.update_stock(existing.get('pond_id') or existing.get('pondId') or payload.get('pond_id'), existing.get('species') or existing.get('species_code'), delta_stock, average_weight=update_fields.get('average_weight') or None, sampling_id=stock_id)
+                    except Exception:
+                        current_app.logger.exception('Failed to apply delta_stock update')
+        except Exception:
+            current_app.logger.exception('Error handling delta stock update')
+
+        # If there's a delta in amount, create an expense for positive delta (additional buy), for negative delta you might create reversal (not implemented)
+        try:
+            if delta_amount and delta_amount > 0 and expenses_repo:
+                expense_doc = {
+                    'pond_id': existing.get('pond_id') or existing.get('pondId'),
+                    'amount': float(delta_amount),
+                    'currency': 'INR',
+                    'recorded_by': payload.get('user_key'),
+                    'account_key': payload.get('account_key'),
+                    'category': 'asset', 'action': 'buy', 'type': 'fish',
+                    'metadata': {'sampling_id': existing.get('sampling_id') or existing.get('_id'), 'stock_id': stock_id}
+                }
+                try:
+                    if hasattr(expenses_repo, 'create_expense'):
+                        expenses_repo.create_expense(expense_doc)
+                    elif hasattr(expenses_repo, 'create'):
+                        expenses_repo.create(expense_doc)
+                    else:
+                        expenses_repo.insert_one(expense_doc)
+                except Exception:
+                    current_app.logger.exception('Failed to create delta expense')
+        except Exception:
+            current_app.logger.exception('Error handling delta amount')
+
         updated = sampling_repo.find_one({'_id': existing.get('_id')})
         # Normalize and try to use DTO for response
         ro = normalize_doc(updated)
         try:
             dto = GrowthRecordDTO.from_doc(ro)
+            # If this update includes buy-related fields, run the buy sampling service to apply side-effects
+            try:
+                if 'total_count' in update_fields or 'total_cost' in update_fields:
+                    repos = {
+                        'sampling': sampling_repo,
+                        'pond': pond_repo,
+                        'fish': fish_repo,
+                        'stock': StockRepository(),
+                        'fish_activity': fish_activity_repo,
+                        'fish_analytics': fish_analytics_repo,
+                        'expenses': expenses_repo,
+                        'fish_mapping': fish_mapping_repo,
+                        'pond_event': pond_event_repo
+                    }
+                    perform_buy_sampling(dto, payload.get('account_key'), repos)
+            except Exception:
+                current_app.logger.exception('Error while running buy sampling service on update')
             return respond_success(dto.to_dict())
         except Exception:
             return respond_success(ro)

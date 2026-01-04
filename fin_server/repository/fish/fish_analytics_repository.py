@@ -1,8 +1,9 @@
+from fin_server.repository.base_repository import BaseRepository
 from fin_server.repository.mongo_helper import get_collection
 from fin_server.utils.time_utils import get_time_date_dt
 import logging
 
-class FishAnalyticsRepository:
+class FishAnalyticsRepository(BaseRepository):
     def __init__(self, db=None, collection_name="fish_analytics"):
         self.collection_name = collection_name
         print("Initializing FishAnalyticsRepository, collection:", self.collection_name)

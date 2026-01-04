@@ -160,7 +160,6 @@ def get_fish_by_id(species_id):
         max_weight = request.args.get('max_weight')
         analytics = fish_analytics_repo.get_analytics(species_id, account_key=account_key, min_age=min_age, max_age=max_age, avg_n=avg_n, min_weight=min_weight, max_weight=max_weight)
         # Find all ponds where this fish is present (from analytics or pond_events)
-        # Use module-level pond_event_repo (initialized from MongoRepositorySingleton)
         try:
             pond_events = pond_event_repo.find_many({'account_key': account_key, 'species_code': species_id})
         except AttributeError:

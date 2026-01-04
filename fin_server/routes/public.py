@@ -1,6 +1,7 @@
 from flask import Blueprint, request, current_app
 
 from fin_server.dto.fish_dto import FishDTO
+from fin_server.repository.mongo_helper import get_collection, MongoRepo
 from fin_server.utils.helpers import respond_error, respond_success
 
 public_bp = Blueprint('public', __name__, url_prefix='/public')
@@ -15,10 +16,9 @@ def health_check():
     in the response body.
     """
     try:
-        db = repo.get_db()
+        assert  MongoRepo.is_initialized()
         # Perform a very lightweight ping by listing collections once.
         # Any connectivity/timeout issues will raise and be logged.
-        _ = db.list_collection_names()
         return respond_success({'status': 'ok', 'db': 'reachable'})
     except Exception as e:
         current_app.logger.exception(f'Health check DB error: {e}')
@@ -49,10 +49,10 @@ def get_public_fish_list():
     """Public endpoint: list fish entities. Optional query param account_key to filter mapped fish for an account."""
     try:
         account_key = request.args.get('account_key')
-        fish_collection = repo.get_collection('fish')
+        fish_collection = get_collection('fish')
         # If account_key provided, use fish_mapping to restrict list
         if account_key:
-            mapping = repo.get_collection('fish_mapping').find_one({'account_key': account_key})
+            mapping = fish_collection.get_collection('fish_mapping').find_one({'account_key': account_key})
             fish_ids = mapping.get('fish_ids', []) if mapping else []
             if not fish_ids:
                 return respond_success({'fish': []})

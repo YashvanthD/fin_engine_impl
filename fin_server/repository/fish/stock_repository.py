@@ -1,6 +1,5 @@
 import logging
 
-from fin_server.repository.expenses import TransactionsRepository
 from fin_server.repository.mongo_helper import get_collection
 from fin_server.utils.time_utils import get_time_date_dt
 
@@ -13,10 +12,18 @@ class StockRepository:
     existing route behavior. They return True on a successful (best-effort) operation
     and False on failure.
     """
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(cls, '_instance'):
+            cls._instance = super(StockRepository, cls).__new__(cls)
+        return cls._instance
 
     def __init__(self, db=None):
+        # store provided db reference (may be None); avoid importing route modules here to prevent circular imports
+        self.db = db
         self.ponds = get_collection('pond')
-        self.pond_events = get_collection('pond_events')
+        self.pond_events = get_collection('pond_event')
         self.fish = get_collection('fish')
         self.fish_activity = get_collection('fish_activity')
         self.fish_analytics = get_collection('fish_analytics')
@@ -112,17 +119,24 @@ class StockRepository:
             try:
                 # Try to update by species code or _id
                 qf = {'$or': [{'species_code': species}, {'_id': species}]}
+                f = None
+                # Prefer repository API if available
                 f = self.fish.find_one(qf)
                 if f:
                     try:
-                        r = self.fish.update_one({'_id': f.get('_id')}, {'$inc': {'current_stock': int(count)}})
-                        logger.debug('Updated fish %s current_stock inc=%s matched=%s modified=%s', f.get('_id'), count, getattr(r, 'matched_count', 0), getattr(r, 'modified_count', 0))
+                        # Compute new current_stock value if repository exposes `update`
+                        old_val = (f.get('current_stock', 0) or 0)
+                        new_val = int(old_val) + int(count)
+                        self.fish.update({'_id': f.get('_id')}, {'current_stock': new_val})
+
+                        logger.debug('Updated fish %s current_stock inc=%s', f.get('_id'), count)
                     except Exception:
                         logger.exception('Failed to increment fish.current_stock for species=%s', species)
                 else:
-                    # create minimal fish doc
+                    # create minimal fish doc using repo API if present
                     fish_doc = {'_id': species, 'species_code': species, 'common_name': species, 'current_stock': int(count)}
                     try:
+                        self.fish.create(fish_doc)
                         self.fish.insert_one(fish_doc)
                         logger.info('Created fish doc for species=%s current_stock=%s', species, count)
                     except Exception:
@@ -192,7 +206,7 @@ class StockRepository:
                         'created_at': get_time_date_dt(include_time=True)
                     }
                     try:
-                        r = self.expenses.insert_one(exp)
+                        # r = self.expenses.insert_one(exp)
                         logger.debug('Inserted expense for pond=%s expense_id=%s amount=%s', pond_id, getattr(r, 'inserted_id', None), exp.get('amount'))
                     except Exception:
                         logger.exception('Failed to insert expense doc for add_stock')
@@ -215,21 +229,11 @@ class StockRepository:
             logger.exception('Unexpected error in add_stock_to_pond for pond=%s species=%s', pond_id, species)
             return False
 
-    def add_stock_transactional(self, account_key, pond_id, species, count, average_weight=None, sampling_id=None, recorded_by=None, expense_amount=None, timeout_seconds: int = 3):
+    def add_stock_transactional(self, account_key, pond_id, species, count, average_weight=None, sampling_id=None, recorded_by=None, expense_amount=None, timeout_seconds: int = 3,
+                                transactions_repo=get_collection('transactions')):
         logger.info('add_stock_transactional start pond=%s species=%s count=%s account=%s', pond_id, species, count, account_key)
-        # ...existing code ... (kept same structure)
+        # ...existing code ...
         try:
-            db = self.db
-            client = None
-            try:
-                client = db.client
-            except Exception:
-                client = None
-
-            if client is None:
-                logger.warning('Mongo client not available for transactions; falling back to non-transactional add_stock_to_pond')
-                return self.add_stock_to_pond(account_key, pond_id, species, count, average_weight=average_weight, sampling_id=sampling_id, recorded_by=recorded_by, create_event=True, create_activity=True, create_analytics=True, create_expense=True, expense_amount=expense_amount)
-
             expense_doc = {
                 'pond_id': pond_id,
                 'species': species,
@@ -254,12 +258,23 @@ class StockRepository:
             session = None
             timer = None
             try:
+                # Use the underlying DB client for transactions when available
+                client = None
+                try:
+                    client = self.db.client if self.db is not None else None
+                except Exception:
+                    client = None
+                if client is None:
+                    logger.warning('Mongo client not available for transactions; falling back to non-transactional add_stock_to_pond')
+                    return self.add_stock_to_pond(account_key, pond_id, species, count, average_weight=average_weight, sampling_id=sampling_id, recorded_by=recorded_by, create_event=True, create_activity=True, create_analytics=True, create_expense=True, expense_amount=expense_amount)
+
                 with client.start_session() as session:
                     session.start_transaction()
                     logger.debug('Started mongo session for add_stock_transactional pond=%s', pond_id)
 
-                    # create transaction ledger entry
+                    # create transaction ledger entry using TransactionsRepository inside the session
                     try:
+                        from fin_server.repository.expenses import TransactionsRepository
                         tr = TransactionsRepository(self.db)
                         tx_payload = {
                             'transaction_id': None,
@@ -338,12 +353,31 @@ class StockRepository:
                     # update fish.current_stock inside session
                     try:
                         q = {'$or': [{'species_code': species}, {'_id': species}]}
-                        f = self.fish.find_one(q, session=session)
-                        if f:
-                            self.fish.update_one({'_id': f.get('_id')}, {'$inc': {'current_stock': int(count)}}, session=session)
+                        # Use raw collection for session-aware ops
+                        fish_coll = self.db['fish'] if self.db is not None else None
+                        if fish_coll is not None:
+                            f = fish_coll.find_one(q, session=session)
+                            if f:
+                                fish_coll.update_one({'_id': f.get('_id')}, {'$inc': {'current_stock': int(count)}}, session=session)
+                            else:
+                                fish_doc = {'_id': species, 'species_code': species, 'common_name': species, 'current_stock': int(count)}
+                                fish_coll.insert_one(fish_doc, session=session)
                         else:
-                            fish_doc = {'_id': species, 'species_code': species, 'common_name': species, 'current_stock': int(count)}
-                            self.fish.insert_one(fish_doc, session=session)
+                            # fallback to repository methods without session
+                            f = self.fish.find_one(q)
+                            if f:
+                                # compute new value and use repo.update
+                                if hasattr(self.fish, 'update'):
+                                    new_val = int((f.get('current_stock', 0) or 0)) + int(count)
+                                    self.fish.update({'_id': f.get('_id')}, {'current_stock': new_val})
+                                else:
+                                    self.fish.update_one({'_id': f.get('_id')}, {'$inc': {'current_stock': int(count)}})
+                            else:
+                                fish_doc = {'_id': species, 'species_code': species, 'common_name': species, 'current_stock': int(count)}
+                                if hasattr(self.fish, 'create'):
+                                    self.fish.create(fish_doc)
+                                else:
+                                    self.fish.insert_one(fish_doc)
                     except Exception:
                         logger.exception('Failed to update fish.current_stock inside session')
                         session.abort_transaction()

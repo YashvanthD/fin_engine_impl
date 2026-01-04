@@ -3,6 +3,7 @@ import os
 import warnings
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
+from fin_server.repository.mongo_helper import MongoRepo
 # Register canonical blueprints and their API blueprints from route modules
 from fin_server.routes.auth import auth_bp, auth_api_bp
 from fin_server.routes.user import user_bp, user_api_bp

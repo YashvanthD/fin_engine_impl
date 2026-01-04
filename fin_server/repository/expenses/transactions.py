@@ -1,9 +1,12 @@
 from bson.decimal128 import Decimal128
 from datetime import datetime, timezone
 
+from fin_server.repository.base_repository import BaseRepository
 
-class TransactionsRepository:
+
+class TransactionsRepository(BaseRepository):
     def __init__(self, db):
+        super().__init__(db)
         self.coll = db['transactions']
         try:
             self.coll.create_index([('postingDate', 1)], name='tx_posting_date')

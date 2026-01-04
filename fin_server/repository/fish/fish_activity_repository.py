@@ -3,7 +3,15 @@ from fin_server.repository.mongo_helper import get_collection
 from fin_server.utils.time_utils import get_time_date_dt
 
 class FishActivityRepository(BaseRepository):
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(cls, '_instance'):
+            cls._instance = super(FishActivityRepository, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self, db=None, collection_name="fish_activity"):
+        super().__init__(db, collection_name)
         self.collection_name = collection_name
         print("Initializing FishActivityRepository, collection:", self.collection_name)
         self.collection = get_collection(self.collection_name) if db is None else db[collection_name]

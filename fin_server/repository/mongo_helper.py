@@ -1,10 +1,7 @@
 from typing import Optional, Any, Dict
 from pymongo import MongoClient
-from pymongo.database import Database
 import os
 import logging
-import importlib
-import json
 
 
 logger = logging.getLogger(__name__)
@@ -19,6 +16,7 @@ class MongoRepo:
         if cls._instance is None:
             cls._instance = super(MongoRepo, cls).__new__(cls)
             cls._client = MongoClient(cls._mongo_uri)
+            cls.init_repositories(cls._instance)
             cls._is_initialized = True
         return cls._instance
 
@@ -61,6 +59,10 @@ class MongoRepo:
         self.transactions: Any = None
         self.feeding: Any = None
 
+        self.init_repositories()
+        self._is_initialized = True
+
+
 
     def init_repositories(self):
         from fin_server.repository.expenses import TransactionsRepository
@@ -72,6 +74,7 @@ class MongoRepo:
         from fin_server.repository.user import UserRepository, FishMappingRepository
         # USER DB REPOSITORIES
         self.users = UserRepository(self.user_db)
+        print("self.users set to:", type(self.users))
         self.fish_mapping = FishMappingRepository(self.user_db)
 
         # MEDIA DB REPOSITORIES
@@ -101,16 +104,18 @@ class MongoRepo:
     def get_instance(cls):
         if cls._instance is None:
             cls._instance = cls()
-            cls._instance.init_repositories()
         return cls._instance
 
 
 def get_collection(collection_name: str) -> Any:
-    mongo_repo = MongoRepo.get_instance()
-    # Don't need to init_repositories again; already handled in get_instance.
-    coll = getattr(mongo_repo, collection_name, None)
+    repo = MongoRepo.get_instance()
+    coll = getattr(repo, collection_name, None)
+    if coll is None and not MongoRepo.is_initialized():
+        m = MongoRepo()
+        m.init_repositories()
+        coll = getattr(repo, collection_name, None)
     if coll is None:
-        raise ValueError(f"Database '{collection_name}' not found in MongoRepo")
+        raise ValueError(f"Repository '{collection_name}' is None. Existing: {dir(repo)}")
     return coll
 
 

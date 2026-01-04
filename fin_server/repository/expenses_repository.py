@@ -4,6 +4,7 @@ This file provides a class `ExpensesRepository` that wraps the lower-level colle
 repositories implemented in `repository/expenses/__init__.py` and offers domain
 operations such as create_expense, post_payment, create_transaction_for_payment, etc.
 """
+from fin_server.repository.base_repository import BaseRepository
 from fin_server.repository.expenses import (
     FinancialAccountsRepository, BankAccountsRepository, PaymentMethodsRepository,
     TransactionsRepository, PaymentsRepository, BankStatementsRepository, StatementLinesRepository,
@@ -13,8 +14,9 @@ from fin_server.repository.expenses import (
 from datetime import datetime, timezone
 
 
-class ExpensesRepository:
+class ExpensesRepository(BaseRepository):
     def __init__(self, db):
+        super().__init__(db)
         self.fin_accounts = FinancialAccountsRepository(db)
         self.bank_accounts = BankAccountsRepository(db)
         self.payment_methods = PaymentMethodsRepository(db)

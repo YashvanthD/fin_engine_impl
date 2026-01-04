@@ -1,7 +1,16 @@
+from fin_server.repository.base_repository import BaseRepository
 from fin_server.utils.time_utils import get_time_date_dt
 
-class FishMappingRepository:
+class FishMappingRepository(BaseRepository):
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not hasattr(cls, '_instance'):
+            cls._instance = super(FishMappingRepository, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self, db, collection="fish_mappings"):
+        super().__init__(db)
         self.collection_name = collection
         print(f"Initializing {self.collection_name} collection:")
         self.collection = db[collection]

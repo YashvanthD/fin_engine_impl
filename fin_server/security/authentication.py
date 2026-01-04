@@ -2,7 +2,7 @@ from jose import jwt, JWTError
 from datetime import timedelta, datetime
 
 from fin_server.repository.mongo_helper import get_collection
-from fin_server.utils.time_utils import get_time_date_dt, now_std
+from fin_server.utils.time_utils import now_std
 import base64
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
