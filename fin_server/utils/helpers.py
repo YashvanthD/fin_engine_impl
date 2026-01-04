@@ -492,7 +492,7 @@ def sanitize(obj, remove_fields=None):
     return _sanitize_inner(obj)
 
 
-def respond_success(payload=None, status=200):
+def respond_success(payload=None, status=200, do_sanitize=True):
     """Return a standardized success response compatible with frontend's ApiResponse.
 
     - If payload is None -> { success: True, data: {} }
@@ -504,7 +504,10 @@ def respond_success(payload=None, status=200):
         data = {}
     else:
         try:
-            data = sanitize(payload)
+            if do_sanitize:
+                data = sanitize(payload)
+            else:
+                data = payload
         except Exception:
             raise
     body = {'success': True}

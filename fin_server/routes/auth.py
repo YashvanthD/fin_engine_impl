@@ -14,6 +14,7 @@ from fin_server.utils.generator import build_user
 from fin_server.utils.helpers import respond_success, respond_error, normalize_doc
 from fin_server.utils.validation import validate_signup, validate_signup_user, build_signup_login_response
 from fin_server.services.user_service import create_user_and_accounts
+from fin_server.exception.UnauthorizedError import UnauthorizedError
 
 # In production, MASTER_ADMIN_PASSWORD must be provided via environment variables.
 # In development (FLASK_DEBUG=true), a weak default is allowed for convenience.
@@ -327,7 +328,7 @@ def login():
     response, status = handle_login_or_token_request(username=username, password=password, phone=phone, email=email)
     if status >= 400:
         return respond_error(response.get('error') or response.get('message') or response, status=status)
-    return respond_success(response, status=status)
+    return respond_success(response, status=status, do_sanitize=False)
 
 # User Data Endpoints
 @auth_bp.route('/account/users', methods=['GET'])
@@ -364,7 +365,11 @@ def user_settings():
     clients can be migrated gradually.
     """
     logging.info("/auth/settings is deprecated; prefer /user/settings")
-    payload = get_auth_payload(request)
+    try:
+        payload = get_auth_payload(request)
+    except UnauthorizedError as ue:
+        logging.warning('Authentication failed in /auth/settings: %s', ue)
+        return respond_error('Missing or invalid token', status=401)
     user_key = payload.get('user_key')
     account_key = payload.get('account_key')
     try:
@@ -398,7 +403,11 @@ def get_user_permissions():
 @auth_bp.route('/validate', methods=['GET'])
 def validate_token():
     logging.info("Validate token endpoint called")
-    payload = get_auth_payload(request)
+    try:
+        payload = get_auth_payload(request)
+    except UnauthorizedError as ue:
+        logging.warning('Authentication failed in validate_token: %s', ue)
+        return respond_error('Missing or invalid token', status=401)
     user_key = payload.get('user_key')
     account_key = payload.get('account_key')
     user_dto = UserDTO.find_by_user_key(user_key)
@@ -429,7 +438,11 @@ def auth_me():
     settings, subscription, last_active, and a sanitized user object.
     """
     logging.info("/auth/me endpoint called")
-    payload = get_auth_payload(request)
+    try:
+        payload = get_auth_payload(request)
+    except UnauthorizedError as ue:
+        logging.warning('Authentication failed in /auth/me: %s', ue)
+        return respond_error('Missing or invalid token', status=401)
     user_key = payload.get('user_key')
     account_key = payload.get('account_key')
     user_dto = UserDTO.find_by_user_key(user_key)
@@ -553,7 +566,7 @@ def generate_token():
         if expiry:
             response['expires_in'] = str(expiry)
         logging.info("Refresh token generated and response: %s", response)
-        return respond_success(response, status=200)
+        return respond_success(response, status=200, do_sanitize=False)
     else:
         # Default: access token flow (existing logic)
         response, status = handle_login_or_token_request(username=username, password=password, refresh_token=refresh_token, phone=phone, email=email, expires_in=expires_in)
@@ -566,12 +579,16 @@ def generate_token():
             response = build_token_only_response(response['access_token'], expiry)
         if status >= 400:
             return respond_error(response.get('error') or response.get('message') or response, status=status)
-        return respond_success(response, status=status)
+        return respond_success(response, status=status, do_sanitize=False)
 
 @auth_bp.route('/subscriptions', methods=['GET', 'PUT'])
 def user_subscriptions():
     logging.info("Subscriptions endpoint called")
-    payload = get_auth_payload(request)
+    try:
+        payload = get_auth_payload(request)
+    except UnauthorizedError as ue:
+        logging.warning('Authentication failed in /subscriptions: %s', ue)
+        return respond_error('Missing or invalid token', status=401)
     user_key = payload.get('user_key')
     account_key = payload.get('account_key')
     roles = payload.get('roles', [])
@@ -615,6 +632,12 @@ def user_subscriptions():
 @auth_bp.route('/account/<account_key>/company', methods=['GET'])
 def get_company_name(account_key):
     # Find any admin user for this account_key
+    try:
+        # Ensure caller is authenticated
+        payload = get_auth_payload(request)
+    except UnauthorizedError as ue:
+        logging.warning('Authentication failed in get_company_name: %s', ue)
+        return respond_error('Missing or invalid token', status=401)
     admin_doc = user_repo.find_one({
         'account_key': account_key,
         'roles': {'$in': ['admin']}
@@ -666,7 +689,7 @@ def api_auth_refresh():
             if not valid:
                 return respond_error('Invalid or expired refresh token', status=401)
             access_token = AuthSecurity.encode_token({'user_key': user_key, 'account_key': user.get('account_key'), 'roles': user.get('roles', []), 'type': 'access'})
-            return respond_success({'accessToken': access_token})
+            return respond_success({'accessToken': access_token}, status=200, do_sanitize=False)
         except Exception:
             current_app.logger.exception('Refresh token validation failed')
             return respond_error('Invalid refresh token', status=401)

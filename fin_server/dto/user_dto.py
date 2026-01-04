@@ -9,10 +9,18 @@ class UserDTO:
     _cache = {}
     _CACHE_EXPIRY_SECONDS = 86400  # 1 day
 
-    def __init__(self, user_id, account_key, user_key, roles=None, refresh_tokens=None, settings=None, subscription=None, password=None, **kwargs):
+    def __init__(self, user_id=None, account_key=None, user_key=None, roles=None, refresh_tokens=None, settings=None, subscription=None, password=None, **kwargs):
+        # Allow user_id to be optional for backward/DB compatibility; other fields default to None
         self.user_id = user_id
         self.account_key = account_key
         self.user_key = user_key
+
+        # account_key and user_key may be provided via kwargs if not passed directly
+        if self.account_key is None and 'account_key' in kwargs:
+            self.account_key = kwargs.get('account_key')
+        if self.user_key is None and 'user_key' in kwargs:
+            self.user_key = kwargs.get('user_key')
+
         self.roles = roles or []
         self._refresh_tokens = refresh_tokens or []
         self._refresh_token_cache = set(self._refresh_tokens)
@@ -130,6 +138,9 @@ class UserDTO:
         user_doc = user_repo.find_one(query)
         if not user_doc:
             return None
+        # If Mongo returned an ObjectId in '_id', expose it as 'user_id' expected by the DTO
+        if '_id' in user_doc:
+            user_doc['user_id'] = user_doc['_id']
         user_doc.pop('_id', None)
         user_doc = {k.lower(): v for k, v in user_doc.items()}
         return cls(**user_doc)
@@ -140,6 +151,9 @@ class UserDTO:
         seen_keys = set()
         result = []
         for u in users:
+            # Map MongoDB _id to user_id to satisfy DTO constructor
+            if '_id' in u:
+                u['user_id'] = u['_id']
             u.pop('_id', None)
             u = {k.lower(): v for k, v in u.items()}
             user_key = u['user_key']

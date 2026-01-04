@@ -1,4 +1,5 @@
 from jose import jwt, JWTError
+from jose.exceptions import JWSError
 from datetime import timedelta, datetime
 
 from fin_server.repository.mongo_helper import get_collection
@@ -62,6 +63,9 @@ class AuthSecurity:
                 if exp < now:
                     raise UnauthorizedError("Token expired. Please login again or refresh your session.")
             return payload
+        except JWSError as e:
+            # Specific handling for crypto/parsing errors from jose
+            raise UnauthorizedError(f"Invalid token or crypto error: {str(e)}")
         except JWTError as e:
             msg = str(e)
             if 'Signature has expired' in msg:
@@ -93,8 +97,12 @@ class AuthSecurity:
             payload.pop("exp", None)
             payload.pop("type", None)
             return cls.encode_token(payload)
+        except JWSError as e:
+            raise ValueError(f"Invalid refresh token (crypto error): {str(e)}")
         except JWTError as e:
             raise ValueError(f"Invalid refresh token: {str(e)}")
+        except Exception as e:
+            raise ValueError(f"Refresh token decode error: {str(e)}")
 
     @staticmethod
     def encode_base64(data: bytes) -> str:
@@ -306,6 +314,8 @@ class AuthSecurity:
             if payload.get('type') not in [None, 'access', 'refresh']:
                 raise UnauthorizedError("Invalid token type.")
             return payload
+        except JWSError as e:
+            raise UnauthorizedError(f"Invalid token (crypto error): {str(e)}")
         except JWTError as e:
             msg = str(e)
             if 'Signature has expired' in msg:
