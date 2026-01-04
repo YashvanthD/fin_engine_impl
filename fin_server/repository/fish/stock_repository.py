@@ -1,5 +1,6 @@
 import logging
 
+from pymongo.errors import DuplicateKeyError
 from fin_server.repository.mongo_helper import get_collection
 from fin_server.utils.time_utils import get_time_date_dt
 
@@ -182,6 +183,9 @@ class StockRepository:
                     try:
                         r = self.fish_analytics.insert_one(batch)
                         logger.debug('Inserted fish_analytics batch id=%s', getattr(r, 'inserted_id', None))
+                    except DuplicateKeyError:
+                        # Handle duplicate key error for analytics batch insert
+                        logger.debug('DuplicateKeyError for fish_analytics batch insert (expected if already stocked): %s', batch)
                     except Exception:
                         logger.exception('Failed to insert fish_analytics batch for add_stock')
                 except Exception:
@@ -398,9 +402,14 @@ class StockRepository:
                         batch = {'_id': f'{account_key}-{species}-{pond_id}-{get_time_date_dt(include_time=True).strftime("%Y%m%d%H%M%S%f")}', 'species_id': species, 'count': int(count), 'fish_age_in_month': 0, 'date_added': get_time_date_dt(include_time=True), 'account_key': account_key, 'pond_id': pond_id}
                         if average_weight is not None:
                             batch['fish_weight'] = average_weight
-                        self.fish_analytics.insert_one(batch, session=session)
+                        try:
+                            self.fish_analytics.insert_one(batch, session=session)
+                        except DuplicateKeyError:
+                            logger.debug('DuplicateKeyError for fish_analytics batch insert inside session (already exists): %s', batch)
+                        except Exception:
+                            logger.exception('Failed to insert fish_analytics inside session')
                     except Exception:
-                        logger.exception('Failed to insert fish_analytics inside session')
+                        logger.exception('Error creating analytics batch for add_stock')
 
                     try:
                         session.commit_transaction()
@@ -494,15 +503,14 @@ class StockRepository:
                     logger.exception('Error creating fish_activity for remove_stock')
 
             if create_analytics:
+                batch = {'_id': f'{account_key}-{species}-sample-{get_time_date_dt(include_time=True).strftime("%Y%m%d%H%M%S%f")}', 'species_id': species, 'count': -int(count), 'fish_age_in_month': 0, 'date_added': get_time_date_dt(include_time=True), 'account_key': account_key, 'pond_id': pond_id}
                 try:
-                    batch = {'_id': f'{account_key}-{species}-sample-{get_time_date_dt(include_time=True).strftime("%Y%m%d%H%M%S%f")}', 'species_id': species, 'count': -int(count), 'fish_age_in_month': 0, 'date_added': get_time_date_dt(include_time=True), 'account_key': account_key, 'pond_id': pond_id}
-                    try:
-                        r = self.fish_analytics.insert_one(batch)
-                        logger.debug('Inserted fish_analytics sample batch id=%s', getattr(r, 'inserted_id', None))
-                    except Exception:
-                        logger.exception('Failed to insert fish_analytics batch for remove_stock')
+                    r = self.fish_analytics.insert_one(batch)
+                    logger.debug('Inserted fish_analytics sample batch id=%s', getattr(r, 'inserted_id', None))
+                except DuplicateKeyError:
+                    logger.debug('DuplicateKeyError for fish_analytics sample batch insert (already exists): %s', batch)
                 except Exception:
-                    logger.exception('Error creating analytics batch for remove_stock')
+                    logger.exception('Failed to insert fish_analytics batch for remove_stock')
 
             logger.info('remove_stock_from_pond completed pond=%s species=%s count=%s', pond_id, species, count)
             return True
