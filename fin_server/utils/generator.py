@@ -1,5 +1,6 @@
 import base64
 import random
+import re
 import time
 
 from fin_server.repository.mongo_helper import get_collection
@@ -157,3 +158,55 @@ def get_default_end_date(current_time=None):
 
 # Re-export get_time_date for callers that import it from this module
 get_time_date = _get_time_date
+
+
+def generate_account_number(ifsc: str = '572137') -> str:
+    """Generate a 12-digit account number starting with the given IFSC prefix.
+
+    Format: <ifsc><6-digit sequential suffix> e.g. 572137000001
+    The function finds the highest existing suffix in `bank_accounts.account_number`
+    that starts with the given IFSC and increments it. If none found, it starts
+    at 000000. This keeps account numbers incremental rather than random.
+
+    NOTE: This function is idempotent and best-effort in presence of concurrent
+    calls; for full transactional guarantees use a DB sequence collection or
+    transactions. For now this heuristic meets the immediate requirement.
+    """
+    # Normalize IFSC to digits only and ensure length 6
+    ifsc_digits = re.sub(r'\D', '', str(ifsc))[:6].ljust(6, '0')
+    try:
+        # Try to access bank_accounts collection via get_collection
+        bank_accounts = get_collection('bank_accounts')
+        coll = getattr(bank_accounts, 'collection', bank_accounts)
+        # Find account_numbers that start with the IFSC prefix
+        cursor = coll.find({'account_number': {'$regex': f'^{ifsc_digits}'}}, {'account_number': 1})
+        max_suffix = -1
+        for doc in cursor:
+            an = str(doc.get('account_number') or '')
+            # extract trailing digits
+            m = re.search(r'(\d+)$', an)
+            if m:
+                digits = m.group(1)
+                # consider only last 6 digits as suffix
+                s = digits[-6:]
+                try:
+                    val = int(s)
+                    if val > max_suffix:
+                        max_suffix = val
+                except Exception:
+                    continue
+        next_suffix = 0 if max_suffix < 0 else (max_suffix + 1)
+    except Exception:
+        # If collection access fails, fall back to a process-local increment starting at 0
+        # This is a safe fallback for tests or environments without DB access.
+        try:
+            # Use a simple attribute on the function to persist across calls
+            if not hasattr(generate_account_number, '_local_counter'):
+                generate_account_number._local_counter = 0
+            generate_account_number._local_counter += 1
+            next_suffix = generate_account_number._local_counter
+        except Exception:
+            next_suffix = 0
+    # format suffix as 6 digits
+    suffix_str = f"{next_suffix:06d}"
+    return f"{ifsc_digits}{suffix_str}"

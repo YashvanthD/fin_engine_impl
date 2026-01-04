@@ -36,7 +36,7 @@ class ExpensesRepository(BaseRepository):
         coll = self.db['expenses']
         doc = dict(expense_doc)
         doc.setdefault('status', 'draft')
-        doc.setdefault('createdAt', datetime.now(timezone.utc))
+        doc.setdefault('created_at', datetime.now(timezone.utc))
         res = coll.insert_one(doc)
         return res.inserted_id
 
@@ -59,29 +59,78 @@ class ExpensesRepository(BaseRepository):
         tx_coll = self.db['transactions']
         payment_doc = dict(payment_doc)
         payment_doc.setdefault('status', 'initiated')
-        payment_doc.setdefault('createdAt', datetime.now(timezone.utc))
+        payment_doc.setdefault('created_at', datetime.now(timezone.utc))
         payment_res = payments_coll.insert_one(payment_doc)
         payment_id = payment_res.inserted_id
         tx_id = None
         if tx_doc:
             tx_doc = dict(tx_doc)
-            tx_doc.setdefault('createdAt', datetime.now(timezone.utc))
+            tx_doc.setdefault('created_at', datetime.now(timezone.utc))
             tx_doc_res = tx_coll.insert_one(tx_doc)
             tx_id = tx_doc_res.inserted_id
             # Link payment -> transaction
-            payments_coll.update_one({'_id': payment_id}, {'$set': {'transactionId': tx_id}})
-        return payment_id, tx_id
+            payments_coll.update_one({'_id': payment_id}, {'$set': {'transaction_id': tx_id}})
+
+        # Post-create bookkeeping: update bank account balance and add statement line
+        try:
+            # Resolve bank account from payment_doc: try common field names
+            bank_account_id = payment_doc.get('bankAccountId') or payment_doc.get('bank_account_id') or (payment_doc.get('metadata') or {}).get('bank_account_id')
+            amount = float(payment_doc.get('amount') or 0)
+            # Determine direction: default 'out' (org paid out), 'in' increases balance
+            direction = (payment_doc.get('direction') or payment_doc.get('type') or 'out').lower()
+            if bank_account_id and amount:
+                # update bank account balance (collection may be via repo)
+                try:
+                    bank_acc_repo = BankAccountsRepository(self.db)
+                    coll = getattr(bank_acc_repo, 'collection', bank_acc_repo)
+                    if direction in ('in', 'credit'):
+                        coll.update_one({'_id': bank_account_id}, {'$inc': {'balance': float(amount)}})
+                    else:
+                        coll.update_one({'_id': bank_account_id}, {'$inc': {'balance': -float(amount)}})
+                except Exception:
+                    try:
+                        coll = self.db['bank_accounts']
+                        if direction in ('in', 'credit'):
+                            coll.update_one({'_id': bank_account_id}, {'$inc': {'balance': float(amount)}})
+                        else:
+                            coll.update_one({'_id': bank_account_id}, {'$inc': {'balance': -float(amount)}})
+                    except Exception:
+                        pass
+
+                # insert a passbook-style statement line (use repository API when present)
+                try:
+                    sl_repo = getattr(self, 'statement_lines', None)
+                    ref = {'type': 'payment', 'id': payment_id}
+                    if sl_repo and hasattr(sl_repo, 'append_line'):
+                        sl_repo.append_line(bank_account_id, amount=amount, currency=payment_doc.get('currency', 'INR'), direction=direction, reference=ref, transaction_id=tx_id, created_at=datetime.now(timezone.utc))
+                    else:
+                        sl_coll = self.db['statement_lines']
+                        stmt = {
+                            'bank_account_id': bank_account_id,
+                            'amount': amount,
+                            'currency': payment_doc.get('currency', 'INR'),
+                            'direction': direction,
+                            'reference': ref,
+                            'transaction_id': tx_id,
+                            'created_at': datetime.now(timezone.utc)
+                        }
+                        sl_coll.insert_one(stmt)
+                except Exception:
+                    pass
+        except Exception:
+            # ensure failure here does not break the main flow
+            pass
 
     # Simple reconciliation helper: match statement_lines by externalRef
     def reconcile_by_external_ref(self, bank_account_id, external_ref):
         # find statement lines with external_ref and payments with matching gateway ref
-        sl = list(self.db['statement_lines'].find({'bankAccountId': bank_account_id, 'externalRef': external_ref}))
+        sl = list(self.db['statement_lines'].find({'bank_account_id': bank_account_id, 'external_ref': external_ref}))
         matches = []
         for line in sl:
-            payment = self.db['payments'].find_one({'externalGatewayRef': external_ref})
+            payment = self.db['payments'].find_one({'external_gateway_ref': external_ref})
             if payment:
                 # mark matched
-                self.db['statement_lines'].update_one({'_id': line['_id']}, {'$set': {'matchedTo': {'type': 'payment', 'id': payment['_id']}}})
+                self.db['statement_lines'].update_one({'_id': line['_id']}, {'$set': {'matched_to': {'type': 'payment', 'id': payment['_id']}}})
                 matches.append((line, payment))
         return matches
 

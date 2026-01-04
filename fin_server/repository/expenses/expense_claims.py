@@ -18,12 +18,12 @@ class ExpenseClaimsRepository(BaseRepository):
             self.collection_name = collection_name
             self.coll = self.collection
             try:
-                self.collection.create_index([('claimantId', 1), ('status', 1)], name='claims_claimant_status')
+                self.collection.create_index([('claimant_id', 1), ('status', 1)], name='claims_claimant_status')
             except Exception:
                 pass
             self._initialized = True
 
     def create(self, doc):
         doc = dict(doc)
-        doc.setdefault('createdAt', datetime.now(timezone.utc))
+        doc.setdefault('created_at', datetime.now(timezone.utc))
         return self.collection.insert_one(doc)

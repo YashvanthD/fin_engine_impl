@@ -154,21 +154,91 @@ def create_expense_with_repo(expense_doc: Dict[str, Any], expenses_repo: Any) ->
                 exp['status'] = 'SUCCESS'
 
         if hasattr(expenses_repo, 'create_expense'):
-            return expenses_repo.create_expense(exp)
-        if hasattr(expenses_repo, 'create'):
-            return expenses_repo.create(exp)
-        if hasattr(expenses_repo, 'insert_one'):
+            inserted = expenses_repo.create_expense(exp)
+        elif hasattr(expenses_repo, 'create'):
+            inserted = expenses_repo.create(exp)
+        elif hasattr(expenses_repo, 'insert_one'):
             res = expenses_repo.insert_one(exp)
-            return getattr(res, 'inserted_id', None)
-        # last resort: try attribute 'db' collection
-        if hasattr(expenses_repo, 'db') and hasattr(expenses_repo.db, 'expenses'):
-            coll = expenses_repo.db['expenses']
-            res = coll.insert_one(exp)
-            return getattr(res, 'inserted_id', None)
+            inserted = getattr(res, 'inserted_id', None)
+        else:
+            # last resort: try attribute 'db' collection
+            if hasattr(expenses_repo, 'db') and hasattr(expenses_repo.db, 'expenses'):
+                coll = expenses_repo.db['expenses']
+                res = coll.insert_one(exp)
+                inserted = getattr(res, 'inserted_id', None)
+            else:
+                inserted = None
+
+        # Post-create: update organization bank account and insert a bank statement line
+        try:
+            org_key = exp.get('account_key') or (exp.get('metadata') or {}).get('account_key')
+            amt = float(exp.get('amount') or 0)
+            if org_key and amt and inserted is not None:
+                # Resolve org bank account
+                bank_accounts = get_collection('bank_accounts')
+                try:
+                    org_acc = bank_accounts.find_one({'account_key': org_key, 'type': 'organization'})
+                except Exception:
+                    coll = getattr(bank_accounts, 'collection', bank_accounts)
+                    org_acc = coll.find_one({'account_key': org_key, 'type': 'organization'})
+
+                if not org_acc:
+                    # create one if missing
+                    try:
+                        from fin_server.services.user_service import ensure_organization_account
+                        org_acc = ensure_organization_account(org_key)
+                    except Exception:
+                        org_acc = None
+
+                if org_acc:
+                    # determine debit/credit: treat 'sell'/'income' as credit, others as debit
+                    action = (exp.get('action') or '').lower()
+                    credit_actions = {'sell', 'income'}
+                    delta = amt if action in credit_actions else -amt
+                    # update balance on account
+                    try:
+                        coll = getattr(bank_accounts, 'collection', bank_accounts)
+                        coll.update_one({'_id': org_acc.get('_id')}, {'$inc': {'balance': float(delta)}})
+                    except Exception:
+                        try:
+                            # if org_acc is an inserted_id returned earlier
+                            coll = getattr(bank_accounts, 'collection', bank_accounts)
+                            coll.update_one({'account_key': org_key, 'type': 'organization'}, {'$inc': {'balance': float(delta)}})
+                        except Exception:
+                            pass
+                    # insert a passbook-style statement line referencing this expense
+                    try:
+                        sl_repo = None
+                        if hasattr(expenses_repo, 'statement_lines'):
+                            sl_repo = getattr(expenses_repo, 'statement_lines')
+                        else:
+                            try:
+                                sl_repo = get_collection('statement_lines')
+                            except Exception:
+                                sl_repo = None
+                        if sl_repo is not None and hasattr(sl_repo, 'append_line'):
+                            # use repo API which will compute running balance and update bank_accounts
+                            ref = {'type': 'expense', 'id': inserted}
+                            # direction: credit for sell/income, debit otherwise
+                            direction = 'in' if action in credit_actions else 'out'
+                            bank_acc_id = org_acc.get('_id') if isinstance(org_acc, dict) else org_acc
+                            try:
+                                sl_repo.append_line(bank_acc_id, amount=amt, currency=exp.get('currency', 'INR'), direction=direction, reference=ref, transaction_id=None, created_at=get_time_date_dt(include_time=True))
+                            except Exception:
+                                # fallback to direct insert if append_line fails
+                                coll = getattr(sl_repo, 'collection', sl_repo)
+                                stmt = {'bank_account_id': bank_acc_id, 'amount': amt, 'currency': exp.get('currency', 'INR'), 'type': 'expense', 'reference': ref, 'created_at': get_time_date_dt(include_time=True)}
+                                coll.insert_one(stmt)
+                    except Exception:
+                        pass
+        except Exception:
+            # keep expense creation primary; failures in bookkeeping should not block
+            logger.exception('Failed to update organization accounting after expense create')
+
+        return inserted
     except Exception:
         logger.exception('Failed to create expense via repo')
         raise
-    return None
 
 
 # ------------------------- Expense/Transaction helper API -------------------------
@@ -232,7 +302,7 @@ def initiate_expense_for_pond(pond_id: str, account_key: str, amount: float, act
         'type': normalize_type(expense_type),
         'status': normalize_status('initiated'),
         'notes': notes,
-        'createdAt': get_time_date_dt(include_time=True),
+        'created_at': get_time_date_dt(include_time=True),
     }
     if meta:
         doc['metadata'] = meta
@@ -321,7 +391,7 @@ def create_draft_transaction_for_pond(pond_id: str, account_key: str, amount: Op
         'status': 'draft',
         'description': description,
         'amount': float(amount) if amount is not None else None,
-        'createdAt': get_time_date_dt(include_time=True),
+        'created_at': get_time_date_dt(include_time=True),
     }
     if metadata:
         tx_doc['metadata'] = metadata
@@ -374,7 +444,7 @@ def prepare_pond_deletion_financials(
             'type': 'pond',
             'status': 'initiated',
             'notes': f'Pond sale for {pond_id}',
-            'createdAt': get_time_date_dt(include_time=True),
+            'created_at': get_time_date_dt(include_time=True),
             'metadata': {'auto_created_by': 'prepare_pond_deletion', 'pond_id': pond_id}
         }
         pond_expense_id = create_expense_with_repo(normalize_document_fields(pond_expense_doc), get_collection('expenses'))
@@ -396,7 +466,7 @@ def prepare_pond_deletion_financials(
             'type': 'fish',
             'status': 'finalized',
             'notes': f'Fish sale on pond {pond_id}',
-            'createdAt': get_time_date_dt(include_time=True),
+            'created_at': get_time_date_dt(include_time=True),
             'metadata': {'auto_created_by': 'prepare_pond_deletion', 'pond_id': pond_id}
         }
         fish_expense_id = create_expense_with_repo(normalize_document_fields(fish_expense_doc), get_collection('expenses'))
@@ -423,7 +493,7 @@ def prepare_pond_deletion_financials(
             'type': 'maintenance',
             'status': 'initiated',
             'notes': notes,
-            'createdAt': get_time_date_dt(include_time=True),
+            'created_at': get_time_date_dt(include_time=True),
             'metadata': meta
         }
         eid = create_expense_with_repo(normalize_document_fields(maint_doc), get_collection('expenses'))

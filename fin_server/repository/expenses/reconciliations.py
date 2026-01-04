@@ -22,5 +22,5 @@ class ReconciliationsRepository(BaseRepository):
 
     def create(self, doc):
         doc = dict(doc)
-        doc.setdefault('createdAt', datetime.now(timezone.utc))
+        doc.setdefault('created_at', datetime.now(timezone.utc))
         return self.collection.insert_one(doc)

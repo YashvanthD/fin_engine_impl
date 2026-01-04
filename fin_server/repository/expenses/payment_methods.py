@@ -18,7 +18,7 @@ class PaymentMethodsRepository(BaseRepository):
             self.collection_name = collection_name
             self.coll = self.collection
             try:
-                self.collection.create_index([('ownerId', 1), ('ownerType', 1)], name='pm_owner')
+                self.collection.create_index([('owner_id', 1), ('owner_type', 1)], name='pm_owner')
             except Exception:
                 pass
             print(f"Initializing {self.collection_name} collection")
@@ -26,7 +26,7 @@ class PaymentMethodsRepository(BaseRepository):
 
     def create(self, doc):
         doc = dict(doc)
-        doc.setdefault('createdAt', datetime.now(timezone.utc))
+        doc.setdefault('created_at', datetime.now(timezone.utc))
         return self.collection.insert_one(doc)
 
     def find_one(self, q):

@@ -18,7 +18,7 @@ class PaymentsRepository(BaseRepository):
             self.collection_name = collection_name
             self.coll = self.collection
             try:
-                self.collection.create_index([('paymentRef', 1)], unique=False, name='payments_ref')
+                self.collection.create_index([('payment_ref', 1)], unique=False, name='payments_ref')
             except Exception:
                 pass
             self._initialized = True
@@ -26,7 +26,7 @@ class PaymentsRepository(BaseRepository):
     def create_payment(self, payment_doc):
         payment = dict(payment_doc)
         payment.setdefault('status', 'initiated')
-        payment.setdefault('createdAt', datetime.now(timezone.utc))
+        payment.setdefault('created_at', datetime.now(timezone.utc))
         return self.collection.insert_one(payment)
 
     def update(self, q, updates):

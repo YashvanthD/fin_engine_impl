@@ -23,5 +23,5 @@ class AuditLogsRepository(BaseRepository):
 
     def insert(self, doc):
         d = dict(doc)
-        d.setdefault('createdAt', datetime.now(timezone.utc))
+        d.setdefault('created_at', datetime.now(timezone.utc))
         return self.collection.insert_one(d)

@@ -13,6 +13,7 @@ from fin_server.security.authentication import AuthSecurity, get_auth_payload
 from fin_server.utils.generator import build_user
 from fin_server.utils.helpers import respond_success, respond_error, normalize_doc
 from fin_server.utils.validation import validate_signup, validate_signup_user, build_signup_login_response
+from fin_server.services.user_service import create_user_and_accounts
 
 # In production, MASTER_ADMIN_PASSWORD must be provided via environment variables.
 # In development (FLASK_DEBUG=true), a weak default is allowed for convenience.
@@ -92,7 +93,16 @@ def signup():
     data['subscription'] = subscription
     admin_data = build_user(data)
     logging.info("Built admin data: %s", admin_data)
-    user_id = user_repo.create(admin_data)
+    # create user and create bank accounts for user and organization
+    try:
+        created = create_user_and_accounts(user_repo, admin_data, create_user_bank=True, ensure_org_account=True)
+        user_id = created.get('user_id')
+    except ValueError as ve:
+        logging.warning("Account creation conflict: %s", ve)
+        return respond_error(str(ve), status=409)
+    except Exception:
+        current_app.logger.exception('Failed creating admin user/accounts')
+        return respond_error('Server error', status=500)
     current_app.logger.info(f'Admin user created with ID: {user_id}')
     logging.info("Admin user created with ID: %s", user_id)
     response = build_signup_login_response(success=True, message='Admin signup validated and saved.', user_id=user_id,
@@ -126,7 +136,16 @@ def signup_user(account_key):
         return respond_error(errors, status=400)
     user_data = build_user(data, account_key)
     logging.info("Built user data: %s", user_data)
-    user_id = user_repo.create(user_data)
+    # create user and create bank accounts for user and organization
+    try:
+        created = create_user_and_accounts(user_repo, user_data, create_user_bank=True, ensure_org_account=True)
+        user_id = created.get('user_id')
+    except ValueError as ve:
+        logging.warning("Account creation conflict for signup_user: %s", ve)
+        return respond_error(str(ve), status=409)
+    except Exception:
+        logging.exception('Failed creating user/accounts for account signup')
+        return respond_error('Server error', status=500)
     logging.info("User created with ID: %s", user_id)
     response = build_signup_login_response(success=True, message='User signup validated and saved.', user_id=user_id,
                                            account_key=account_key, user_key=user_data['user_key'])

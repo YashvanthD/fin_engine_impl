@@ -91,11 +91,15 @@ def create_payment():
     try:
         payload = get_request_payload(request)
         payment = request.get_json(force=True)
-        pay_repo = expense_repo.payments
-        if not pay_repo:
-            return respond_error('Payments repository not available', status=500)
-        res = pay_repo.create_payment(payment)
-        return respond_success({'data': {'paymentId': str(res.inserted_id)}}, status=201)
+        # Use high-level method which will also optionally create a transaction
+        tx_doc = payment.get('transaction') if isinstance(payment, dict) else None
+        # The ExpensesRepository.create_payment_and_transaction expects (payment_doc, tx_doc)
+        try:
+            payment_id, tx_id = expense_repo.create_payment_and_transaction(payment, tx_doc)
+            return respond_success({'data': {'paymentId': str(payment_id), 'transactionId': str(tx_id) if tx_id else None}}, status=201)
+        except Exception:
+            current_app.logger.exception('Failed to create payment and transaction')
+            return respond_error('Server error', status=500)
     except (Unauthorized, Forbidden) as ue:
         return respond_error(str(ue), status=getattr(ue, 'code', 401))
     except Exception:
@@ -130,12 +134,31 @@ def import_bank_statement():
         stmt = body.get('statement')
         lines = body.get('lines', [])
         res = bs_repo.create(stmt)
+        inserted_id = getattr(res, 'inserted_id', None) if res is not None else None
         if lines:
             # attach bankStatementId
             for l in lines:
-                l['bankStatementId'] = res.inserted_id
-            sl_repo.insert_many(lines)
-        return respond_success({'data': {'bankStatementId': str(res.inserted_id)}})
+                l['bankStatementId'] = inserted_id
+            # use statement_lines repository to insert many
+            try:
+                sl_repo.insert_many(lines)
+            except Exception:
+                # fallback to collection
+                coll = getattr(sl_repo, 'coll', getattr(sl_repo, 'collection', sl_repo))
+                for l in lines:
+                    coll.insert_one(l)
+
+            # attempt reconciliation for lines that have externalRef
+            for l in lines:
+                ext = l.get('externalRef') or l.get('external_ref')
+                bank_acc = l.get('bankAccountId') or l.get('bank_account_id')
+                if ext and bank_acc:
+                    try:
+                        matches = expense_repo.reconcile_by_external_ref(bank_acc, ext)
+                        # matches returned may be used for logging/audit
+                    except Exception:
+                        current_app.logger.exception('Failed to reconcile statement line %s', l)
+        return respond_success({'data': {'bankStatementId': str(inserted_id)}})
     except (Unauthorized, Forbidden) as ue:
         return respond_error(str(ue), status=getattr(ue, 'code', 401))
     except Exception:

@@ -52,7 +52,7 @@ class TransactionsRepository(BaseRepository):
         if total_debit != total_credit:
             raise ValueError('Transaction not balanced: debits != credits')
         tx_doc = dict(tx_doc)
-        tx_doc.setdefault('createdAt', datetime.now(timezone.utc))
+        tx_doc.setdefault('created_at', datetime.now(timezone.utc))
         res = self.collection.insert_one(tx_doc)
         return res.inserted_id
 

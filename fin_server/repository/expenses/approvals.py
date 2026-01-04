@@ -20,12 +20,12 @@ class ApprovalsRepository(BaseRepository):
             self.collection_name = collection_name
             self.coll = self.collection
             try:
-                self.collection.create_index([('refType', 1), ('refId', 1)], name='approvals_ref')
+                self.collection.create_index([('ref_type', 1), ('ref_id', 1)], name='approvals_ref')
             except Exception:
                 pass
             self._initialized = True
 
     def create(self, doc):
         doc = dict(doc)
-        doc.setdefault('createdAt', datetime.now(timezone.utc))
+        doc.setdefault('created_at', datetime.now(timezone.utc))
         return self.collection.insert_one(doc)
