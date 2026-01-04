@@ -4,16 +4,18 @@ from fin_server.utils.time_utils import get_time_date_dt
 class FishMappingRepository(BaseRepository):
     _instance = None
 
-    def __new__(cls, *args, **kwargs):
-        if not hasattr(cls, '_instance'):
+    def __new__(cls, db, collection="fish_mapping"):
+        if cls._instance is None:
             cls._instance = super(FishMappingRepository, cls).__new__(cls)
+            cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self, db, collection="fish_mappings"):
-        super().__init__(db)
-        self.collection_name = collection
-        print(f"Initializing {self.collection_name} collection:")
-        self.collection = db[collection]
+    def __init__(self, db, collection="fish_mapping"):
+        if not getattr(self, "_initialized", False):
+            super().__init__(db=db, collection_name=collection)
+            self.collection_name = collection
+            print(f"Initializing {self.collection_name} collection")
+            self._initialized = True
 
     def update_one(self, *args, **kwargs):
         return self.collection.update_one(*args, **kwargs)

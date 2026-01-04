@@ -62,39 +62,60 @@ class MongoRepo:
         self.init_repositories()
         self._is_initialized = True
 
+    def init_client(self):
+        if self._client is None:
+            self._client = MongoClient(self._mongo_uri)
 
+    def init_dbs(self):
+        self.init_client()
+
+        self.user_db_name = 'user_db'
+        self.media_db_name = 'media_db'
+        self.expenses_db_name = 'expenses_db'
+        self.fish_db_name = 'fish_db'
+        self.analytics_db_name = 'analytics_db'
+
+        self.user_db = self._client[self.user_db_name]
+        self.media_db = self._client[self.media_db_name]
+        self.expenses_db = self._client[self.expenses_db_name]
+        self.fish_db = self._client[self.fish_db_name]
+        self.analytics_db = self._client[self.analytics_db_name]
 
     def init_repositories(self):
-        from fin_server.repository.expenses import TransactionsRepository
-        from fin_server.repository.expenses_repository import ExpensesRepository
-        from fin_server.repository.fish import FishRepository, FishActivityRepository, PondEventRepository, PondRepository, \
-            FishAnalyticsRepository, SamplingRepository, FeedingRepository
-        from fin_server.repository.media import MessageRepository, NotificationRepository, NotificationQueueRepository, \
-            TaskRepository
-        from fin_server.repository.user import UserRepository, FishMappingRepository
-        # USER DB REPOSITORIES
-        self.users = UserRepository(self.user_db)
-        print("self.users set to:", type(self.users))
-        self.fish_mapping = FishMappingRepository(self.user_db)
+        try:
+            from fin_server.repository.expenses import TransactionsRepository
+            from fin_server.repository.expenses_repository import ExpensesRepository
+            from fin_server.repository.fish import FishRepository, FishActivityRepository, PondEventRepository, PondRepository, \
+                FishAnalyticsRepository, SamplingRepository, FeedingRepository
+            from fin_server.repository.media import MessageRepository, NotificationRepository, NotificationQueueRepository, \
+                TaskRepository
+            from fin_server.repository.user import UserRepository, FishMappingRepository
+            # USER DB REPOSITORIES
+            self.init_dbs()
+            self.users = UserRepository(self.user_db)
+            self.fish_mapping = FishMappingRepository(self.user_db)
 
-        # MEDIA DB REPOSITORIES
-        self.message = MessageRepository(self.media_db)
-        self.notification = NotificationRepository(self.media_db)
-        self.notification_queue = NotificationQueueRepository(self.media_db)
-        self.task = TaskRepository(self.media_db)
+            # MEDIA DB REPOSITORIES
+            self.message = MessageRepository(self.media_db)
+            self.notification = NotificationRepository(self.media_db)
+            self.notification_queue = NotificationQueueRepository(self.media_db)
+            self.task = TaskRepository(self.media_db)
 
-        # FISH DB REPOSITORIES
-        self.fish = FishRepository(self.fish_db)
-        self.fish_activity = FishActivityRepository(self.fish_db)
-        self.fish_analytics = FishAnalyticsRepository(self.fish_db)
-        self.pond = PondRepository(self.fish_db)
-        self.pond_event = PondEventRepository(self.fish_db)
-        self.sampling = SamplingRepository(self.fish_db)
+            # FISH DB REPOSITORIES
+            self.fish = FishRepository(self.fish_db)
+            self.fish_activity = FishActivityRepository(self.fish_db)
+            self.fish_analytics = FishAnalyticsRepository(self.fish_db)
+            self.pond = PondRepository(self.fish_db)
+            self.pond_event = PondEventRepository(self.fish_db)
+            self.sampling = SamplingRepository(self.fish_db)
 
-        # EXPENSE/TRANSACTION DB REPOSITORIES
-        self.expenses = ExpensesRepository(self.expenses_db)
-        self.transactions = TransactionsRepository(self.expenses_db)
-        self.feeding = FeedingRepository(self.expenses_db)
+            # EXPENSE/TRANSACTION DB REPOSITORIES
+            self.expenses = ExpensesRepository(self.expenses_db)
+            self.transactions = TransactionsRepository(self.expenses_db)
+            self.feeding = FeedingRepository(self.expenses_db)
+        except Exception as e:
+            logger.error(f"Error initializing repositories: {e}")
+            raise e
 
     @classmethod
     def is_initialized(cls):
@@ -108,12 +129,22 @@ class MongoRepo:
 
 
 def get_collection(collection_name: str) -> Any:
+    """Return the named repository collection from the singleton MongoRepo.
+
+    Avoid importing `server` here to prevent circular import errors when
+    modules (DTOs/routes) call this function at import time.
+    """
+    # Use the MongoRepo singleton directly instead of importing server.mongoDbRepo
     repo = MongoRepo.get_instance()
+    # Ensure repositories are initialized
+    if not MongoRepo.is_initialized():
+        try:
+            repo.init_repositories()
+        except Exception:
+            # If initialization fails, ensure the error is visible to the caller
+            raise
+
     coll = getattr(repo, collection_name, None)
-    if coll is None and not MongoRepo.is_initialized():
-        m = MongoRepo()
-        m.init_repositories()
-        coll = getattr(repo, collection_name, None)
     if coll is None:
         raise ValueError(f"Repository '{collection_name}' is None. Existing: {dir(repo)}")
     return coll

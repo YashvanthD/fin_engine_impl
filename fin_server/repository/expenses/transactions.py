@@ -5,13 +5,20 @@ from fin_server.repository.base_repository import BaseRepository
 
 
 class TransactionsRepository(BaseRepository):
-    def __init__(self, db):
-        super().__init__(db)
-        self.coll = db['transactions']
-        try:
-            self.coll.create_index([('postingDate', 1)], name='tx_posting_date')
-        except Exception:
-            pass
+    _instance = None
+
+    def __new__(cls, db, collection="transactions"):
+        if cls._instance is None:
+            cls._instance = super(TransactionsRepository, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self, db, collection="transactions"):
+        if not getattr(self, "_initialized", False):
+            super().__init__(db=db, collection_name=collection)
+            self.collection_name = collection
+            print(f"Initializing {self.collection_name} collection")
+            self._initialized = True
 
     def create_transaction(self, tx_doc):
         """Create a journal transaction ensuring debits == credits.
