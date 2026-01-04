@@ -3,6 +3,8 @@ from fin_server.repository.mongo_helper import get_collection
 from fin_server.utils.helpers import respond_success, respond_error, get_request_payload
 from werkzeug.exceptions import Unauthorized, Forbidden
 from bson import ObjectId
+from fin_server.services.expense_service import create_expense_with_repo
+
 
 expenses_bp = Blueprint('expenses', __name__, url_prefix='/expenses')
 
@@ -16,8 +18,10 @@ def create_expense():
         data = request.get_json(force=True)
         if not expense_repo:
             return respond_error('Expenses repository not available', status=500)
-        # minimal validation: amount and pond/account
-        inserted = expense_repo.create_expense(data)
+        # Use centralized helper to normalize and persist expense documents. This
+        # ensures domain links (pond/sampling/stock) are stored in `metadata` and
+        # category/type/status/payload are normalized consistently.
+        inserted = create_expense_with_repo(data, expense_repo)
         return respond_success({'data': {'expenseId': str(inserted)}}, status=201)
     except (Unauthorized, Forbidden) as ue:
         return respond_error(str(ue), status=getattr(ue, 'code', 401))

@@ -23,6 +23,7 @@ from typing import Any, Dict, Optional
 from fin_server.utils.time_utils import get_time_date_dt
 from fin_server.utils.generator import derive_stock_id_from_dto
 import logging
+from fin_server.services.expense_service import create_expense_with_repo
 
 logger = logging.getLogger(__name__)
 
@@ -203,19 +204,11 @@ def perform_buy_sampling(dto: Any, account_key: str, repos: Dict[str, Any], crea
                 'type': extra.get('type') or 'fish',
                 'metadata': {'stock_id': result.get('stock_id')}
             }
-            # If ExpensesRepository exposes create_expense, prefer it; it may also create transactions
-            if hasattr(expenses_repo, 'create_expense'):
-                expense_id = expenses_repo.create_expense(expense_doc)
-            elif hasattr(expenses_repo, 'create'):
-                expense_id = expenses_repo.create(expense_doc)
-            else:
-                # fallback to collection insert
-                try:
-                    r = expenses_repo.insert_one(expense_doc)
-                    expense_id = getattr(r, 'inserted_id', None)
-                except Exception:
-                    logger.exception('Failed to insert expense doc')
-            result['expense_id'] = str(expense_id) if expense_id is not None else None
+            try:
+                expense_id = create_expense_with_repo(expense_doc, expenses_repo)
+                result['expense_id'] = str(expense_id) if expense_id is not None else None
+            except Exception:
+                logger.exception('Failed to create expense for sampling')
     except Exception:
         logger.exception('Failed to create expense for sampling')
 

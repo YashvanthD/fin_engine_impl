@@ -13,6 +13,10 @@ from fin_server.utils.helpers import get_request_payload, parse_pagination
 from fin_server.utils.helpers import normalize_doc, respond_success, respond_error
 from fin_server.utils.time_utils import get_time_date_dt
 
+# import the new service
+from fin_server.services.pond_service import delete_pond_and_related
+from fin_server.services.expense_service import prepare_pond_deletion_financials
+
 # module-level singletons/repo instances
 
 fish_repo_class = get_collection('fish')
@@ -20,6 +24,7 @@ fish_activity_class = get_collection('fish_activity')
 fish_analytics_class = get_collection('fish_analytics')
 pond_event_class = get_collection('pond_event')
 pond_repository = get_collection('pond')
+fish_mapping = get_collection('fish_mapping')
 pond_bp = Blueprint('pond', __name__, url_prefix='/pond')
 IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
 
@@ -177,13 +182,35 @@ def delete_pond(pond_id):
     try:
         payload = get_auth_payload(request)
         account_key = payload.get('account_key')
-        result = pond_repository.delete({'pond_id': pond_id, 'account_key': account_key})
-        if not result or not getattr(result, 'deleted_count', 0):
+        # ensure pond belongs to account
+        existing = pond_repository.find_one({'pond_id': pond_id, 'account_key': account_key})
+        if not existing:
             return respond_error('Pond not found', status=404)
-        return respond_success({'deleted': True})
+
+        # Optionally prepare financial artifacts before deletion. Client may send details in JSON body.
+        body = request.get_json(silent=True) or {}
+        pond_sale_amount = body.get('pond_sale_amount') or body.get('pondSaleAmount')
+        fish_sale_amount = body.get('fish_sale_amount') or body.get('fishSaleAmount')
+        maintenance_estimates = body.get('maintenance_estimates') or body.get('maintenanceEstimates')
+
+        financial_summary = None
+        if pond_sale_amount or fish_sale_amount or maintenance_estimates:
+            financial_summary = prepare_pond_deletion_financials(
+                pond_id=pond_id,
+                account_key=account_key,
+                pond_sale_amount=pond_sale_amount,
+                fish_sale_amount=fish_sale_amount,
+                maintenance_estimates=maintenance_estimates or [],
+                description=f'Pond deletion initiated by user for {pond_id}'
+            )
+
+        # perform cascade delete using the service (uses get_collection internally)
+        delete_summary = delete_pond_and_related(pond_id)
+        return respond_success({'deleted': True, 'financials': financial_summary, 'delete_summary': delete_summary})
     except UnauthorizedError as e:
         return respond_error(str(e), status=401)
     except Exception as e:
+        current_app.logger.exception(f'Exception in delete_pond: {e}')
         return respond_error('Server error', status=500)
 
 @pond_bp.route('/', methods=['GET'])
@@ -216,8 +243,8 @@ def pond_fish_options(pond_id):
         payload = get_auth_payload(request)
         account_key = payload.get('account_key')
         # find mapped fish ids
-        fish_mapping = mongo_repo_singleton.fish_mapping
-        mapping = fish_mapping.find_one({'account_key': account_key})
+        mapping_repo = get_collection('fish_mapping')
+        mapping = mapping_repo.find_one({'account_key': account_key})
         fish_ids = mapping.get('fish_ids', []) if mapping else []
         # return basic fish entities
         fish_list = fish_repo_class.find({'_id': {'$in': fish_ids}}) if fish_ids else []

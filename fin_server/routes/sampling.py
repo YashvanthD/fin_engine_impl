@@ -11,6 +11,7 @@ from fin_server.utils.generator import generate_sampling_id
 from fin_server.utils.helpers import respond_success, respond_error, normalize_doc, parse_iso_or_epoch
 from fin_server.utils.validation import compute_total_amount_from_payload
 from fin_server.services.sampling_service import perform_buy_sampling
+from fin_server.services.expense_service import handle_sampling_deletion
 
 sampling_bp = Blueprint('sampling', __name__, url_prefix='/sampling')
 
@@ -380,6 +381,49 @@ def update_sampling_route(sampling_id):
         return respond_error(str(ue), status=401)
     except Exception:
         current_app.logger.exception('Error in update_sampling_route')
+        return respond_error('Server error', status=500)
+
+# DELETE /sampling/<sampling_id> - remove a sampling record
+@sampling_bp.route('/<sampling_id>', methods=['DELETE'])
+def delete_sampling_route(sampling_id):
+    try:
+        payload = get_auth_payload(request)
+        account_key = payload.get('account_key')
+
+        # Resolve sampling by _id (ObjectId) or sampling_id
+        query = None
+        try:
+            from bson import ObjectId
+            query = {'_id': ObjectId(sampling_id)}
+        except Exception:
+            query = {'sampling_id': sampling_id}
+
+        existing = sampling_repo.find_one(query)
+        if not existing:
+            existing = sampling_repo.find_one({'sampling_id': sampling_id})
+        if not existing:
+            return respond_error('Sampling record not found', status=404)
+
+        # enforce account scoping if present on records
+        if account_key and existing.get('account_key') and existing.get('account_key') != account_key:
+            return respond_error('Not authorized to delete this sampling (account mismatch)', status=403)
+
+        # perform business cleanup: cancel expenses, delete linked transactions, decrement counts, remove analytics/activity
+        summary = handle_sampling_deletion(sampling_id)
+
+        # finally remove the sampling document itself
+        # attempt by sampling_id first then by _id
+        del_res = sampling_repo.delete({'sampling_id': sampling_id})
+        if not del_res or not del_res:
+            # try by _id
+            if existing.get('_id') is not None:
+                del_res = sampling_repo.delete({'_id': existing.get('_id')})
+
+        return respond_success({'deleted': True, 'cleanup_summary': summary})
+    except UnauthorizedError as ue:
+        return respond_error(str(ue), status=401)
+    except Exception:
+        current_app.logger.exception('Error in delete_sampling_route')
         return respond_error('Server error', status=500)
 
 from flask import Blueprint as _Blueprint
