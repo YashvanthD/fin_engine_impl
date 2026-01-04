@@ -3,16 +3,16 @@ from fin_server.repository.base_repository import BaseRepository
 class UserRepository(BaseRepository):
     _instance = None
 
-    def __new__(cls, db, collection="users"):
+    def __new__(cls, db, collection_name="users"):
         if cls._instance is None:
             cls._instance = super(UserRepository, cls).__new__(cls)
             cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self, db, collection="users"):
+    def __init__(self, db, collection_name="users"):
         if not getattr(self, "_initialized", False):
-            super().__init__(db=db, collection_name=collection)
-            self.collection_name = collection
+            super().__init__(db=db, collection_name=collection_name)
+            self.collection_name = collection_name
             print(f"Initializing {self.collection_name} collection")
             self._initialized = True
 

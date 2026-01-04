@@ -4,16 +4,19 @@ from bson import ObjectId
 class TaskRepository(BaseRepository):
     _instance = None
 
-    def __new__(cls, *args, **kwargs):
-        if not hasattr(cls, '_instance'):
+    def __new__(cls, db, collection_name="task"):
+        if cls._instance is None:
             cls._instance = super(TaskRepository, cls).__new__(cls)
+            cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self, db, collection="task"):
-        super().__init__(db)
-        self.collection_name = collection
-        print(f"Initializing {self.collection_name} collection:")
-        self.collection = db[collection]
+    def __init__(self, db, collection_name="task"):
+        if not getattr(self, "_initialized", False):
+            super().__init__(db=db, collection_name=collection_name)
+            self.collection_name = collection_name
+            self.coll = self.collection
+            print(f"Initializing {self.collection_name} collection")
+            self._initialized = True
 
     def create(self, data):
         # Ensure user_key is used for consistency

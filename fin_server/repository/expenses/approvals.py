@@ -8,21 +8,24 @@ from fin_server.repository.base_repository import BaseRepository
 class ApprovalsRepository(BaseRepository):
     _instance = None
 
-    def __new__(cls, *args, **kwargs):
-        if not hasattr(cls, '_instance'):
+    def __new__(cls, db, collection_name="approvals"):
+        if cls._instance is None:
             cls._instance = super(ApprovalsRepository, cls).__new__(cls)
+            cls._instance._initialized = False
         return cls._instance
     
-    def __init__(self, db):
-        super().__init__(db)
-        self.coll = db['approvals']
-        try:
-            self.coll.create_index([('refType', 1), ('refId', 1)], name='approvals_ref')
-        except Exception:
-            pass
+    def __init__(self, db, collection_name="approvals"):
+        if not getattr(self, "_initialized", False):
+            super().__init__(db=db, collection_name=collection_name)
+            self.collection_name = collection_name
+            self.coll = self.collection
+            try:
+                self.collection.create_index([('refType', 1), ('refId', 1)], name='approvals_ref')
+            except Exception:
+                pass
+            self._initialized = True
 
     def create(self, doc):
         doc = dict(doc)
         doc.setdefault('createdAt', datetime.now(timezone.utc))
-        return self.coll.insert_one(doc)
-
+        return self.collection.insert_one(doc)

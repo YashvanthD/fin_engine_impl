@@ -4,16 +4,20 @@ from fin_server.utils.time_utils import get_time_date_dt
 class NotificationQueueRepository(BaseRepository):
     _instance = None
 
-    def __new__(cls, *args, **kwargs):
-        if not hasattr(cls, '_instance'):
+    def __new__(cls, db, collection_name="notification_queue"):
+        if cls._instance is None:
             cls._instance = super(NotificationQueueRepository, cls).__new__(cls)
+            cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self, db, collection="notification_queue"):
-        super().__init__(db)
-        self.collection_name = collection
-        print(f"Initializing {self.collection_name} collection:")
-        self.collection = db[collection]
+    def __init__(self, db, collection_name="notification_queue"):
+        if not getattr(self, "_initialized", False):
+            super().__init__(db=db, collection_name=collection_name)
+            self.collection_name = collection_name
+            # Ensure backward-compatible attribute used in some repos
+            self.coll = self.collection_name
+            print(f"Initializing {self.collection_name} collection")
+            self._initialized = True
 
     def enqueue(self, notification):
         notification['status'] = 'pending'

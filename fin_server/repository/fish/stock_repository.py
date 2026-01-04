@@ -14,25 +14,29 @@ class StockRepository:
     """
     _instance = None
 
-    def __new__(cls, *args, **kwargs):
-        if not hasattr(cls, '_instance'):
+    def __new__(cls, db=None):
+        if cls._instance is None:
             cls._instance = super(StockRepository, cls).__new__(cls)
+            cls._instance._initialized = False
         return cls._instance
 
     def __init__(self, db=None):
-        # store provided db reference (may be None); avoid importing route modules here to prevent circular imports
-        self.db = db
-        self.ponds = get_collection('pond')
-        self.pond_events = get_collection('pond_event')
-        self.fish = get_collection('fish')
-        self.fish_activity = get_collection('fish_activity')
-        self.fish_analytics = get_collection('fish_analytics')
-        self.fish_mapping = get_collection('fish_mapping')
-        # expenses collection may or may not be present
-        try:
-            self.expenses = get_collection('expenses')
-        except Exception:
-            self.expenses = None
+        if not getattr(self, "_initialized", False):
+            # store provided db reference (may be None); avoid importing route modules here to prevent circular imports
+            self.db = db
+            self.ponds = get_collection('pond')
+            self.pond_events = get_collection('pond_event')
+            self.fish = get_collection('fish')
+            self.fish_activity = get_collection('fish_activity')
+            self.fish_analytics = get_collection('fish_analytics')
+            self.fish_mapping = get_collection('fish_mapping')
+            # expenses collection may or may not be present
+            try:
+                self.expenses = get_collection('expenses')
+            except Exception:
+                self.expenses = None
+
+            self._initialized = True
 
     def _attempt_update(self, queries, update):
         """Try a list of queries sequentially until one matches. Return the update result or None."""
@@ -150,7 +154,7 @@ class StockRepository:
                     ev = {'pond_id': pond_id, 'event_type': 'buy', 'details': {'species': species, 'count': int(count)}, 'recorded_by': recorded_by}
                     try:
                         r = self.pond_events.insert_one(ev)
-                        logger.debug('Inserted pond_event for buy pond=%s event_id=%s', pond_id, getattr(r, 'inserted_id', None))
+                        logger.debug('Inserted pond_event for buy pond=%s', pond_id)
                     except Exception:
                         logger.exception('Failed to insert pond_event for add_stock')
                 except Exception:
@@ -162,7 +166,7 @@ class StockRepository:
                     act = {'account_key': account_key, 'pond_id': pond_id, 'fish_id': species, 'event_type': 'buy', 'count': int(count), 'user_key': recorded_by, 'created_at': get_time_date_dt(include_time=True)}
                     try:
                         r = self.fish_activity.insert_one(act)
-                        logger.debug('Inserted fish_activity for pond=%s activity_id=%s', pond_id, getattr(r, 'inserted_id', None))
+                        logger.debug('Inserted fish_activity for pond=%s', pond_id)
                     except Exception:
                         logger.exception('Failed to insert fish_activity for add_stock')
                 except Exception:
@@ -207,7 +211,7 @@ class StockRepository:
                     }
                     try:
                         # r = self.expenses.insert_one(exp)
-                        logger.debug('Inserted expense for pond=%s expense_id=%s amount=%s', pond_id, getattr(r, 'inserted_id', None), exp.get('amount'))
+                        logger.debug('Inserted expense for pond=%s amount=%s', pond_id, exp.get('amount'))
                     except Exception:
                         logger.exception('Failed to insert expense doc for add_stock')
                 except Exception:
@@ -472,7 +476,7 @@ class StockRepository:
                     ev = {'pond_id': pond_id, 'event_type': 'sample', 'details': {'species': species, 'count': int(count)}, 'recorded_by': recorded_by}
                     try:
                         r = self.pond_events.insert_one(ev)
-                        logger.debug('Inserted pond_event for sample pond=%s event_id=%s', pond_id, getattr(r, 'inserted_id', None))
+                        logger.debug('Inserted pond_event for sample pond=%s', pond_id)
                     except Exception:
                         logger.exception('Failed to insert pond_event for remove_stock')
                 except Exception:
@@ -483,7 +487,7 @@ class StockRepository:
                     act = {'account_key': account_key, 'pond_id': pond_id, 'fish_id': species, 'event_type': 'sample', 'count': int(count), 'user_key': recorded_by, 'created_at': get_time_date_dt(include_time=True)}
                     try:
                         r = self.fish_activity.insert_one(act)
-                        logger.debug('Inserted fish_activity for sample pond=%s activity_id=%s', pond_id, getattr(r, 'inserted_id', None))
+                        logger.debug('Inserted fish_activity for sample pond=%s', pond_id)
                     except Exception:
                         logger.exception('Failed to insert fish_activity for remove_stock')
                 except Exception:

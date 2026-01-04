@@ -4,10 +4,25 @@ from fin_server.utils.time_utils import get_time_date_dt
 import logging
 
 class FishAnalyticsRepository(BaseRepository):
+    _instance = None
+
+    def __new__(cls, db=None, collection_name="fish_analytics"):
+        if cls._instance is None:
+            cls._instance = super(FishAnalyticsRepository, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
     def __init__(self, db=None, collection_name="fish_analytics"):
-        self.collection_name = collection_name
-        print("Initializing FishAnalyticsRepository, collection:", self.collection_name)
-        self.collection = get_collection(self.collection_name) if db is None else db[collection_name]
+        if not getattr(self, "_initialized", False):
+            self.collection_name = collection_name
+            print("Initializing FishAnalyticsRepository, collection:", self.collection_name)
+            # If db is None, use module-level get_collection to fetch the collection lazily
+            if db is None:
+                self.collection = get_collection(self.collection_name)
+            else:
+                super().__init__(db=db, collection_name=collection_name)
+            self.coll = getattr(self, 'collection', None)
+            self._initialized = True
 
     def add_batch(self, species_id, count, fish_age_in_month, date_added=None, account_key=None, event_id=None, fish_weight=None, pond_id=None):
         if not date_added:

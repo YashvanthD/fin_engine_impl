@@ -7,16 +7,17 @@ from fin_server.repository.base_repository import BaseRepository
 class TransactionsRepository(BaseRepository):
     _instance = None
 
-    def __new__(cls, db, collection="transactions"):
+    def __new__(cls, db, collection_name="transactions"):
         if cls._instance is None:
             cls._instance = super(TransactionsRepository, cls).__new__(cls)
             cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self, db, collection="transactions"):
+    def __init__(self, db, collection_name="transactions"):
         if not getattr(self, "_initialized", False):
-            super().__init__(db=db, collection_name=collection)
-            self.collection_name = collection
+            super().__init__(db=db, collection_name=collection_name)
+            self.collection_name = collection_name
+            self.coll = self.collection
             print(f"Initializing {self.collection_name} collection")
             self._initialized = True
 
@@ -52,12 +53,11 @@ class TransactionsRepository(BaseRepository):
             raise ValueError('Transaction not balanced: debits != credits')
         tx_doc = dict(tx_doc)
         tx_doc.setdefault('createdAt', datetime.now(timezone.utc))
-        res = self.coll.insert_one(tx_doc)
+        res = self.collection.insert_one(tx_doc)
         return res.inserted_id
 
     def find(self, q=None, limit=100):
-        return list(self.coll.find(q or {}).limit(limit))
+        return list(self.collection.find(q or {}).limit(limit))
 
     def find_one(self, q):
-        return self.coll.find_one(q)
-
+        return self.collection.find_one(q)

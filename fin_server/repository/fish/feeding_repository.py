@@ -4,16 +4,19 @@ from fin_server.utils.time_utils import get_time_date_dt
 class FeedingRepository(BaseRepository):
     _instance = None
 
-    def __new__(cls, *args, **kwargs):
-        if not hasattr(cls, '_instance'):
+    def __new__(cls, db, collection_name="feeding"):
+        if cls._instance is None:
             cls._instance = super(FeedingRepository, cls).__new__(cls)
+            cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self, db, collection="feeding"):
-        super().__init__(db)
-        self.collection_name = collection
-        print(f"Initializing {self.collection_name} collection:")
-        self.collection = db[collection]
+    def __init__(self, db, collection_name="feeding"):
+        if not getattr(self, "_initialized", False):
+            super().__init__(db=db, collection_name=collection_name)
+            self.collection_name = collection_name
+            self.coll = self.collection
+            print(f"Initializing {self.collection_name} collection")
+            self._initialized = True
 
     def create(self, data):
         data = dict(data)

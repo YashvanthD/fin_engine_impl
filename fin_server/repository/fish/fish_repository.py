@@ -8,16 +8,25 @@ from fin_server.utils.time_utils import get_time_date_dt
 class FishRepository(BaseRepository):
     _instance = None
 
-    def __new__(cls, *args, **kwargs):
-        if not hasattr(cls, '_instance'):
+    def __new__(cls, db, collection_name="fish"):
+        if cls._instance is None:
             cls._instance = super(FishRepository, cls).__new__(cls)
+            cls._instance._initialized = False
         return cls._instance
 
-    def __init__(self, db, collection="fish"):
-        super().__init__(db)
-        self.collection_name = collection
-        print(f"Initializing {self.collection_name} collection:")
-        self.collection = db[collection]
+    def __init__(self, db, collection_name="fish"):
+        if not getattr(self, "_initialized", False):
+            # If db is None, fall back to module-level get_collection to allow late initialization
+            if db is None:
+                # get_collection returns a repository object; we want the raw collection
+                self.collection = get_collection(collection_name)
+                self.collection_name = collection_name
+            else:
+                super().__init__(db=db, collection_name=collection_name)
+                self.collection_name = collection_name
+            self.coll = getattr(self, 'collection', None)
+            print(f"Initializing {self.collection_name} collection")
+            self._initialized = True
 
     def create(self, data):
         logging.info(f"Inserting fish data: {data}")

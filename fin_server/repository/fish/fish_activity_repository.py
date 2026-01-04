@@ -5,16 +5,19 @@ from fin_server.utils.time_utils import get_time_date_dt
 class FishActivityRepository(BaseRepository):
     _instance = None
 
-    def __new__(cls, *args, **kwargs):
-        if not hasattr(cls, '_instance'):
+    def __new__(cls, db=None, collection_name="fish_activity"):
+        if cls._instance is None:
             cls._instance = super(FishActivityRepository, cls).__new__(cls)
+            cls._instance._initialized = False
         return cls._instance
 
     def __init__(self, db=None, collection_name="fish_activity"):
-        super().__init__(db, collection_name)
-        self.collection_name = collection_name
-        print("Initializing FishActivityRepository, collection:", self.collection_name)
-        self.collection = get_collection(self.collection_name) if db is None else db[collection_name]
+        if not getattr(self, "_initialized", False):
+            super().__init__(db=db, collection_name=collection_name) if db is not None else None
+            self.collection_name = collection_name
+            print("Initializing FishActivityRepository, collection:", self.collection_name)
+            self.collection = get_collection(self.collection_name) if db is None else db[collection_name]
+            self._initialized = True
 
     def create(self, data):
         data['created_at'] = get_time_date_dt(include_time=True)
