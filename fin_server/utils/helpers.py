@@ -9,11 +9,28 @@ from werkzeug.exceptions import Forbidden, Unauthorized
 def respond_error(message_or_dict, status=400):
     """Return a standardized error response compatible with frontend expectations.
 
-    - If a string is passed, returns { success: False, 'message': str, 'error': str }.
-    - If a dict is passed, returns { success: False, 'errors': dict, 'message': first message }.
+    Behaviour:
+    - If an Exception is passed, extract its message and map some exception types to HTTP codes:
+      * UnauthorizedError or werkzeug Unauthorized -> 401
+      * werkzeug Forbidden -> 403
+    - If a dict is passed, include it as 'errors' in the response and try to extract a short 'message'.
+    - If a string is passed, use it as 'message' and also include an 'error' field.
+    The response always includes a timestamp (IST) and prunes None values before returning.
     """
+    # If an exception instance is passed, derive message and possibly override status
+    if isinstance(message_or_dict, Exception):
+        exc = message_or_dict
+        # Map known exception types to status codes unless caller explicitly provided a different status
+        if isinstance(exc, UnauthorizedError) or isinstance(exc, Unauthorized):
+            status = 401
+        elif isinstance(exc, Forbidden):
+            status = 403
+        # stringify the exception for consumers
+        message_or_dict = str(exc)
+
     body = {'success': False}
     if isinstance(message_or_dict, dict):
+        # include validation errors / structured errors
         body['errors'] = message_or_dict
         # try to build a short message from first error
         try:
@@ -25,11 +42,27 @@ def respond_error(message_or_dict, status=400):
         except Exception:
             body['message'] = 'Validation error'
     else:
+        # plain string message
         body['message'] = str(message_or_dict)
         body['error'] = str(message_or_dict)
+
     # always include a timestamp for debugging by frontend (IST)
-    ist = zoneinfo.ZoneInfo('Asia/Kolkata')
-    body['timestamp'] = datetime.now(ist).isoformat()
+    try:
+        ist = zoneinfo.ZoneInfo('Asia/Kolkata')
+    except Exception:
+        # fallback to UTC if zoneinfo unavailable
+        try:
+            ist = timezone.utc
+        except Exception:
+            ist = None
+    if ist is not None:
+        try:
+            body['timestamp'] = datetime.now(ist).isoformat()
+        except Exception:
+            try:
+                body['timestamp'] = datetime.now().isoformat()
+            except Exception:
+                body['timestamp'] = None
     # prune None values before returning
     try:
         body = _prune_none(body)
@@ -663,3 +696,52 @@ def clean_for_ui(obj):
         return transformed
 
 
+def sanitize_user_doc(user_doc, remove_fields=None):
+    """Compatibility wrapper used by older modules.
+
+    Sanitizes a single user document by removing sensitive fields and converting
+    keys to the frontend-friendly shape. Returns a dict (empty dict on failure).
+    """
+    try:
+        if user_doc is None:
+            return {}
+        s = sanitize(user_doc, remove_fields=remove_fields)
+        # normalize_for_ui expects normalized primitives; run it to ensure consistent output
+        try:
+            s = normalize_for_ui(s)
+        except Exception:
+            current_app.logger.debug('normalize_for_ui failed in sanitize_user_doc; continuing with sanitized output')
+        try:
+            s = _prune_none(s) or {}
+        except Exception:
+            current_app.logger.debug('prune_none failed in sanitize_user_doc; returning unpruned output')
+        # ensure dict return
+        if isinstance(s, dict):
+            return s
+        return {'data': s}
+    except Exception:
+        current_app.logger.exception('Failed to sanitize user doc')
+        return {}
+
+
+def sanitize_users_list(users, remove_fields=None):
+    """Sanitize a list/iterable of user docs and return a list of sanitized dicts.
+    Accepts lists/generator; returns a list. Non-dict items are preserved via sanitize.
+    """
+    out = []
+    if users is None:
+        return out
+    try:
+        for u in users:
+            try:
+                out.append(sanitize_user_doc(u, remove_fields=remove_fields))
+            except Exception:
+                current_app.logger.exception('Failed to sanitize one user in list; appending empty dict')
+                out.append({})
+    except TypeError:
+        # not iterable; try single element
+        try:
+            return [sanitize_user_doc(users, remove_fields=remove_fields)]
+        except Exception:
+            return []
+    return out
