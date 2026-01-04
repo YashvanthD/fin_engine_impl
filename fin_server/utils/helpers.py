@@ -398,6 +398,67 @@ def normalize_for_ui(obj):
     return transformed
 
 
+def sanitize(obj, remove_fields=None):
+    """Recursively sanitize an object by:
+    - removing keys that look sensitive (passwords, tokens, secrets, keys, card numbers, etc.)
+    - converting underscored keys to camelCase (e.g. user_key -> userKey)
+    Returns a new object and does not mutate the input.
+
+    remove_fields: optional iterable of additional field name fragments to treat as sensitive.
+    """
+    # default sensitive fragments (checked against normalized underscored key)
+    default_sensitive = (
+        'password', 'pass', 'pwd', 'token', 'access_token', 'refresh_token', 'secret',
+        'api_key', 'apikey', 'ssn', 'card_number', 'cardnumber', 'cvv',
+        'otp', 'salt', 'private_key', 'privatekey', 'signature'
+    )
+    sens = set(f.lower() for f in default_sensitive)
+    if remove_fields:
+        for f in remove_fields:
+            if f:
+                sens.add(str(f).lower())
+
+    def _is_sensitive_key(k: str) -> bool:
+        if not k:
+            return False
+        s = str(k)
+        # normalize: lower & replace hyphens with underscore
+        norm = s.replace('-', '_').lower()
+        # check direct match or containment of any sensitive fragment
+        for frag in sens:
+            if norm == frag or frag in norm:
+                return True
+        return False
+
+    def _sanitize_inner(o):
+        # None and primitives
+        if o is None:
+            return None
+        if isinstance(o, (str, int, float, bool)):
+            return o
+        if isinstance(o, list):
+            return [_sanitize_inner(v) for v in o]
+        if isinstance(o, dict):
+            out = {}
+            for k, v in o.items():
+                try:
+                    # compute camelCase key using existing helper
+                    newk = _snake_to_camel(k)
+                except Exception:
+                    newk = k
+                # Decide sensitivity based on original key and the camel key
+                if _is_sensitive_key(k) or _is_sensitive_key(newk):
+                    # skip adding this key entirely (filter out sensitive fields)
+                    continue
+                # recurse
+                out[newk] = _sanitize_inner(v)
+            return out
+        # fallback: attempt to leave untouched
+        return o
+
+    return _sanitize_inner(obj)
+
+
 def respond_success(payload=None, status=200):
     """Return a standardized success response compatible with frontend's ApiResponse.
 
@@ -409,8 +470,10 @@ def respond_success(payload=None, status=200):
     if payload is None:
         data = {}
     else:
-        data = payload
-
+        try:
+            data = sanitize(payload)
+        except Exception:
+            raise
     body = {'success': True}
     if isinstance(data, dict) and 'data' in data:
         # caller already provided envelope-like object
@@ -598,3 +661,5 @@ def clean_for_ui(obj):
     except Exception:
         current_app.logger.exception('Prune None failed in clean_for_ui')
         return transformed
+
+

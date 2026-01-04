@@ -4,7 +4,7 @@ from fin_server.utils.helpers import respond_success, respond_error
 
 from fin_server.security.authentication import AuthSecurity
 from fin_server.utils.generator import build_user, get_current_timestamp, epoch_to_datetime
-from fin_server.repository.mongo_helper import get_collection, get_collection
+from fin_server.repository.mongo_helper import get_collection
 from fin_server.dto.company_dto import CompanyDTO
 
 user_repo = get_collection('users')
