@@ -120,6 +120,8 @@ class ExpensesRepository(BaseRepository):
         except Exception:
             # ensure failure here does not break the main flow
             pass
+        # return identifiers for caller
+        return payment_id, tx_id
 
     # Simple reconciliation helper: match statement_lines by externalRef
     def reconcile_by_external_ref(self, bank_account_id, external_ref):

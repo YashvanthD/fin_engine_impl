@@ -5,6 +5,7 @@ from fin_server.repository.mongo_helper import get_collection
 from fin_server.security.authentication import get_auth_payload
 from fin_server.exception.UnauthorizedError import UnauthorizedError
 from fin_server.utils.helpers import respond_success, respond_error, normalize_doc, parse_iso_or_epoch
+from fin_server.services.expense_service import post_transaction_effects
 
 transactions_bp = Blueprint('transactions', __name__, url_prefix='/transactions')
 
@@ -72,10 +73,32 @@ def create_transaction():
         data = request.get_json(force=True)
         data['recorded_by'] = data.get('recorded_by') or payload.get('user_key')
         data['account_key'] = data.get('account_key') or payload.get('account_key')
-        res = transactions_repo.create_transaction(data)
-        inserted_id = getattr(res, 'inserted_id', None)
-        doc = transactions_repo.find_one({'_id': inserted_id})
-        return respond_success(normalize_doc(doc), status=201)
+        # create transaction; repo may return inserted_id or a result object
+        try:
+            res = transactions_repo.create_transaction(data)
+        except Exception:
+            # if repo expects a different shape, propagate error
+            raise
+        # normalize possible return types
+        if isinstance(res, dict):
+            tx_id = res.get('inserted_id') or res.get('_id') or res.get('id')
+        else:
+            # repo often returns the inserted_id directly
+            tx_id = res
+        # best-effort: post transaction effects (update bank accounts and statement lines)
+        try:
+            if tx_id:
+                post_transaction_effects(tx_id)
+        except Exception:
+            current_app.logger.exception('Failed to post transaction effects for %s', tx_id)
+
+        # fetch and return created transaction doc
+        try:
+            doc = transactions_repo.find_one({'_id': tx_id}) if tx_id is not None else None
+        except Exception:
+            coll = getattr(transactions_repo, 'collection', transactions_repo)
+            doc = coll.find_one({'_id': tx_id}) if tx_id is not None else None
+        return respond_success(normalize_doc(doc) if doc else None, status=201)
     except UnauthorizedError as ue:
         return respond_error(str(ue), status=401)
     except Exception:

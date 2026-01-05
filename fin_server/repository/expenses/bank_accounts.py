@@ -31,3 +31,26 @@ class BankAccountsRepository(BaseRepository):
 
     def find_one(self, q):
         return self.collection.find_one(q)
+
+    def get_by_account_key(self, account_key: str):
+        try:
+            return self.collection.find_one({'account_key': account_key})
+        except Exception:
+            return None
+
+    def adjust_balance(self, account_selector, delta: float):
+        """Adjust balance by delta. account_selector can be _id or account_key dict/value."""
+        try:
+            # If caller passes a dict, use it as query
+            if isinstance(account_selector, dict):
+                q = account_selector
+            else:
+                # try _id first
+                q = {'_id': account_selector}
+            res = self.collection.update_one(q, {'$inc': {'balance': float(delta)}})
+            if getattr(res, 'matched_count', 0) == 0:
+                # fallback to account_key
+                self.collection.update_one({'account_key': account_selector}, {'$inc': {'balance': float(delta)}})
+        except Exception:
+            # best-effort
+            pass

@@ -62,8 +62,8 @@ def ensure_organization_account(account_key: str, account_name: Optional[str] = 
         coll = getattr(bank_accounts, 'collection', bank_accounts)
         existing = coll.find_one({'account_key': account_key, 'type': 'organization'})
     if existing:
-        # Organization account already exists; raise rather than silently returning
-        raise ValueError(f"Organization bank account already exists for account_key {account_key}")
+        # Organization account already exists; return it for callers to use
+        return existing
     rec = {
         'account_number': generate_account_number(),
         'account_key': account_key,
@@ -73,12 +73,24 @@ def ensure_organization_account(account_key: str, account_name: Optional[str] = 
         'account_type': 'current',
         'created_at': get_time_date_dt(include_time=True)
     }
+    # create and return the created document for consistency
     if hasattr(bank_accounts, 'create'):
         r = bank_accounts.create(rec)
-        return getattr(r, 'inserted_id', None)
-    coll = getattr(bank_accounts, 'collection', bank_accounts)
-    r = coll.insert_one(rec)
-    return getattr(r, 'inserted_id', None)
+        inserted_id = getattr(r, 'inserted_id', None)
+        # if repo returned doc directly, return it
+        if isinstance(r, dict):
+            return r
+    else:
+        coll = getattr(bank_accounts, 'collection', bank_accounts)
+        r = coll.insert_one(rec)
+        inserted_id = getattr(r, 'inserted_id', None)
+
+    # fetch and return the inserted doc if we have an id
+    try:
+        coll = getattr(bank_accounts, 'collection', bank_accounts)
+        return coll.find_one({'_id': inserted_id}) if inserted_id is not None else None
+    except Exception:
+        return inserted_id
 
 
 def create_user_and_accounts(user_repo, user_doc: Dict[str, Any], create_user_bank: bool = True, ensure_org_account: bool = True) -> Dict[str, Any]:

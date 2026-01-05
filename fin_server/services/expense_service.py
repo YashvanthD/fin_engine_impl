@@ -650,3 +650,122 @@ def handle_sampling_deletion(sampling_id: str):
 
     return summary
 
+
+def post_transaction_effects(tx_or_id: Any) -> Any:
+    """Apply transaction accounting entries to bank accounts and statement_lines.
+
+    tx_or_id may be a transaction dict or a transaction _id. For each entry with an
+    accountId/account_key, we will append a statement line (preferred) or insert a
+    statement_lines doc and update the bank_accounts balance as a best-effort fallback.
+    Returns a list of inserted statement line ids.
+    """
+    tx_repo = get_collection('transactions')
+    # resolve tx doc
+    if isinstance(tx_or_id, dict):
+        tx = tx_or_id
+    else:
+        try:
+            tx = tx_repo.find_one({'_id': tx_or_id})
+        except Exception:
+            coll = getattr(tx_repo, 'collection', tx_repo)
+            tx = coll.find_one({'_id': tx_or_id})
+    if not tx:
+        raise ValueError('Transaction not found')
+
+    entries = tx.get('entries') or []
+    sl_repo = None
+    try:
+        sl_repo = get_collection('statement_lines')
+    except Exception:
+        # try to find on repos attached to expenses repo
+        try:
+            expenses_repo = get_collection('expenses')
+            sl_repo = getattr(expenses_repo, 'statement_lines', None)
+        except Exception:
+            sl_repo = None
+
+    bank_coll = get_collection('bank_accounts')
+    inserted_stmt_ids = []
+    ref = {'type': 'transaction', 'id': tx.get('_id')}
+    created_at = tx.get('occurredAt') or tx.get('postingDate') or tx.get('created_at') or get_time_date_dt(include_time=True)
+
+    for e in entries:
+        acct = e.get('accountId') or e.get('account_id') or e.get('account_key')
+        if not acct:
+            continue
+        # determine amount and direction: credit -> in, debit -> out
+        try:
+            debit = float(e.get('debit') or 0)
+        except Exception:
+            debit = 0.0
+        try:
+            credit = float(e.get('credit') or 0)
+        except Exception:
+            credit = 0.0
+        amt = credit if credit else debit
+        if not amt or amt <= 0:
+            continue
+        direction = 'in' if credit > 0 else 'out'
+
+        try:
+            if sl_repo is not None and hasattr(sl_repo, 'append_line'):
+                # append_line will compute running balance and update bank_accounts
+                sid, new_bal = sl_repo.append_line(acct, amount=amt, currency=tx.get('currency', 'INR'), direction=direction, reference=ref, transaction_id=tx.get('_id'), created_at=created_at)
+                inserted_stmt_ids.append(sid)
+            else:
+                # fallback: insert statement line directly and update bank account via $inc
+                stmt = {
+                    'bank_account_id': acct,
+                    'amount': amt,
+                    'currency': tx.get('currency', 'INR'),
+                    'direction': direction,
+                    'reference': ref,
+                    'transaction_id': tx.get('_id'),
+                    'created_at': created_at
+                }
+                try:
+                    sl_coll = get_collection('statement_lines')
+                    res = sl_coll.insert_one(stmt)
+                    sid = getattr(res, 'inserted_id', None)
+                    inserted_stmt_ids.append(sid)
+                except Exception:
+                    # last resort: try direct collection access on repo objects
+                    try:
+                        coll = getattr(sl_repo, 'collection', sl_repo)
+                        res = coll.insert_one(stmt)
+                        sid = getattr(res, 'inserted_id', None)
+                        inserted_stmt_ids.append(sid)
+                    except Exception:
+                        sid = None
+                # update bank_accounts balance optimistically
+                try:
+                    delta = float(amt) if direction in ('in', 'credit') else -float(amt)
+                    # Try update by _id first, fallback to account_key
+                    upd = bank_coll.update_one({'_id': acct}, {'$inc': {'balance': delta}})
+                    if getattr(upd, 'matched_count', 0) == 0:
+                        bank_coll.update_one({'account_key': acct}, {'$inc': {'balance': delta}})
+                except Exception:
+                    try:
+                        bank_coll = getattr(bank_coll, 'collection', bank_coll)
+                        bank_coll.update_one({'account_key': acct}, {'$inc': {'balance': delta}})
+                    except Exception:
+                        logger.exception('Failed to update bank_accounts for acct %s', acct)
+        except Exception:
+            logger.exception('Failed to post statement line for entry %s', e)
+
+    return inserted_stmt_ids
+
+
+def create_transaction_and_post(tx_doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a transaction and apply its accounting effects (statement lines & balances).
+
+    Returns dict with keys: transaction_id, statement_line_ids
+    """
+    tx_id = init_transaction(tx_doc)
+    stmt_ids = []
+    try:
+        stmt_ids = post_transaction_effects(tx_id) or []
+    except Exception:
+        logger.exception('Failed to post transaction effects for tx %s', tx_id)
+    return {'transaction_id': tx_id, 'statement_line_ids': stmt_ids}
+
