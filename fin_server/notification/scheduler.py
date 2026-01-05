@@ -6,13 +6,16 @@ from .worker import NotificationWorker
 from fin_server.repository.media.task_repository import TaskRepository
 import logging
 
+from ..repository.mongo_helper import get_collection
+
+
 class TaskScheduler:
     def __init__(self, interval_seconds=60):
         self.interval = interval_seconds
         self.worker = NotificationWorker()
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.running = False
-        self.task_repository = TaskRepository()
+        self.task_repository = get_collection('tasks')
 
     def start(self):
         self.running = True
