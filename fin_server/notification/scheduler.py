@@ -15,7 +15,7 @@ class TaskScheduler:
         self.worker = NotificationWorker()
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.running = False
-        self.task_repository = get_collection('tasks')
+        self.task_repository = get_collection('task')
 
     def start(self):
         self.running = True
