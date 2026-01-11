@@ -346,6 +346,44 @@ class Config:
         return self._get_yaml_value('notification', 'worker_enabled', default=True)
 
     # ==========================================================================
+    # OpenAI / AI Settings
+    # ==========================================================================
+
+    @property
+    def OPENAI_API_KEY(self) -> Optional[str]:
+        """OpenAI API key."""
+        return os.getenv('OPENAI_API_KEY') or self._get_yaml_value('openai', 'api_key')
+
+    @property
+    def OPENAI_MODEL(self) -> str:
+        """Default OpenAI model."""
+        return os.getenv('OPENAI_MODEL') or self._get_yaml_value('openai', 'model', default='gpt-4o-mini')
+
+    @property
+    def OPENAI_MAX_TOKENS(self) -> int:
+        """Max tokens for OpenAI responses."""
+        env_val = os.getenv('OPENAI_MAX_TOKENS')
+        if env_val:
+            return int(env_val)
+        return self._get_yaml_value('openai', 'max_tokens', default=2000)
+
+    @property
+    def OPENAI_TEMPERATURE(self) -> float:
+        """Default temperature for OpenAI."""
+        env_val = os.getenv('OPENAI_TEMPERATURE')
+        if env_val:
+            return float(env_val)
+        return self._get_yaml_value('openai', 'temperature', default=0.7)
+
+    @property
+    def OPENAI_TIMEOUT(self) -> int:
+        """OpenAI request timeout in seconds."""
+        env_val = os.getenv('OPENAI_TIMEOUT')
+        if env_val:
+            return int(env_val)
+        return self._get_yaml_value('openai', 'timeout', default=30)
+
+    # ==========================================================================
     # Feature Flags
     # ==========================================================================
 

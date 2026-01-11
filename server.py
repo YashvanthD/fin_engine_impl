@@ -17,6 +17,7 @@ from fin_server.routes.public import public_bp
 from fin_server.routes.feeding import feeding_bp, feeding_api_bp
 from fin_server.routes.sampling import sampling_bp, sampling_api_bp
 from fin_server.routes.expenses import expenses_bp, expenses_api_bp
+from fin_server.routes.ai import openai_bp
 from fin_server.security.authentication import AuthSecurity
 from fin_server.notification.scheduler import TaskScheduler
 from fin_server.messaging.socket_server import socketio, start_notification_worker
@@ -75,6 +76,9 @@ def create_app() -> Flask:
     app.register_blueprint(feeding_bp)
     app.register_blueprint(sampling_bp)
     app.register_blueprint(expenses_bp)
+
+    # AI routes
+    app.register_blueprint(openai_bp)
 
     # Register API blueprints provided by modules (no ad-hoc app.add_url_rule)
     app.register_blueprint(auth_api_bp)

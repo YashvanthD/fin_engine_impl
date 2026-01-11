@@ -24,6 +24,19 @@ database:
     fish: "fish_db"
     analytics: "analytics_db"
 
+# OpenAI / AI Configuration
+openai:
+  # API key - MUST be set via environment variable OPENAI_API_KEY
+  api_key: null
+  # Default model to use
+  model: "gpt-4o-mini"
+  # Max tokens for responses
+  max_tokens: 2000
+  # Default temperature (creativity)
+  temperature: 0.7
+  # Request timeout in seconds
+  timeout: 30
+
 logging:
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
