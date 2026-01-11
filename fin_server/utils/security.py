@@ -7,6 +7,8 @@ import secrets
 import hashlib
 from typing import Optional
 
+from config import config
+
 
 def hash_password(plain: str) -> str:
     """Hash a plaintext password using bcrypt.
@@ -25,7 +27,7 @@ def hash_password(plain: str) -> str:
     if not plain:
         raise ValueError("Password cannot be empty")
 
-    salt = bcrypt.gensalt(rounds=12)  # Use 12 rounds for better security
+    salt = bcrypt.gensalt(rounds=config.BCRYPT_ROUNDS)
     return bcrypt.hashpw(plain.encode('utf-8'), salt).decode('utf-8')
 
 

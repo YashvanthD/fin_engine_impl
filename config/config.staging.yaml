@@ -1,0 +1,45 @@
+# =============================================================================
+# Staging Environment Configuration
+# =============================================================================
+# For staging/QA environment - production-like but with some debug features.
+#
+# To use: Set FLASK_ENV=staging
+# =============================================================================
+
+app:
+  debug: false
+  env: staging
+  port: 5000
+
+security:
+  # Must be set via environment variable in staging
+  master_admin_password: null
+
+  jwt:
+    # Must be set via JWT_SECRET environment variable
+    secret: null
+    access_token_expire_minutes: 10080  # 7 days
+    refresh_token_expire_days: 90
+
+  bcrypt_rounds: 12
+
+database:
+  # Set via MONGO_URI environment variable
+  mongo_uri: null
+
+cors:
+  # Restrict to staging domains
+  origins: "https://staging.example.com,https://staging-app.example.com"
+
+timezone:
+  default: "Asia/Kolkata"
+
+logging:
+  level: "INFO"
+
+# Staging-specific feature flags
+features:
+  enable_swagger: true
+  enable_debug_endpoints: false
+  enable_mock_data: false
+

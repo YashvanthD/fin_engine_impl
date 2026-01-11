@@ -1,0 +1,34 @@
+# =============================================================================
+# Local Configuration Example
+# =============================================================================
+# Copy this file to config.local.yaml and customize for your local environment.
+# This file is git-ignored and should contain your local secrets.
+#
+# cp config.local.yaml.example config.local.yaml
+# =============================================================================
+
+# Enable debug mode for local development
+app:
+  debug: true
+  env: development
+
+# Set your JWT secret for local development
+security:
+  jwt:
+    secret: "your-local-dev-secret-key-change-in-production"
+
+  # You can override the master password for local testing
+  master_admin_password: "local-dev-password"
+
+# Local MongoDB connection (if different from default)
+# database:
+#   mongo_uri: "mongodb://localhost:27017"
+
+# Local CORS settings (allow all for development)
+cors:
+  origins: "*"
+
+# Debug logging
+logging:
+  level: "DEBUG"
+

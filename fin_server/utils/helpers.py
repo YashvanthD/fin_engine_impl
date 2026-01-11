@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 import zoneinfo
 from werkzeug.exceptions import Forbidden, Unauthorized
 
-# IST timezone - loaded once
-IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
+from config import config
+
+# Default timezone - loaded once from config
+IST_TZ = zoneinfo.ZoneInfo(config.DEFAULT_TIMEZONE)
 
 
 def respond_error(message_or_dict, status=400):
@@ -558,8 +560,6 @@ def get_request_payload(req=None, required_role: str = None, account_key: str = 
 
     return payload
 
-
-IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
 
 
 def parse_iso_or_epoch(s):

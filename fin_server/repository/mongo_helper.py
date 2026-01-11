@@ -1,32 +1,32 @@
-from typing import Optional, Any, Dict
+from typing import Any
 from pymongo import MongoClient
-import os
 import logging
 
+from config import config
 
 logger = logging.getLogger(__name__)
+
 
 class MongoRepo:
     _instance = None
     _client = None
-    _mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
     _is_initialized = False
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
             cls._instance = super(MongoRepo, cls).__new__(cls)
-            cls._client = MongoClient(cls._mongo_uri)
+            cls._client = MongoClient(config.MONGO_URI)
             cls.init_repositories(cls._instance)
             cls._is_initialized = True
         return cls._instance
 
     def __init__(self):
-
-        self.user_db_name = 'user_db'
-        self.media_db_name = 'media_db'
-        self.expenses_db_name = 'expenses_db'
-        self.fish_db_name = 'fish_db'
-        self.analytics_db_name = 'analytics_db'
+        # Use database names from config
+        self.user_db_name = config.USER_DB_NAME
+        self.media_db_name = config.MEDIA_DB_NAME
+        self.expenses_db_name = config.EXPENSES_DB_NAME
+        self.fish_db_name = config.FISH_DB_NAME
+        self.analytics_db_name = config.ANALYTICS_DB_NAME
 
         self.user_db = self._client[self.user_db_name]
         self.media_db = self._client[self.media_db_name]
@@ -65,16 +65,17 @@ class MongoRepo:
 
     def init_client(self):
         if self._client is None:
-            self._client = MongoClient(self._mongo_uri)
+            self._client = MongoClient(config.MONGO_URI)
 
     def init_dbs(self):
         self.init_client()
 
-        self.user_db_name = 'user_db'
-        self.media_db_name = 'media_db'
-        self.expenses_db_name = 'expenses_db'
-        self.fish_db_name = 'fish_db'
-        self.analytics_db_name = 'analytics_db'
+        # Use database names from config
+        self.user_db_name = config.USER_DB_NAME
+        self.media_db_name = config.MEDIA_DB_NAME
+        self.expenses_db_name = config.EXPENSES_DB_NAME
+        self.fish_db_name = config.FISH_DB_NAME
+        self.analytics_db_name = config.ANALYTICS_DB_NAME
 
         self.user_db = self._client[self.user_db_name]
         self.media_db = self._client[self.media_db_name]

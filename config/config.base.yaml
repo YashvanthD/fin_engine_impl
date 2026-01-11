@@ -1,0 +1,53 @@
+# =============================================================================
+# Base Configuration (shared across all environments)
+# =============================================================================
+# This file contains base/default values that can be overridden by environment
+# specific config files (config.dev.yaml, config.staging.yaml, config.prod.yaml)
+# =============================================================================
+
+app:
+  name: "Fin Engine API"
+  version: "1.0.0"
+
+security:
+  jwt:
+    algorithm: "HS256"
+    access_token_expire_minutes: 10080  # 7 days
+    refresh_token_expire_days: 90
+  bcrypt_rounds: 12
+
+database:
+  databases:
+    user: "user_db"
+    media: "media_db"
+    expenses: "expenses_db"
+    fish: "fish_db"
+    analytics: "analytics_db"
+
+logging:
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+notification:
+  scheduler_interval_seconds: 60
+  worker_enabled: true
+
+rate_limit:
+  enabled: false
+  requests_per_minute: 60
+  requests_per_hour: 1000
+
+upload:
+  max_file_size_mb: 10
+  allowed_extensions:
+    - jpg
+    - jpeg
+    - png
+    - pdf
+    - xlsx
+    - csv
+
+cache:
+  enabled: false
+  type: "memory"
+  ttl_seconds: 300
+

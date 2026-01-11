@@ -5,12 +5,11 @@ This module provides endpoints for:
 - Company details retrieval and updates
 - Public company info
 """
-import hmac
 import logging
-import os
 
 from flask import Blueprint, request
 
+from config import config
 from fin_server.dto.company_dto import CompanyDTO
 from fin_server.repository.mongo_helper import get_collection
 from fin_server.security.authentication import AuthSecurity
@@ -20,8 +19,6 @@ from fin_server.utils.helpers import respond_success, respond_error
 
 logger = logging.getLogger(__name__)
 
-# Environment configuration
-MASTER_ADMIN_PASSWORD = os.getenv('MASTER_ADMIN_PASSWORD', 'password')
 
 # Blueprint
 company_bp = Blueprint('company', __name__, url_prefix='/company')
@@ -65,19 +62,6 @@ def _sync_company_users(account_key):
 
     return users_list, employee_count
 
-
-def _validate_master_password(provided_password):
-    """Validate master password for company registration."""
-    if not MASTER_ADMIN_PASSWORD:
-        return False, 'Server not configured for company registration'
-
-    if not provided_password:
-        return False, 'Master password is required'
-
-    if not hmac.compare_digest(str(provided_password), str(MASTER_ADMIN_PASSWORD)):
-        return False, 'Invalid master password'
-
-    return True, None
 
 
 def _build_company_response(company, users_list=None, employee_count=None):
@@ -130,8 +114,8 @@ def register_company():
     logger.info('POST /company/register called')
     data = request.get_json(force=True)
 
-    # Validate master password
-    is_valid, error_msg = _validate_master_password(data.get('master_password'))
+    # Validate master password using centralized config
+    is_valid, error_msg = config.validate_master_password(data.get('master_password'))
     if not is_valid:
         logger.warning('Company registration failed: %s', error_msg)
         return respond_error(error_msg, status=403 if 'Invalid' in error_msg else 500)

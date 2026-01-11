@@ -1,0 +1,47 @@
+# =============================================================================
+# Development Environment Configuration
+# =============================================================================
+# This is the DEFAULT environment for local development.
+# Inherits from config.base.yaml and overrides dev-specific settings.
+#
+# To use: Set FLASK_ENV=development (or leave unset - dev is default)
+# =============================================================================
+
+app:
+  debug: true
+  env: development
+  port: 5000
+
+security:
+  # Default dev password - NEVER use in production!
+  master_admin_password: "password"
+
+  jwt:
+    # Dev secret - set JWT_SECRET env var in production!
+    secret: "dev-secret-key-change-in-production"
+    # Shorter token expiry for dev testing
+    access_token_expire_minutes: 10080  # 7 days
+    refresh_token_expire_days: 90
+
+  # Faster hashing in dev for quicker tests
+  bcrypt_rounds: 10
+
+database:
+  mongo_uri: "mongodb://localhost:27017"
+
+cors:
+  # Allow all origins in development
+  origins: "*"
+
+timezone:
+  default: "Asia/Kolkata"
+
+logging:
+  level: "DEBUG"
+
+# Dev-specific feature flags
+features:
+  enable_swagger: true
+  enable_debug_endpoints: true
+  enable_mock_data: false
+

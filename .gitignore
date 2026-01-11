@@ -4,3 +4,12 @@ fin_ui
 fin_ui/*
 tests
 tests/*
+
+# Local config overrides (contains secrets)
+config/config.local.yaml
+*.local.yaml
+
+# Environment files
+.env
+.env.local
+.env.*.local

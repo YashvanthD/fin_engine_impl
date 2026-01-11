@@ -11,6 +11,7 @@ from datetime import datetime
 
 from flask import Blueprint, request
 
+from config import config
 from fin_server.dto.fish_dto import FishDTO
 from fin_server.repository.mongo_helper import get_collection
 from fin_server.utils import validation
@@ -21,8 +22,8 @@ from fin_server.utils.time_utils import get_time_date_dt
 
 logger = logging.getLogger(__name__)
 
-# Constants
-IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
+# Default timezone from config
+IST_TZ = zoneinfo.ZoneInfo(config.DEFAULT_TIMEZONE)
 
 # Blueprint
 fish_bp = Blueprint('fish', __name__, url_prefix='/fish')

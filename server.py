@@ -1,8 +1,9 @@
 import argparse
-import os
 import warnings
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
+
+from config import config
 from fin_server.repository.mongo_helper import MongoRepo
 # Register canonical blueprints and their API blueprints from route modules
 from fin_server.routes.auth import auth_bp, auth_api_bp
@@ -34,30 +35,21 @@ except Exception:
     # If urllib3 or the warning class is unavailable, ignore and continue
     pass
 
-# Allow debug mode to be controlled by environment variable FLASK_DEBUG (true/false)
-APP_DEBUG = os.getenv('FLASK_DEBUG', 'false').lower() in ('1', 'true', 'yes')
-
 
 def configure_auth_from_env():
-    """Configure AuthSecurity from environment variables.
+    """Configure AuthSecurity from centralized config.
 
-    JWT_SECRET (required): secret key for signing tokens.
-    JWT_ALGORITHM (optional): default HS256.
-    ACCESS_TOKEN_MINUTES (optional): default 7 days.
-    REFRESH_TOKEN_DAYS (optional): default 90 days.
+    Uses config.JWT_SECRET, config.JWT_ALGORITHM, etc.
     """
-    secret = os.getenv('JWT_SECRET')
-    if not secret:
+    if not config.JWT_SECRET:
         # Fail fast in production; for local dev you can set a simple value.
         raise RuntimeError('JWT_SECRET environment variable is required')
-    algorithm = os.getenv('JWT_ALGORITHM', 'HS256')
-    access_minutes = int(os.getenv('ACCESS_TOKEN_MINUTES', str(7 * 24 * 60)))
-    refresh_days = int(os.getenv('REFRESH_TOKEN_DAYS', '90'))
+
     AuthSecurity.configure(
-        secret_key=secret,
-        algorithm=algorithm,
-        access_token_expire_minutes=access_minutes,
-        refresh_token_expire_days=refresh_days,
+        secret_key=config.JWT_SECRET,
+        algorithm=config.JWT_ALGORITHM,
+        access_token_expire_minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES,
+        refresh_token_expire_days=config.REFRESH_TOKEN_EXPIRE_DAYS,
     )
 
 
@@ -68,8 +60,8 @@ def create_app() -> Flask:
     separately via configure_auth_from_env().
     """
     app = Flask(__name__, template_folder='templates')
-    # Enable CORS for all routes and all origins by default (allow '*')
-    CORS(app, resources={r"/*": {"origins": "*"}})
+    # Enable CORS for all routes using config
+    CORS(app, resources={r"/*": {"origins": config.CORS_ORIGINS_LIST}})
 
     # Register canonical blueprints (keep resource endpoints grouped)
     app.register_blueprint(auth_bp)
@@ -158,7 +150,7 @@ def parse_args():
     in environments where they are managed separately.
     """
     parser = argparse.ArgumentParser(description='Run fin_engine_impl backend server')
-    parser.add_argument('--port', type=int, default=int(os.getenv('PORT', '5000')), help='TCP port to bind (default: 5000 or PORT env)')
+    parser.add_argument('--port', type=int, default=config.PORT, help='TCP port to bind (default: 5000 or PORT env)')
     parser.add_argument('--no-scheduler', action='store_true', help='Do not start background TaskScheduler')
     parser.add_argument('--no-worker', action='store_true', help='Do not start notification worker thread')
     return parser.parse_args()
@@ -178,8 +170,8 @@ if __name__ == "__main__":
         start_notification_worker()
     try:
         logging.info('Starting server with Socket.IO on port %s', args.port)
-        socketio.init_app(app, cors_allowed_origins="*")
-        socketio.run(app, host="0.0.0.0", port=args.port, debug=APP_DEBUG)
+        socketio.init_app(app, cors_allowed_origins=config.CORS_ORIGINS)
+        socketio.run(app, host="0.0.0.0", port=args.port, debug=config.DEBUG)
     except Exception as exc:
         logging.exception('Socket.IO server failed to start (falling back to Flask.run): %s', exc)
-        app.run(host="0.0.0.0", port=args.port, debug=APP_DEBUG)
+        app.run(host="0.0.0.0", port=args.port, debug=config.DEBUG)

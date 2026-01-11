@@ -2,6 +2,11 @@ from datetime import datetime
 import zoneinfo
 from typing import Optional, Dict, Any
 
+from config import config
+
+# Default timezone from config
+DEFAULT_TZ = config.DEFAULT_TIMEZONE
+
 
 def _resolve_tz_name(zone: str = 'IST', settings: Optional[Dict[str, Any]] = None) -> str:
     """Resolve a timezone name from an optional settings map and a zone hint.
@@ -9,7 +14,7 @@ def _resolve_tz_name(zone: str = 'IST', settings: Optional[Dict[str, Any]] = Non
     Priority:
       1) settings['timezone'] if present (user- or account-level)
       2) explicit zone parameter (e.g. 'IST', 'Asia/Kolkata', 'Europe/Berlin')
-      3) fallback to Asia/Kolkata (IST)
+      3) fallback to DEFAULT_TIMEZONE from config
     """
     # settings can be any mapping; tolerate missing keys
     if settings and isinstance(settings, dict):
@@ -17,8 +22,8 @@ def _resolve_tz_name(zone: str = 'IST', settings: Optional[Dict[str, Any]] = Non
         if isinstance(tz_val, str) and tz_val.strip():
             zone = tz_val.strip()
     if isinstance(zone, str) and zone.upper() == 'IST':
-        return 'Asia/Kolkata'
-    return zone or 'Asia/Kolkata'
+        return DEFAULT_TZ
+    return zone or DEFAULT_TZ
 
 
 def get_time_date(zone: str = 'IST', dt: datetime = None, include_time: bool = True, settings: Optional[Dict[str, Any]] = None) -> str:
@@ -35,7 +40,7 @@ def get_time_date(zone: str = 'IST', dt: datetime = None, include_time: bool = T
     try:
         tz = zoneinfo.ZoneInfo(tz_name)
     except Exception:
-        tz = zoneinfo.ZoneInfo('Asia/Kolkata')
+        tz = zoneinfo.ZoneInfo(DEFAULT_TZ)
 
     if dt is None:
         now = datetime.now(tz)

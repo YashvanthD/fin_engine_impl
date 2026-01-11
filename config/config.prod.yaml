@@ -1,0 +1,55 @@
+# =============================================================================
+# Production Environment Configuration
+# =============================================================================
+# For production environment - maximum security, minimal logging.
+#
+# To use: Set FLASK_ENV=production
+#
+# IMPORTANT: All sensitive values (secrets, passwords, URIs) MUST be set
+# via environment variables in production!
+# =============================================================================
+
+app:
+  debug: false
+  env: production
+  port: 5000
+
+security:
+  # MUST be set via MASTER_ADMIN_PASSWORD environment variable
+  master_admin_password: null
+
+  jwt:
+    # MUST be set via JWT_SECRET environment variable
+    secret: null
+    algorithm: "HS256"
+    access_token_expire_minutes: 1440  # 1 day (shorter for security)
+    refresh_token_expire_days: 30      # Shorter refresh in production
+
+  # Maximum security
+  bcrypt_rounds: 12
+
+database:
+  # MUST be set via MONGO_URI environment variable
+  mongo_uri: null
+
+cors:
+  # MUST specify exact production domains - no wildcards!
+  origins: "https://example.com,https://app.example.com"
+
+timezone:
+  default: "Asia/Kolkata"
+
+logging:
+  level: "WARNING"
+
+rate_limit:
+  enabled: true
+  requests_per_minute: 60
+  requests_per_hour: 1000
+
+# Production feature flags
+features:
+  enable_swagger: false
+  enable_debug_endpoints: false
+  enable_mock_data: false
+

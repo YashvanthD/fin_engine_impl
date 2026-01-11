@@ -6,12 +6,11 @@ This module provides endpoints for:
 - Token generation and refresh
 - User settings and subscriptions
 """
-import hmac
 import logging
-import os
 
 from flask import Blueprint, request
 
+from config import config
 from fin_server.dto.user_dto import UserDTO
 from fin_server.repository.mongo_helper import get_collection
 from fin_server.security.authentication import AuthSecurity
@@ -29,11 +28,6 @@ from fin_server.utils.decorators import handle_errors, require_auth
 
 logger = logging.getLogger(__name__)
 
-# Environment configuration
-_FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'false').lower() in ('1', 'true', 'yes')
-MASTER_ADMIN_PASSWORD = os.getenv('MASTER_ADMIN_PASSWORD')
-if not MASTER_ADMIN_PASSWORD and _FLASK_DEBUG:
-    MASTER_ADMIN_PASSWORD = 'password'
 
 # Blueprint for auth routes
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
@@ -56,13 +50,10 @@ def signup():
     # Validate master password if provided
     provided_master = data.get('master_password')
     if provided_master:
-        if not MASTER_ADMIN_PASSWORD:
-            logger.error("MASTER_ADMIN_PASSWORD not configured")
-            return respond_error('Server not configured for admin registration', status=500)
-
-        if not hmac.compare_digest(str(provided_master), str(MASTER_ADMIN_PASSWORD)):
-            logger.warning("Invalid master password for admin signup")
-            return respond_error('Unauthorized: invalid master password', status=403)
+        is_valid, error_msg = config.validate_master_password(provided_master)
+        if not is_valid:
+            logger.warning("Invalid master password for admin signup: %s", error_msg)
+            return respond_error(error_msg, status=403 if 'Invalid' in error_msg else 500)
 
     data.pop('master_password', None)
 
