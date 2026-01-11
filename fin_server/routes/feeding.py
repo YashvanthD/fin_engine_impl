@@ -1,107 +1,125 @@
-from flask import Blueprint, request, current_app
+"""Feeding routes for fish feeding records.
 
-from fin_server.repository.mongo_helper import get_collection
-from fin_server.utils.helpers import respond_success, respond_error, normalize_doc
-from fin_server.security.authentication import get_auth_payload
+This module provides endpoints for:
+- Feeding record creation
+- Feeding record listing
+- Feeding records by pond
+"""
+import logging
+
+from flask import Blueprint, request
+
 from fin_server.dto.feeding_dto import FeedingRecordDTO
-from fin_server.exception.UnauthorizedError import UnauthorizedError
+from fin_server.repository.mongo_helper import get_collection
+from fin_server.utils.decorators import handle_errors, require_auth
+from fin_server.utils.helpers import respond_success, respond_error, normalize_doc
 
+logger = logging.getLogger(__name__)
+
+# Blueprint
 feeding_bp = Blueprint('feeding', __name__, url_prefix='/feeding')
 
+# Repository
 feeding_repo = get_collection('feeding')
 
-@feeding_bp.route('/', methods=['POST'])
-def create_feeding_route():
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+def _normalize_feeding_doc(doc):
+    """Normalize feeding document to DTO format."""
+    normalized = normalize_doc(doc)
     try:
-        payload = get_auth_payload(request)
-        data = request.get_json(force=True)
-        # Build DTO from request (accepts multiple variants)
-        dto = FeedingRecordDTO.from_request(data)
-        # Ensure recordedBy is set from token
-        dto.recordedBy = payload.get('user_key')
-        # Persist using DTO helper
-        try:
-            res = dto.save(repo=feeding_repo)
-            # repo.create may return inserted id or pymongo result
-            try:
-                inserted_id = getattr(res, 'inserted_id', res)
-            except Exception:
-                inserted_id = res
-            inserted_id = str(inserted_id) if inserted_id is not None else None
-        except Exception:
-            # fallback to direct collection insert
-            r = feeding_repo.insert_one(dto.to_db_doc())
-            inserted_id = str(r.inserted_id)
-        dto.id = inserted_id
-        return respond_success(dto.to_dict(), status=201)
-    except UnauthorizedError as ue:
-        return respond_error(str(ue), status=401)
+        dto = FeedingRecordDTO.from_doc(normalized)
+        return dto.to_dict()
     except Exception:
-        current_app.logger.exception('Error in create_feeding_route')
-        return respond_error('Server error', status=500)
+        normalized['_id'] = str(normalized.get('_id'))
+        normalized['id'] = normalized.get('_id')
+        return normalized
+
+
+def _get_feeding_list(query):
+    """Get list of feeding records matching query."""
+    try:
+        feeds = feeding_repo.find(query)
+    except Exception:
+        feeds = list(feeding_repo.find(query).sort('created_at', -1))
+
+    return [_normalize_feeding_doc(f) for f in feeds]
+
+
+# =============================================================================
+# Feeding Endpoints
+# =============================================================================
+
+@feeding_bp.route('/', methods=['POST'])
+@handle_errors
+@require_auth
+def create_feeding_route(auth_payload):
+    """Create a new feeding record."""
+    data = request.get_json(force=True)
+
+    # Build DTO
+    dto = FeedingRecordDTO.from_request(data)
+    dto.recordedBy = auth_payload.get('user_key')
+
+    # Persist
+    try:
+        res = dto.save(repo=feeding_repo)
+        inserted_id = getattr(res, 'inserted_id', res)
+        inserted_id = str(inserted_id) if inserted_id is not None else None
+    except Exception:
+        r = feeding_repo.insert_one(dto.to_db_doc())
+        inserted_id = str(r.inserted_id)
+
+    dto.id = inserted_id
+    return respond_success(dto.to_dict(), status=201)
+
 
 @feeding_bp.route('/', methods=['GET'])
-def list_feeding_route():
-    try:
-        payload = get_auth_payload(request)
-        q = {}
-        pondId = request.args.get('pondId') or request.args.get('pond_id')
-        if pondId:
-            q['pondId'] = pondId
-        try:
-            feeds = feeding_repo.find(q)
-        except Exception:
-            feeds = list(feeding_repo.find(q).sort('created_at', -1))
-        out = []
-        for f in feeds:
-            # normalize doc and convert via DTO
-            fo = normalize_doc(f)
-            try:
-                feed_dto = FeedingRecordDTO.from_doc(fo)
-                out.append(feed_dto.to_dict())
-            except Exception:
-                # fallback: include normalized doc with id
-                fo['_id'] = str(fo.get('_id'))
-                fo['id'] = fo.get('_id')
-                out.append(fo)
-        return respond_success(out)
-    except UnauthorizedError as ue:
-        return respond_error(str(ue), status=401)
-    except Exception:
-        current_app.logger.exception('Error in list_feeding_route')
-        return respond_error('Server error', status=500)
+@handle_errors
+@require_auth
+def list_feeding_route(auth_payload):
+    """List all feeding records."""
+    q = {}
+
+    pond_id = request.args.get('pondId') or request.args.get('pond_id')
+    if pond_id:
+        q['pondId'] = pond_id
+
+    feeds = _get_feeding_list(q)
+    return respond_success(feeds)
+
 
 @feeding_bp.route('/pond/<pond_id>', methods=['GET'])
+@handle_errors
 def feeding_by_pond_route(pond_id):
-    try:
-        feeds = list(feeding_repo.find({'pondId': pond_id}).sort('created_at', -1))
-        out = []
-        for f in feeds:
-            fo = normalize_doc(f)
-            try:
-                feed_dto = FeedingRecordDTO.from_doc(fo)
-                out.append(feed_dto.to_dict())
-            except Exception:
-                fo['_id'] = str(fo.get('_id'))
-                fo['id'] = fo.get('_id')
-                out.append(fo)
-        return respond_success(out)
-    except Exception:
-        current_app.logger.exception('Error in feeding_by_pond_route')
-        return respond_error('Server error', status=500)
+    """Get feeding records for a specific pond."""
+    feeds = list(feeding_repo.find({'pondId': pond_id}).sort('created_at', -1))
+    out = [_normalize_feeding_doc(f) for f in feeds]
+    return respond_success(out)
 
-from flask import Blueprint as _Blueprint
 
-feeding_api_bp = _Blueprint('feeding_api', __name__, url_prefix='/api')
+# =============================================================================
+# API Blueprint Aliases
+# =============================================================================
+
+feeding_api_bp = Blueprint('feeding_api', __name__, url_prefix='/api')
 
 @feeding_api_bp.route('/feeding', methods=['POST'])
-def api_create_feeding():
-    return create_feeding_route()
+@handle_errors
+@require_auth
+def api_create_feeding(auth_payload):
+    return create_feeding_route(auth_payload)
 
 @feeding_api_bp.route('/feeding', methods=['GET'])
-def api_list_feeding():
-    return list_feeding_route()
+@handle_errors
+@require_auth
+def api_list_feeding(auth_payload):
+    return list_feeding_route(auth_payload)
 
 @feeding_api_bp.route('/feeding/pond/<pond_id>', methods=['GET'])
+@handle_errors
 def api_feeding_by_pond(pond_id):
     return feeding_by_pond_route(pond_id)

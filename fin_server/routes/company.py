@@ -1,115 +1,205 @@
+"""Company routes for company registration and management.
+
+This module provides endpoints for:
+- Company registration with admin user
+- Company details retrieval and updates
+- Public company info
+"""
+import hmac
 import logging
-from flask import Blueprint, request, current_app
+import os
+
+from flask import Blueprint, request
+
+from fin_server.dto.company_dto import CompanyDTO
+from fin_server.repository.mongo_helper import get_collection
+from fin_server.security.authentication import AuthSecurity
+from fin_server.utils.decorators import handle_errors, require_auth
+from fin_server.utils.generator import build_user, get_current_timestamp, epoch_to_datetime
 from fin_server.utils.helpers import respond_success, respond_error
 
-from fin_server.security.authentication import AuthSecurity
-from fin_server.utils.generator import build_user, get_current_timestamp, epoch_to_datetime
-from fin_server.repository.mongo_helper import get_collection
-from fin_server.dto.company_dto import CompanyDTO
+logger = logging.getLogger(__name__)
 
-user_repo = get_collection('users')
+# Environment configuration
+MASTER_ADMIN_PASSWORD = os.getenv('MASTER_ADMIN_PASSWORD', 'password')
 
-import os
-import hmac
-
-MASTER_ADMIN_PASSWORD = os.getenv('MASTER_ADMIN_PASSWORD', 'password')  # Must be set in environment
-
+# Blueprint
 company_bp = Blueprint('company', __name__, url_prefix='/company')
 
-# Helper to build company users list from user collection
+# Repositories
+user_repo = get_collection('users')
+companies_repo = get_collection('companies')
 
-def build_company_users_list(account_key):
-    # user_repo.find_many expects a query dict (collection is implied by repository)
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
+
+def _build_company_users_list(account_key):
+    """Build list of company users with their status from user repository."""
     users = user_repo.find_many({'account_key': account_key})
-    result = []
-    for u in users:
-        user_entry = {
+    return [
+        {
             'user_key': u.get('user_key'),
             'username': u.get('username'),
             'roles': u.get('roles', []),
             'joined_date': u.get('joined_date'),
-            # Active if at least one refresh token exists
             'active': bool(u.get('refresh_tokens'))
         }
-        result.append(user_entry)
-    return result
+        for u in users
+    ]
 
-# Register a new company and its admin user
+
+def _get_active_employee_count(users_list):
+    """Count active employees from users list."""
+    return sum(1 for u in users_list if u.get('active'))
+
+
+def _sync_company_users(account_key):
+    """Sync company users list with user repository and update company."""
+    users_list = _build_company_users_list(account_key)
+    employee_count = _get_active_employee_count(users_list)
+
+    # Use repository method to update
+    companies_repo.update_users_list(account_key, users_list, employee_count)
+
+    return users_list, employee_count
+
+
+def _validate_master_password(provided_password):
+    """Validate master password for company registration."""
+    if not MASTER_ADMIN_PASSWORD:
+        return False, 'Server not configured for company registration'
+
+    if not provided_password:
+        return False, 'Master password is required'
+
+    if not hmac.compare_digest(str(provided_password), str(MASTER_ADMIN_PASSWORD)):
+        return False, 'Invalid master password'
+
+    return True, None
+
+
+def _build_company_response(company, users_list=None, employee_count=None):
+    """Build company response dict."""
+    if company is None:
+        return None
+
+    response = dict(company)
+    response.pop('_id', None)
+
+    if users_list is not None:
+        response['users'] = users_list
+    if employee_count is not None:
+        response['employee_count'] = employee_count
+
+    return response
+
+
+def _format_created_date(created_date_raw):
+    """Format created date for response."""
+    if isinstance(created_date_raw, (int, float)):
+        try:
+            return epoch_to_datetime(int(created_date_raw)).split(' ')[0]
+        except Exception:
+            pass
+    return created_date_raw
+
+
+def _build_owner_object(admin_user, admin_user_key):
+    """Build owner object for public response."""
+    if admin_user:
+        return {
+            'user_key': admin_user.get('user_key'),
+            'username': admin_user.get('username')
+        }
+    return {
+        'user_key': admin_user_key,
+        'username': None
+    }
+
+
+# =============================================================================
+# Company Registration
+# =============================================================================
+
 @company_bp.route('/register', methods=['POST'])
+@handle_errors
 def register_company():
-    current_app.logger.debug('POST /api/v1/company/register called with data: %s', request.json)
-    current_app.logger.info('POST /company/register called')
+    """Register a new company with admin user."""
+    logger.info('POST /company/register called')
     data = request.get_json(force=True)
-    # Master password verification
-    provided_master = data.get('master_password')
-    if MASTER_ADMIN_PASSWORD is None:
-        logging.error('MASTER_ADMIN_PASSWORD not configured')
-        return respond_error('Server not configured for company registration', status=500)
-    if not provided_master or not hmac.compare_digest(str(provided_master), str(MASTER_ADMIN_PASSWORD) and not(provided_master == MASTER_ADMIN_PASSWORD)):
-        logging.warning('Invalid master password for company registration')
-        return respond_error('Unauthorized: invalid master password', status=403)
+
+    # Validate master password
+    is_valid, error_msg = _validate_master_password(data.get('master_password'))
+    if not is_valid:
+        logger.warning('Company registration failed: %s', error_msg)
+        return respond_error(error_msg, status=403 if 'Invalid' in error_msg else 500)
+
     data.pop('master_password', None)
+
+    # Validate required fields
     company_name = data.get('company_name')
     if not company_name or not str(company_name).strip():
         return respond_error('company_name is required', status=400)
-    # Admin user required fields
+
     if not data.get('username') or not data.get('password'):
         return respond_error('username and password are required', status=400)
+
     if not (data.get('email') or data.get('phone')):
         return respond_error('Either email or phone is required', status=400)
-    # Ensure roles contains admin
-    roles = data.get('roles')
-    if not roles:
-        roles = ['admin']
-    elif 'admin' not in roles:
+
+    # Ensure admin role
+    roles = data.get('roles') or ['admin']
+    if 'admin' not in roles:
         roles.append('admin')
     data['roles'] = roles
-    current_app.logger.info(f'Received company registration data: {data}')
-    # Pass company_name into build_user; build_user enforces company_name for admin
-    try:
-        admin_data = build_user(data)
-    except ValueError as ve:
-        return respond_error(str(ve), status=400)
-    # Insert admin user
-    try:
-        user_id = user_repo.create(admin_data)
-    except ValueError as ve:
-        return respond_error(str(ve), status=400)
-    current_app.logger.info(f'Admin user created with ID: {user_id}')
+
+    # Build admin user
+    admin_data = build_user(data)
+    user_id = user_repo.create(admin_data)
+
+    logger.info('Admin user created with ID: %s', user_id)
+
     account_key = admin_data['account_key']
     admin_user_key = admin_data['user_key']
-    # Create company doc
-    # created_ts is epoch seconds; UI helpers convert to IST when displaying
     created_ts = get_current_timestamp()
+
+    # Create company document using repository
     company_doc = {
         'account_key': account_key,
         'company_name': company_name,
         'admin_user_key': admin_user_key,
-        'users': [
-            {
-                'user_key': admin_user_key,
-                'username': admin_data.get('username'),
-                'roles': admin_data.get('roles', []),
-                'joined_date': admin_data.get('joined_date'),
-                'active': True
-            }
-        ],
+        'users': [{
+            'user_key': admin_user_key,
+            'username': admin_data.get('username'),
+            'roles': admin_data.get('roles', []),
+            'joined_date': admin_data.get('joined_date'),
+            'active': True
+        }],
         'created_date': created_ts,
         'pincode': data.get('pincode'),
         'description': data.get('description'),
         'employee_count': 1
     }
-    user_repo.get_collection('companies').insert_one(company_doc)
-    current_app.logger.info(f'Company document: {company_doc}')
-    # Issue access token for admin
-    access_payload = {
+
+    # Use repository create method (with duplicate check)
+    try:
+        companies_repo.create(company_doc)
+    except ValueError as ve:
+        # Company already exists
+        logger.warning('Company creation failed: %s', ve)
+        return respond_error(str(ve), status=409)
+
+    # Issue tokens
+    access_token = AuthSecurity.encode_token({
         'user_key': admin_user_key,
         'account_key': account_key,
         'roles': admin_data.get('roles', []),
         'type': 'access'
-    }
-    access_token = AuthSecurity.encode_token(access_payload)
-    refresh_token = admin_data['refresh_tokens'][0] if admin_data.get('refresh_tokens') else None
+    })
+    refresh_token = admin_data.get('refresh_tokens', [None])[0]
+
     response = {
         'company': {
             'account_key': account_key,
@@ -127,140 +217,183 @@ def register_company():
         'access_token': access_token,
         'refresh_token': refresh_token
     }
-    current_app.logger.info(f'Company registered: {response}')
+
+    logger.info('Company registered: %s', account_key)
     return respond_success(response, status=201)
 
-# Get company details (requires any authenticated user of account)
+
+# =============================================================================
+# Company Details
+# =============================================================================
+
 @company_bp.route('/<account_key>', methods=['GET'])
-def get_company(account_key):
-    current_app.logger.debug('GET /api/v1/company/%s called', account_key)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return respond_error('Missing or invalid token', status=401)
-    token = auth_header.split(' ', 1)[1]
-    try:
-        payload = AuthSecurity.decode_token(token)
-        if payload.get('account_key') != account_key:
-            return respond_error('Unauthorized', status=403)
-        # Companies are stored in a separate collection; use helper to access it
-        coll = get_collection('companies')
-        company = coll.find_one({'account_key': account_key})
-        if not company:
-            return respond_error('Company not found', status=404)
-        company.pop('_id', None)
-        # Rebuild users list to ensure it is current
-        users_list = build_company_users_list(account_key)
-        employee_count = sum(1 for u in users_list if u.get('active'))
-        # Persist updated company users/employee_count
-        coll.update_one({'account_key': account_key}, {'$set': {'users': users_list, 'employee_count': employee_count}}, upsert=False)
-        company['users'] = users_list
-        company['employee_count'] = employee_count
-        return respond_success({'company': company})
-    except ValueError as ve:
-        return respond_error(str(ve), status=401)
-    except Exception:
-        logging.exception('Error in get_company')
-        return respond_error('Server error', status=500)
+@handle_errors
+@require_auth
+def get_company(account_key, auth_payload):
+    """Get company details (requires authenticated user of account)."""
+    logger.debug('GET /company/%s called', account_key)
 
-# Update company details (name, pincode, description) - ONLY original admin of account
+    if auth_payload.get('account_key') != account_key:
+        return respond_error('Unauthorized', status=403)
+
+    # Use repository method
+    company = companies_repo.get_by_account_key(account_key)
+    if not company:
+        return respond_error('Company not found', status=404)
+
+    # Sync and get current users list
+    users_list, employee_count = _sync_company_users(account_key)
+
+    return respond_success({
+        'company': _build_company_response(company, users_list, employee_count)
+    })
+
+
 @company_bp.route('/<account_key>', methods=['PUT'])
-def update_company(account_key):
-    current_app.logger.debug('PUT /api/v1/company/%s called with data: %s', account_key, request.json)
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('Bearer '):
-        return respond_error('Missing or invalid token', status=401)
-    token = auth_header.split(' ', 1)[1]
-    try:
-        payload = AuthSecurity.decode_token(token)
-        roles = payload.get('roles', [])
-        user_key = payload.get('user_key')
-        if payload.get('account_key') != account_key or 'admin' not in roles:
-            return respond_error('Unauthorized', status=403)
-        coll = get_collection('companies')
-        company = coll.find_one({'account_key': account_key})
-        if not company:
-            return respond_error('Company not found', status=404)
-        admin_user_key = company.get('admin_user_key')
-        if user_key != admin_user_key:
-            return respond_error('Only the original admin can update company details', status=403)
-        data = request.get_json(force=True)
-        update_fields = {}
-        for field in ['company_name', 'pincode', 'description']:
-            if field in data and data[field] is not None:
-                update_fields[field] = data[field]
-        if update_fields:
-            # Persist updates to companies collection
-            coll.update_one({'account_key': account_key}, {'$set': update_fields}, upsert=False)
-            # If company_name changed, propagate to user docs (multi update)
-            if 'company_name' in update_fields:
-                user_repo.update({'account_key': account_key}, {'company_name': update_fields['company_name']}, multi=True)
-        # Rebuild users list and employee count
-        users_list = build_company_users_list(account_key)
-        employee_count = sum(1 for u in users_list if u.get('active'))
-        # Persist users list and employee count to companies collection
-        coll.update_one({'account_key': account_key}, {'$set': {'users': users_list, 'employee_count': employee_count}}, upsert=False)
-        updated_company = coll.find_one({'account_key': account_key})
-        updated_company.pop('_id', None)
-        updated_company['users'] = users_list
-        updated_company['employee_count'] = employee_count
-        return respond_success({'company': updated_company})
-    except ValueError as ve:
-        return respond_error(str(ve), status=401)
-    except Exception:
-        logging.exception('Error in update_company')
-        return respond_error('Server error', status=500)
+@handle_errors
+@require_auth
+def update_company(account_key, auth_payload):
+    """Update company details (only original admin)."""
+    logger.debug('PUT /company/%s called', account_key)
 
-# Public: minimal company info (no auth) -> company_name, created_date, owner, worker_count, account_key
+    # Check authorization
+    if auth_payload.get('account_key') != account_key:
+        return respond_error('Unauthorized', status=403)
+
+    if 'admin' not in auth_payload.get('roles', []):
+        return respond_error('Unauthorized', status=403)
+
+    # Use repository method
+    company = companies_repo.get_by_account_key(account_key)
+    if not company:
+        return respond_error('Company not found', status=404)
+
+    # Only original admin can update
+    if auth_payload.get('user_key') != company.get('admin_user_key'):
+        return respond_error('Only the original admin can update company details', status=403)
+
+    data = request.get_json(force=True)
+
+    # Build update fields
+    update_fields = {
+        field: data[field]
+        for field in ['company_name', 'pincode', 'description']
+        if field in data and data[field] is not None
+    }
+
+    if update_fields:
+        # Update company using repository
+        companies_repo.update({'account_key': account_key}, update_fields)
+
+        # Propagate company_name to user docs if changed
+        if 'company_name' in update_fields:
+            companies_repo.update_company_name(account_key, update_fields['company_name'])
+            user_repo.update(
+                {'account_key': account_key},
+                {'company_name': update_fields['company_name']},
+                multi=True
+            )
+
+    # Sync users list
+    users_list, employee_count = _sync_company_users(account_key)
+
+    updated_company = companies_repo.get_by_account_key(account_key)
+    return respond_success({
+        'company': _build_company_response(updated_company, users_list, employee_count)
+    })
+
+
+# =============================================================================
+# Public Endpoints
+# =============================================================================
+
 @company_bp.route('/public/<account_key>', methods=['GET'])
+@handle_errors
 def get_company_public(account_key):
-    current_app.logger.debug('GET /api/v1/company/public/%s called', account_key)
+    """Get minimal company info (no auth required)."""
+    logger.debug('GET /company/public/%s called', account_key)
+
+    # Use repository method
+    company = companies_repo.get_by_account_key(account_key)
+    if not company:
+        return respond_error('Company not found', status=404)
+
+    # Get admin user info
+    admin_user_key = company.get('admin_user_key')
+    admin_user = user_repo.find_one({'user_key': admin_user_key}) if admin_user_key else None
+
+    # Count active workers
+    users = user_repo.find_many({'account_key': account_key})
+    worker_count = sum(1 for u in users if u.get('refresh_tokens'))
+
+    # Format created date
+    created_date_fmt = _format_created_date(company.get('created_date'))
+
+    # Build owner object
+    owner_obj = _build_owner_object(admin_user, admin_user_key)
+
+    # Try to use DTO
     try:
-        # Use companies collection for company lookup
-        coll = get_collection('companies')
-        company = coll.find_one({'account_key': account_key})
-        if not company:
-            return respond_error('Company not found', status=404)
-        admin_user_key = company.get('admin_user_key')
-        admin_user = None
-        if admin_user_key:
-            admin_user = user_repo.find_one({'user_key': admin_user_key})
-        # Recompute active workers count (do not persist/mutate company doc)
-        users = user_repo.find_many({'account_key': account_key})
-        worker_count = 0
-        for u in users:
-            if u.get('refresh_tokens'):
-                worker_count += 1
-        created_date_raw = company.get('created_date')
-        # Convert epoch (int) to YYYY-MM-DD if possible
-        created_date_fmt = None
-        if isinstance(created_date_raw, (int, float)):
-            try:
-                created_date_fmt = epoch_to_datetime(int(created_date_raw)).split(' ')[0]
-            except Exception:
-                created_date_fmt = created_date_raw
-        owner_obj = None
-        if admin_user:
-            owner_obj = {
-                'user_key': admin_user.get('user_key'),
-                'username': admin_user.get('username')
-            }
-        else:
-            owner_obj = {'user_key': admin_user_key, 'username': None}
-        # Build DTO for response
-        try:
-            cdto = CompanyDTO.from_doc(company)
-            cdict = cdto.to_dict()
-            cdict['owner'] = owner_obj
-            cdict['worker_count'] = worker_count
-            return respond_success({'company': cdict})
-        except Exception:
-            return respond_success({'company': {
+        cdto = CompanyDTO.from_doc(company)
+        cdict = cdto.to_dict()
+        cdict['owner'] = owner_obj
+        cdict['worker_count'] = worker_count
+        return respond_success({'company': cdict})
+    except Exception:
+        return respond_success({
+            'company': {
                 'account_key': company.get('account_key'),
                 'company_name': company.get('company_name'),
-                'created_date': created_date_fmt or created_date_raw,
+                'created_date': created_date_fmt,
                 'owner': owner_obj,
                 'worker_count': worker_count
-            }})
-    except Exception:
-        logging.exception('Error in get_company_public')
-        return respond_error('Server error', status=500)
+            }
+        })
+
+
+# =============================================================================
+# Company User Management Endpoints
+# =============================================================================
+
+@company_bp.route('/<account_key>/users', methods=['GET'])
+@handle_errors
+@require_auth
+def get_company_users(account_key, auth_payload):
+    """Get list of users in a company."""
+    logger.debug('GET /company/%s/users called', account_key)
+
+    if auth_payload.get('account_key') != account_key:
+        return respond_error('Unauthorized', status=403)
+
+    # Sync users and return
+    users_list, employee_count = _sync_company_users(account_key)
+
+    return respond_success({
+        'users': users_list,
+        'employee_count': employee_count
+    })
+
+
+@company_bp.route('/<account_key>/users/<user_key>', methods=['DELETE'])
+@handle_errors
+@require_auth
+def remove_company_user(account_key, user_key, auth_payload):
+    """Remove a user from company (admin only)."""
+    logger.debug('DELETE /company/%s/users/%s called', account_key, user_key)
+
+    if auth_payload.get('account_key') != account_key:
+        return respond_error('Unauthorized', status=403)
+
+    if 'admin' not in auth_payload.get('roles', []):
+        return respond_error('Only admin can remove users', status=403)
+
+    # Cannot remove self
+    if auth_payload.get('user_key') == user_key:
+        return respond_error('Cannot remove yourself', status=400)
+
+    # Use repository method
+    result = companies_repo.remove_user_from_company(account_key, user_key)
+
+    if result.modified_count > 0:
+        return respond_success({'message': 'User removed from company'})
+    return respond_error('User not found in company', status=404)

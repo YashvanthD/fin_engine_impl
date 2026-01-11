@@ -1,462 +1,109 @@
+"""Fish routes for fish species management and analytics.
+
+This module provides endpoints for:
+- Fish species CRUD operations
+- Fish batch management
+- Fish analytics
+"""
+import logging
 import zoneinfo
 from datetime import datetime
 
-from flask import Blueprint, request, current_app
+from flask import Blueprint, request
 
 from fin_server.dto.fish_dto import FishDTO
-from fin_server.exception.UnauthorizedError import UnauthorizedError
 from fin_server.repository.mongo_helper import get_collection
-from fin_server.security.authentication import get_auth_payload
 from fin_server.utils import validation
+from fin_server.utils.decorators import handle_errors, require_auth
 from fin_server.utils.generator import generate_key
-from fin_server.utils.helpers import respond_error, respond_success, get_request_payload
+from fin_server.utils.helpers import respond_error, respond_success
 from fin_server.utils.time_utils import get_time_date_dt
 
-fish_bp = Blueprint('fish', __name__, url_prefix='/fish')
+logger = logging.getLogger(__name__)
+
+# Constants
 IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
 
+# Blueprint
+fish_bp = Blueprint('fish', __name__, url_prefix='/fish')
+
+# Repositories
 fish_repo = get_collection('fish')
 fish_analytics_repo = get_collection('fish_analytics')
 fish_mapping_repo = get_collection('fish_mapping')
 pond_event_repo = get_collection('pond_event')
 
 
-@fish_bp.route('/create', methods=['POST'])
-def create_fish_entity():
-    current_app.logger.info('POST /fish/create called')
-    try:
-        payload = get_request_payload(request)
-        data = request.get_json(force=True)
-        # validate payload
-        ok, errors = validation.validate_fish_create(data)
-        if not ok:
-            return respond_error(errors, status=400)
-        account_key = payload.get('account_key')
-        data.pop('account_key', None)
-        data['created_at'] = get_time_date_dt(include_time=True)
-        overwrite = str(request.args.get('overwrite', 'false')).lower() == 'true'
-        # Generate species_code if not provided
-        species_code = data.get('species_code')
-        sci = data.get('scientific_name', '').strip()
-        com = data.get('common_name', '').strip()
-        # Check for duplicate scientific_name or common_name or species_code
-        duplicate_query = {"$or": []}
-        if sci:
-            duplicate_query["$or"].append({"scientific_name": {"$regex": f"^{sci}$", "$options": "i"}})
-        if com:
-            duplicate_query["$or"].append({"common_name": {"$regex": f"^{com}$", "$options": "i"}})
-        if species_code:
-            duplicate_query["$or"].append({"species_code": {"$regex": f"^{species_code}$", "$options": "i"}})
-        if duplicate_query["$or"]:
-            existing = fish_repo.find_one(duplicate_query)
-            if existing and not overwrite:
-                return respond_error('Fish with the same scientific_name, common_name, or species_code already exists. Use overwrite=true to force.', status=409)
-        if not species_code:
-            base = ''
-            if sci:
-                base = ''.join([c[0].upper() for c in sci.split() if c])[:5]
-            elif com:
-                base = ''.join([c[0].upper() for c in com.split() if c])[:5]
-            else:
-                base = 'FSH'
-            species_code = f"{base}{generate_key(3)}"
-            data['species_code'] = species_code
-        species_id = species_code
-        # Build DTO and DB entity
-        fish_entity = data.copy()
-        fish_entity['_id'] = species_id
-        fish_entity['account_key'] = account_key if account_key else fish_entity.get('account_key')
-        try:
-            fish_dto = FishDTO.from_request(fish_entity)
-            # persist using DTO helper (upsert)
-            try:
-                res = fish_dto.save(repo=fish_repo, collection_name='fish', upsert=True)
-                # normalize inserted id
-                inserted = getattr(res, 'inserted_id', res)
-            except Exception:
-                # fallback to repository create
-                if hasattr(fish_repo, 'create_or_update'):
-                    fish_repo.create_or_update(fish_dto.to_db_doc())
-                else:
-                    fish_repo.create(fish_dto.to_db_doc())
-        except Exception:
-            # fallback to old behavior if dto mapping fails
-            fish_repo.create(fish_entity)
-        # Store mapping in fish_mapping (use helper)
-        try:
-            fish_mapping_repo.add_fish_to_account(account_key, species_id)
-        except Exception:
-            current_app.logger.exception('Failed to add fish to mapping')
-        return respond_success({'species_id': species_id, 'species_code': species_code}, status=201)
-    except UnauthorizedError as e:
-        return respond_error(str(e), status=401)
-    except Exception as e:
-        current_app.logger.exception(f'Exception in create_fish_entity: {e}')
-        return respond_error('Server error', status=500)
+# =============================================================================
+# Helper Functions
+# =============================================================================
 
-@fish_bp.route('/', methods=['POST', 'PUT'], strict_slashes=False)
-def add_fish_batch():
-    current_app.logger.info('POST/PUT /fish/ (batch) called')
-    try:
-        payload = get_request_payload(request)
-        data = request.get_json(force=True)
-        # validate batch payload
-        ok, errors = validation.validate_batch_add(data)
-        if not ok:
-            return respond_error(errors, status=400)
-        account_key = payload.get('account_key')
-        species_code = data.get('species_code')
-        count = int(data.get('count'))
-        fish_age_in_month = int(data.get('fish_age_in_month'))
-        if not species_code or not count or not fish_age_in_month:
-            return respond_error('species_code, count, and fish_age_in_month are required.', status=400)
-        # Check if fish entity exists
-        fish_entity = fish_repo.find_one({'_id': species_code})
-        if not fish_entity:
-            return respond_error('Fish species not found. Please create the fish entity first.', status=404)
-        # Always update mapping: add fish to mapping if not present (fresh addition to farm)
-        try:
-            fish_mapping_repo.add_fish_to_account(account_key, species_code)
-        except Exception:
-            current_app.logger.exception('Failed to add fish to mapping')
-        # Add analytics event (always, even if mapping was missing before)
-        event_id = f"{account_key}-{species_code}-{generate_key(9)}"
-        fish_weight = data.get('fish_weight') if isinstance(data, dict) else None
-        base_dt = get_time_date_dt(include_time=True)
-        fish_analytics_repo.add_batch(
-            species_code, int(count), int(fish_age_in_month), base_dt, account_key=account_key, event_id=event_id, fish_weight=fish_weight
-        )
-        return respond_success({'species_id': species_code, 'event_id': event_id}, status=201)
-    except UnauthorizedError as e:
-        return respond_error(str(e), status=401)
-    except Exception as e:
-        current_app.logger.exception(f'Exception in add_fish_batch: {e}')
-        return respond_error('Server error', status=500)
-
-@fish_bp.route('/<species_id>', methods=['GET'])
-def get_fish_by_id(species_id):
-    """
-    Retrieve a fish entity and its analytics for the current user's account_key.
-    Also returns all ponds where this fish is present (from pond_events or analytics).
-    If the fish is not mapped to the user's account (not present in their farm),
-    return a clear error message.
-    """
-    try:
-        payload = get_auth_payload(request)
-        account_key = payload.get('account_key')
-        # Check if fish is mapped to this account_key
-        mapping = fish_mapping_repo.find_one({'account_key': account_key})
-        fish_ids = mapping.get('fish_ids', []) if mapping else []
-        if species_id not in fish_ids:
-            return respond_error('This fish is not present in your farm (not mapped to your account_key).', status=404)
-        fish = fish_repo.find_one({'_id': species_id})
-        if not fish:
-            return respond_error('Fish not found', status=404)
-        # Pass analytics filter params from query string
-        min_age = request.args.get('min_age')
-        max_age = request.args.get('max_age')
-        avg_n = request.args.get('avg_n')
-        min_weight = request.args.get('min_weight')
-        max_weight = request.args.get('max_weight')
-        analytics = fish_analytics_repo.get_analytics(species_id, account_key=account_key, min_age=min_age, max_age=max_age, avg_n=avg_n, min_weight=min_weight, max_weight=max_weight)
-        # Find all ponds where this fish is present (from analytics or pond_events)
-        try:
-            pond_events = pond_event_repo.find_many({'account_key': account_key, 'species_code': species_id})
-        except AttributeError:
-            pond_events = list(pond_event_repo.find({'account_key': account_key, 'species_code': species_id}))
-        pond_ids = list(set([event.get('pond_id') for event in pond_events if event.get('pond_id')]))
-        fish.update({'analytics': analytics, 'ponds': pond_ids})
-        return respond_success({'fish': _prepare_fish_ui(fish, analytics, pond_ids)})
-    except UnauthorizedError as e:
-        return respond_error(str(e), status=401)
-    except Exception as e:
-        current_app.logger.exception(f'Exception in get_fish_by_id: {e}')
-        return respond_error('Server error', status=500)
-
-@fish_bp.route('/', methods=['GET'])
-def get_fish():
-    """Get all fish for the current account_key, with analytics."""
-    try:
-        current_app.logger.debug('GET /fish/ called')
-        payload = get_auth_payload(request)
-        current_app.logger.debug('GET /fish/ auth payload: %s', payload)
-        query = request.args.to_dict()
-        account_key = payload.get('account_key')
-        current_app.logger.debug('GET /fish/ using account_key=%s, raw query=%s', account_key, query)
-        mapping = fish_mapping_repo.find_one({'account_key': account_key})
-        # mapping doc may contain internal details; avoid logging full object
-        current_app.logger.debug('GET /fish/ mapping doc: %s', mapping)
-        fish_ids = mapping.get('fish_ids', []) if mapping else []
-        current_app.logger.debug('GET /fish/ resolved fish_ids: %s', fish_ids)
-        if not fish_ids:
-            current_app.logger.info('GET /fish/ no mapped fish_ids for account_key=%s, returning empty list', account_key)
-            return respond_success({'fish': []})
-        mongo_query = {'_id': {'$in': fish_ids}}
-        # Date range filter (created_at)
-        from_date = query.get('from_date')
-        to_date = query.get('to_date')
-        if from_date or to_date:
-            date_filter = {}
-            try:
-                if from_date:
-                    current_app.logger.debug('GET /fish/ parsing from_date=%s', from_date)
-                    date_filter['$gte'] = datetime.fromisoformat(from_date)
-                if to_date:
-                    current_app.logger.debug('GET /fish/ parsing to_date=%s', to_date)
-                    date_filter['$lte'] = datetime.fromisoformat(to_date)
-            except Exception as dt_ex:
-                current_app.logger.exception('GET /fish/ failed to parse date range from_date=%s to_date=%s', from_date, to_date)
-                return respond_error(f'Invalid date format for from_date/to_date: {dt_ex}', status=400)
-            mongo_query['created_at'] = date_filter
-        # Numeric filters (size, weight, count)
-        for field in ['size', 'weight', 'count']:
-            min_key = f'min_{field}'
-            max_key = f'max_{field}'
-            min_val = query.get(min_key)
-            max_val = query.get(max_key)
-            if min_val or max_val:
-                try:
-                    num_filter = {}
-                    if min_val:
-                        num_filter['$gte'] = float(min_val)
-                    if max_val:
-                        num_filter['$lte'] = float(max_val)
-                    mongo_query[field] = num_filter
-                    current_app.logger.debug('GET /fish/ numeric filter on %s: %s', field, num_filter)
-                except Exception as num_ex:
-                    current_app.logger.exception('GET /fish/ invalid numeric filter %s=%s %s=%s', min_key, min_val, max_key, max_val)
-                    return respond_error(f'Invalid numeric filter for {field}: {num_ex}', status=400)
-        # Direct field match (common_name, scientific_name, species_code, etc.)
-        for field in ['common_name', 'scientific_name', 'species_code']:
-            if field in query:
-                mongo_query[field] = {"$eq": query[field]}
-                current_app.logger.debug('GET /fish/ direct match filter on %s=%s', field, query[field])
-        current_app.logger.debug('GET /fish/ final mongo_query: %s', mongo_query)
-        fish_list = fish_repo.find(mongo_query)
-        current_app.logger.debug('GET /fish/ repository returned %d fish docs', len(fish_list) if hasattr(fish_list, '__len__') else -1)
-        # Join analytics for each fish
-        result = []
-        min_age = query.get('min_age')
-        max_age = query.get('max_age')
-        avg_n = query.get('avg_n')
-        min_weight = query.get('min_weight')
-        max_weight = query.get('max_weight')
-        current_app.logger.debug('GET /fish/ analytics filters: min_age=%s max_age=%s avg_n=%s min_weight=%s max_weight=%s', min_age, max_age, avg_n, min_weight, max_weight)
-        for f in fish_list:
-            species_id = f.get('_id')
-            current_app.logger.debug('GET /fish/ processing fish_id=%s', species_id)
-            analytics = fish_analytics_repo.get_analytics(species_id, account_key=account_key, min_age=min_age, max_age=max_age, avg_n=avg_n, min_weight=min_weight, max_weight=max_weight)
-            # Post-filter by age_analytics if needed (kept for compatibility)
-            if min_age or max_age:
-                age_analytics = analytics.get('age_analytics', {})
-                match = False
-                for age, count in age_analytics.items():
-                    if (not min_age or int(age) >= int(min_age)) and (not max_age or int(age) <= int(max_age)):
-                        match = True
-                        break
-                if not match:
-                    current_app.logger.debug('GET /fish/ fish_id=%s filtered out by age_analytics min_age=%s max_age=%s', species_id, min_age, max_age)
-                    continue
-            f.update({'analytics': analytics})
-            # try to format using DTO
-            try:
-                fdto = FishDTO.from_doc(f)
-                fdto.extra['analytics'] = analytics
-                ui_obj = fdto.to_ui()
-                result.append(ui_obj)
-                current_app.logger.debug('GET /fish/ DTO to_ui for fish_id=%s: %s', species_id, ui_obj)
-            except Exception as dto_ex:
-                current_app.logger.exception('GET /fish/ FishDTO.from_doc/to_ui failed for fish_id=%s, falling back to dict', species_id)
-                result.append(fish_to_dict(f))
-        current_app.logger.info('GET /fish/ returning %d fish records for account_key=%s', len(result), account_key)
-        return respond_success({'fish': result})
-    except UnauthorizedError as e:
-        current_app.logger.warning('GET /fish/ UnauthorizedError: %s', e)
-        return respond_error(str(e), status=401)
-    except Exception as e:
-        current_app.logger.exception('Exception in get_fish')
-        return respond_error('Server error', status=500)
-
-@fish_bp.route('/analytics', methods=['GET'])
-def get_fish_analytics():
-    """
-    Get analytics for all fish mapped to the current user's account_key.
-    Supports query params: species_code (optional), or returns all analytics for mapped fish.
-    """
-    try:
-        payload = get_auth_payload(request)
-        account_key = payload.get('account_key')
-        species_code = request.args.get('species_code')
-        # analytics filter params
-        min_age = request.args.get('min_age')
-        max_age = request.args.get('max_age')
-        avg_n = request.args.get('avg_n')
-        min_weight = request.args.get('min_weight')
-        max_weight = request.args.get('max_weight')
-        mapping = fish_mapping_repo.find_one({'account_key': account_key})
-        fish_ids = mapping.get('fish_ids', []) if mapping else []
-        analytics_result = []
-        if species_code:
-            if species_code not in fish_ids:
-                return respond_error('This fish is not present in your farm (not mapped to your account_key).', status=404)
-            analytics = fish_analytics_repo.get_analytics(species_code, account_key=account_key, min_age=min_age, max_age=max_age, avg_n=avg_n, min_weight=min_weight, max_weight=max_weight)
-            analytics_result.append({'species_code': species_code, 'analytics': analytics})
-        else:
-            for sid in fish_ids:
-                analytics = fish_analytics_repo.get_analytics(sid, account_key=account_key, min_age=min_age, max_age=max_age, avg_n=avg_n, min_weight=min_weight, max_weight=max_weight)
-                analytics_result.append({'species_code': sid, 'analytics': analytics})
-        return respond_success({'analytics': analytics_result})
-    except UnauthorizedError as e:
-        return respond_error(str(e), status=401)
-    except Exception as e:
-        current_app.logger.exception(f'Exception in get_fish_analytics: {e}')
-        return respond_error('Server error', status=500)
-
-@fish_bp.route('/<species_id>/analytics', methods=['GET'])
-def get_fish_analytics_by_id(species_id):
-    """
-    Get analytics for a specific fish species_id mapped to the current user's account_key.
-    """
-    try:
-        payload = get_auth_payload(request)
-        account_key = payload.get('account_key')
-        mapping = fish_mapping_repo.find_one({'account_key': account_key})
-        fish_ids = mapping.get('fish_ids', []) if mapping else []
-        if species_id not in fish_ids:
-            return respond_error('This fish is not present in your farm (not mapped to your account_key).', status=404)
-        # analytics filter params
-        min_age = request.args.get('min_age')
-        max_age = request.args.get('max_age')
-        avg_n = request.args.get('avg_n')
-        min_weight = request.args.get('min_weight')
-        max_weight = request.args.get('max_weight')
-        analytics = fish_analytics_repo.get_analytics(species_id, account_key=account_key, min_age=min_age, max_age=max_age, avg_n=avg_n, min_weight=min_weight, max_weight=max_weight)
-        return respond_success({'species_code': species_id, 'analytics': analytics})
-    except UnauthorizedError as e:
-        return respond_error(str(e), status=401)
-    except Exception as e:
-        current_app.logger.exception(f'Exception in get_fish_analytics_by_id: {e}')
-        return respond_error('Server error', status=500)
-
-# New: update fish entity and optionally add a batch
-@fish_bp.route('/<species_id>', methods=['PUT'])
-def update_fish(species_id):
-    current_app.logger.info(f'PUT /fish/{species_id} called')
-    try:
-        payload = get_auth_payload(request)
-        account_key = payload.get('account_key')
-        data = request.get_json(force=True)
-        # validate update payload (including optional batch add)
-        ok, errors = validation.validate_fish_update_payload(data)
-        if not ok:
-            return respond_error(errors, status=400)
-
-        # Separate batch fields (optional)
-        count = data.pop('count', None)
-        fish_age_in_month = data.pop('fish_age_in_month', None)
-        fish_weight = data.pop('fish_weight', None)
-
-        # Update fish entity fields (non-empty)
-        update_fields = {k: v for k, v in data.items() if k}
-        if update_fields:
-            # keep updated_at handled by repository
-            fish_repo.update({'_id': species_id}, update_fields)
-
-        # Optionally add analytics batch
-        if count is not None and fish_age_in_month is not None:
-            # ensure species exists
-            fish_entity = fish_repo.find_one({'_id': species_id})
-            if not fish_entity:
-                return respond_error('Fish species not found.', status=404)
-            # ensure mapping
-            fish_mapping_repo.update_one(
-                {'account_key': account_key},
-                {'$addToSet': {'fish_ids': species_id}},
-                upsert=True
-            )
-            event_id = f"{account_key}-{species_id}-{generate_key(9)}"
-            base_dt = get_time_date_dt(include_time=True)
-            fish_analytics_repo.add_batch(species_id, int(count), int(fish_age_in_month), base_dt, account_key=account_key, event_id=event_id, fish_weight=fish_weight)
-            return respond_success({'species_id': species_id, 'event_id': event_id})
-
-            return respond_success({'species_id': species_id})
-    except UnauthorizedError as e:
-        return respond_error(str(e), status=401)
-    except Exception as e:
-        current_app.logger.exception(f'Exception in update_fish: {e}')
-        return respond_error('Server error', status=500)
+def _generate_species_code(scientific_name, common_name):
+    """Generate a species code from names."""
+    base = ''
+    if scientific_name:
+        base = ''.join([c[0].upper() for c in scientific_name.split() if c])[:5]
+    elif common_name:
+        base = ''.join([c[0].upper() for c in common_name.split() if c])[:5]
+    else:
+        base = 'FSH'
+    return f"{base}{generate_key(3)}"
 
 
-# GET /fish/fields
-@fish_bp.route('/fields', methods=['GET'])
-def get_fish_fields():
-    try:
-        _ = get_request_payload(request)
-        fields = fish_repo.get_fields()
-        return respond_success({'fields': list(fields)})
-    except UnauthorizedError as e:
-        return respond_error(str(e), status=401)
-    except Exception as e:
-        current_app.logger.exception(f'Exception in get_fish_fields: {e}')
-        return respond_error('Server error', status=500)
+def _check_duplicate_fish(fish_repo, scientific_name, common_name, species_code):
+    """Check for duplicate fish by name or code."""
+    duplicate_query = {"$or": []}
+    if scientific_name:
+        duplicate_query["$or"].append({"scientific_name": {"$regex": f"^{scientific_name}$", "$options": "i"}})
+    if common_name:
+        duplicate_query["$or"].append({"common_name": {"$regex": f"^{common_name}$", "$options": "i"}})
+    if species_code:
+        duplicate_query["$or"].append({"species_code": {"$regex": f"^{species_code}$", "$options": "i"}})
+
+    if duplicate_query["$or"]:
+        return fish_repo.find_one(duplicate_query)
+    return None
 
 
-# GET /fish/distinct/<field>
-@fish_bp.route('/distinct/<field>', methods=['GET'])
-def get_fish_distinct(field):
-    try:
-        _ = get_auth_payload(request)
-        values = fish_repo.get_distinct_values(field)
-        return respond_success({'field': field, 'values': values})
-    except UnauthorizedError as e:
-        return respond_error(str(e), status=401)
-    except Exception as e:
-        current_app.logger.exception(f'Exception in get_fish_distinct: {e}')
-        return respond_error('Server error', status=500)
+def _get_mapped_fish_ids(account_key):
+    """Get fish IDs mapped to an account."""
+    mapping = fish_mapping_repo.find_one({'account_key': account_key})
+    return mapping.get('fish_ids', []) if mapping else []
 
 
-# GET /fish/stats/<field>
-@fish_bp.route('/stats/<field>', methods=['GET'])
-def get_fish_stats(field):
-    try:
-        _ = get_auth_payload(request)
-        stats = fish_repo.get_field_stats(field)
-        return respond_success({'field': field, 'stats': stats})
-    except UnauthorizedError as e:
-        return respond_error(str(e), status=401)
-    except Exception as e:
-        current_app.logger.exception(f'Exception in get_fish_stats: {e}')
-        return respond_error('Server error', status=500)
-
-def fish_to_dict(fish):
+def _fish_to_dict(fish):
+    """Convert fish document to dict format."""
     if not fish:
         return None
+
     fish = dict(fish)
-    fish['id'] = str(fish.pop('_id'))
-    # Optionally convert datetime fields to isoformat
+    fish['id'] = str(fish.pop('_id', ''))
+
+    # Convert datetime fields
     if 'created_at' in fish and hasattr(fish['created_at'], 'isoformat'):
         fish['created_at'] = fish['created_at'].isoformat()
+
     if 'batches' in fish:
         for batch in fish['batches']:
             date_val = batch.get('date_added')
-            if date_val and not isinstance(date_val, str) and hasattr(date_val, 'isoformat'):
+            if date_val and hasattr(date_val, 'isoformat'):
                 batch['date_added'] = date_val.isoformat()
-    if 'metadata' in fish and isinstance(fish['metadata'], dict):
-        # age_analytics is already calculated
-        pass
+
     return fish
 
+
 def _prepare_fish_ui(fish, analytics=None, pond_ids=None):
+    """Prepare fish document for UI response."""
     try:
         fish_doc = dict(fish)
         if analytics is not None:
             fish_doc['analytics'] = analytics
         if pond_ids is not None:
             fish_doc['ponds'] = pond_ids
+
         fish_dto = FishDTO.from_doc(fish_doc)
         return fish_dto.to_ui()
     except Exception:
-        # fallback
         if isinstance(fish, dict):
             fish['_id'] = str(fish.get('_id'))
             fish['id'] = fish.get('_id')
@@ -468,3 +115,365 @@ def _prepare_fish_ui(fish, analytics=None, pond_ids=None):
         return None
 
 
+def _get_analytics_params(args):
+    """Extract analytics filter params from request args."""
+    return {
+        'min_age': args.get('min_age'),
+        'max_age': args.get('max_age'),
+        'avg_n': args.get('avg_n'),
+        'min_weight': args.get('min_weight'),
+        'max_weight': args.get('max_weight'),
+    }
+
+
+def _get_fish_ponds(account_key, species_id):
+    """Get pond IDs where fish is present."""
+    try:
+        pond_events = pond_event_repo.find_many({
+            'account_key': account_key,
+            'species_code': species_id
+        })
+    except AttributeError:
+        pond_events = list(pond_event_repo.find({
+            'account_key': account_key,
+            'species_code': species_id
+        }))
+
+    return list(set([e.get('pond_id') for e in pond_events if e.get('pond_id')]))
+
+
+# =============================================================================
+# Fish CRUD Endpoints
+# =============================================================================
+
+@fish_bp.route('/create', methods=['POST'])
+@handle_errors
+@require_auth
+def create_fish_entity(auth_payload):
+    """Create a new fish species entity."""
+    logger.info('POST /fish/create called')
+    data = request.get_json(force=True)
+
+    # Validate
+    ok, errors = validation.validate_fish_create(data)
+    if not ok:
+        return respond_error(errors, status=400)
+
+    account_key = auth_payload.get('account_key')
+    data['created_at'] = get_time_date_dt(include_time=True)
+    overwrite = str(request.args.get('overwrite', 'false')).lower() == 'true'
+
+    species_code = data.get('species_code')
+    scientific_name = data.get('scientific_name', '').strip()
+    common_name = data.get('common_name', '').strip()
+
+    # Check for duplicates
+    existing = _check_duplicate_fish(fish_repo, scientific_name, common_name, species_code)
+    if existing and not overwrite:
+        return respond_error(
+            'Fish with the same scientific_name, common_name, or species_code already exists. Use overwrite=true to force.',
+            status=409
+        )
+
+    # Generate species code if needed
+    if not species_code:
+        species_code = _generate_species_code(scientific_name, common_name)
+        data['species_code'] = species_code
+
+    # Build and persist entity
+    fish_entity = data.copy()
+    fish_entity['_id'] = species_code
+    fish_entity['account_key'] = account_key
+
+    try:
+        fish_dto = FishDTO.from_request(fish_entity)
+        fish_dto.save(repo=fish_repo, collection_name='fish', upsert=True)
+    except Exception:
+        fish_repo.create(fish_entity)
+
+    # Add to mapping
+    try:
+        fish_mapping_repo.add_fish_to_account(account_key, species_code)
+    except Exception:
+        logger.exception('Failed to add fish to mapping')
+
+    return respond_success({'species_id': species_code, 'species_code': species_code}, status=201)
+
+
+@fish_bp.route('/', methods=['POST', 'PUT'], strict_slashes=False)
+@handle_errors
+@require_auth
+def add_fish_batch(auth_payload):
+    """Add a batch of fish to an existing species."""
+    logger.info('POST/PUT /fish/ (batch) called')
+    data = request.get_json(force=True)
+
+    # Validate
+    ok, errors = validation.validate_batch_add(data)
+    if not ok:
+        return respond_error(errors, status=400)
+
+    account_key = auth_payload.get('account_key')
+    species_code = data.get('species_code')
+    count = int(data.get('count'))
+    fish_age_in_month = int(data.get('fish_age_in_month'))
+
+    if not species_code or not count or not fish_age_in_month:
+        return respond_error('species_code, count, and fish_age_in_month are required.', status=400)
+
+    # Verify fish exists
+    fish_entity = fish_repo.find_one({'_id': species_code})
+    if not fish_entity:
+        return respond_error('Fish species not found. Please create the fish entity first.', status=404)
+
+    # Update mapping
+    try:
+        fish_mapping_repo.add_fish_to_account(account_key, species_code)
+    except Exception:
+        logger.exception('Failed to add fish to mapping')
+
+    # Add analytics event
+    event_id = f"{account_key}-{species_code}-{generate_key(9)}"
+    fish_weight = data.get('fish_weight')
+    base_dt = get_time_date_dt(include_time=True)
+
+    fish_analytics_repo.add_batch(
+        species_code, count, fish_age_in_month, base_dt,
+        account_key=account_key, event_id=event_id, fish_weight=fish_weight
+    )
+
+    return respond_success({'species_id': species_code, 'event_id': event_id}, status=201)
+
+
+@fish_bp.route('/<species_id>', methods=['GET'])
+@handle_errors
+@require_auth
+def get_fish_by_id(species_id, auth_payload):
+    """Get a fish species with analytics and pond info."""
+    account_key = auth_payload.get('account_key')
+
+    # Check mapping
+    fish_ids = _get_mapped_fish_ids(account_key)
+    if species_id not in fish_ids:
+        return respond_error('This fish is not present in your farm.', status=404)
+
+    fish = fish_repo.find_one({'_id': species_id})
+    if not fish:
+        return respond_error('Fish not found', status=404)
+
+    # Get analytics
+    analytics_params = _get_analytics_params(request.args)
+    analytics = fish_analytics_repo.get_analytics(species_id, account_key=account_key, **analytics_params)
+
+    # Get ponds
+    pond_ids = _get_fish_ponds(account_key, species_id)
+
+    return respond_success({'fish': _prepare_fish_ui(fish, analytics, pond_ids)})
+
+
+@fish_bp.route('/', methods=['GET'])
+@handle_errors
+@require_auth
+def get_fish(auth_payload):
+    """Get all fish for the current account with analytics."""
+    logger.debug('GET /fish/ called')
+
+    account_key = auth_payload.get('account_key')
+    query = request.args.to_dict()
+
+    # Get mapped fish
+    fish_ids = _get_mapped_fish_ids(account_key)
+    if not fish_ids:
+        return respond_success({'fish': []})
+
+    mongo_query = {'_id': {'$in': fish_ids}}
+
+    # Date range filter
+    from_date = query.get('from_date')
+    to_date = query.get('to_date')
+    if from_date or to_date:
+        date_filter = {}
+        if from_date:
+            date_filter['$gte'] = datetime.fromisoformat(from_date)
+        if to_date:
+            date_filter['$lte'] = datetime.fromisoformat(to_date)
+        mongo_query['created_at'] = date_filter
+
+    # Numeric filters
+    for field in ['size', 'weight', 'count']:
+        min_val = query.get(f'min_{field}')
+        max_val = query.get(f'max_{field}')
+        if min_val or max_val:
+            num_filter = {}
+            if min_val:
+                num_filter['$gte'] = float(min_val)
+            if max_val:
+                num_filter['$lte'] = float(max_val)
+            mongo_query[field] = num_filter
+
+    # Direct field matches
+    for field in ['common_name', 'scientific_name', 'species_code']:
+        if field in query:
+            mongo_query[field] = {"$eq": query[field]}
+
+    fish_list = fish_repo.find(mongo_query)
+    analytics_params = _get_analytics_params(query)
+
+    result = []
+    for f in fish_list:
+        species_id = f.get('_id')
+        analytics = fish_analytics_repo.get_analytics(species_id, account_key=account_key, **analytics_params)
+
+        # Age filter
+        min_age = analytics_params.get('min_age')
+        max_age = analytics_params.get('max_age')
+        if min_age or max_age:
+            age_analytics = analytics.get('age_analytics', {})
+            match = any(
+                (not min_age or int(age) >= int(min_age)) and (not max_age or int(age) <= int(max_age))
+                for age in age_analytics.keys()
+            )
+            if not match:
+                continue
+
+        f['analytics'] = analytics
+
+        try:
+            fdto = FishDTO.from_doc(f)
+            fdto.extra['analytics'] = analytics
+            result.append(fdto.to_ui())
+        except Exception:
+            result.append(_fish_to_dict(f))
+
+    logger.info('GET /fish/ returning %d fish records', len(result))
+    return respond_success({'fish': result})
+
+
+@fish_bp.route('/<species_id>', methods=['PUT'])
+@handle_errors
+@require_auth
+def update_fish(species_id, auth_payload):
+    """Update a fish species and optionally add a batch."""
+    logger.info('PUT /fish/%s called', species_id)
+
+    account_key = auth_payload.get('account_key')
+    data = request.get_json(force=True)
+
+    # Validate
+    ok, errors = validation.validate_fish_update_payload(data)
+    if not ok:
+        return respond_error(errors, status=400)
+
+    # Extract batch fields
+    count = data.pop('count', None)
+    fish_age_in_month = data.pop('fish_age_in_month', None)
+    fish_weight = data.pop('fish_weight', None)
+
+    # Update fish entity
+    update_fields = {k: v for k, v in data.items() if k}
+    if update_fields:
+        fish_repo.update({'_id': species_id}, update_fields)
+
+    # Add batch if provided
+    if count is not None and fish_age_in_month is not None:
+        fish_entity = fish_repo.find_one({'_id': species_id})
+        if not fish_entity:
+            return respond_error('Fish species not found.', status=404)
+
+        fish_mapping_repo.update_one(
+            {'account_key': account_key},
+            {'$addToSet': {'fish_ids': species_id}},
+            upsert=True
+        )
+
+        event_id = f"{account_key}-{species_id}-{generate_key(9)}"
+        base_dt = get_time_date_dt(include_time=True)
+
+        fish_analytics_repo.add_batch(
+            species_id, int(count), int(fish_age_in_month), base_dt,
+            account_key=account_key, event_id=event_id, fish_weight=fish_weight
+        )
+
+        return respond_success({'species_id': species_id, 'event_id': event_id})
+
+    return respond_success({'species_id': species_id})
+
+
+# =============================================================================
+# Analytics Endpoints
+# =============================================================================
+
+@fish_bp.route('/analytics', methods=['GET'])
+@handle_errors
+@require_auth
+def get_fish_analytics(auth_payload):
+    """Get analytics for all mapped fish."""
+    account_key = auth_payload.get('account_key')
+    species_code = request.args.get('species_code')
+    analytics_params = _get_analytics_params(request.args)
+
+    fish_ids = _get_mapped_fish_ids(account_key)
+
+    if species_code:
+        if species_code not in fish_ids:
+            return respond_error('This fish is not present in your farm.', status=404)
+        analytics = fish_analytics_repo.get_analytics(species_code, account_key=account_key, **analytics_params)
+        return respond_success({'analytics': [{'species_code': species_code, 'analytics': analytics}]})
+
+    result = [
+        {
+            'species_code': sid,
+            'analytics': fish_analytics_repo.get_analytics(sid, account_key=account_key, **analytics_params)
+        }
+        for sid in fish_ids
+    ]
+
+    return respond_success({'analytics': result})
+
+
+@fish_bp.route('/<species_id>/analytics', methods=['GET'])
+@handle_errors
+@require_auth
+def get_fish_analytics_by_id(species_id, auth_payload):
+    """Get analytics for a specific fish species."""
+    account_key = auth_payload.get('account_key')
+
+    fish_ids = _get_mapped_fish_ids(account_key)
+    if species_id not in fish_ids:
+        return respond_error('This fish is not present in your farm.', status=404)
+
+    analytics_params = _get_analytics_params(request.args)
+    analytics = fish_analytics_repo.get_analytics(species_id, account_key=account_key, **analytics_params)
+
+    return respond_success({'species_code': species_id, 'analytics': analytics})
+
+
+# =============================================================================
+# Metadata Endpoints
+# =============================================================================
+
+@fish_bp.route('/fields', methods=['GET'])
+@handle_errors
+@require_auth
+def get_fish_fields(auth_payload):
+    """Get available fish fields."""
+    fields = fish_repo.get_fields()
+    return respond_success({'fields': list(fields)})
+
+
+@fish_bp.route('/distinct/<field>', methods=['GET'])
+@handle_errors
+@require_auth
+def get_fish_distinct(field, auth_payload):
+    """Get distinct values for a field."""
+    values = fish_repo.get_distinct_values(field)
+    return respond_success({'field': field, 'values': values})
+
+
+@fish_bp.route('/stats/<field>', methods=['GET'])
+@handle_errors
+@require_auth
+def get_fish_stats(field, auth_payload):
+    """Get statistics for a field."""
+    stats = fish_repo.get_field_stats(field)
+    return respond_success({'field': field, 'stats': stats})

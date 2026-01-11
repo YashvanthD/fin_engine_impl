@@ -5,69 +5,51 @@ from datetime import datetime, timezone
 import zoneinfo
 from werkzeug.exceptions import Forbidden, Unauthorized
 
+# IST timezone - loaded once
+IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
+
 
 def respond_error(message_or_dict, status=400):
     """Return a standardized error response compatible with frontend expectations.
 
-    Behaviour:
-    - If an Exception is passed, extract its message and map some exception types to HTTP codes:
-      * UnauthorizedError or werkzeug Unauthorized -> 401
-      * werkzeug Forbidden -> 403
-    - If a dict is passed, include it as 'errors' in the response and try to extract a short 'message'.
-    - If a string is passed, use it as 'message' and also include an 'error' field.
-    The response always includes a timestamp (IST) and prunes None values before returning.
+    Args:
+        message_or_dict: Error message string, dict of errors, or Exception
+        status: HTTP status code (auto-detected for some exception types)
+        
+    Returns:
+        Tuple of (JSON response, status code)
     """
-    # If an exception instance is passed, derive message and possibly override status
+    # Handle Exception instances
     if isinstance(message_or_dict, Exception):
         exc = message_or_dict
-        # Map known exception types to status codes unless caller explicitly provided a different status
-        if isinstance(exc, UnauthorizedError) or isinstance(exc, Unauthorized):
+        if isinstance(exc, (UnauthorizedError, Unauthorized)):
             status = 401
         elif isinstance(exc, Forbidden):
             status = 403
-        # stringify the exception for consumers
         message_or_dict = str(exc)
 
     body = {'success': False}
+    
     if isinstance(message_or_dict, dict):
-        # include validation errors / structured errors
         body['errors'] = message_or_dict
-        # try to build a short message from first error
-        try:
-            first = next(iter(message_or_dict.values()))
-            if isinstance(first, list) and first:
-                body['message'] = str(first[0])
-            else:
-                body['message'] = str(first)
-        except Exception:
+        # Extract first error as message
+        first_value = next(iter(message_or_dict.values()), None)
+        if isinstance(first_value, list) and first_value:
+            body['message'] = str(first_value[0])
+        elif first_value:
+            body['message'] = str(first_value)
+        else:
             body['message'] = 'Validation error'
     else:
-        # plain string message
         body['message'] = str(message_or_dict)
         body['error'] = str(message_or_dict)
 
-    # always include a timestamp for debugging by frontend (IST)
-    try:
-        ist = zoneinfo.ZoneInfo('Asia/Kolkata')
-    except Exception:
-        # fallback to UTC if zoneinfo unavailable
-        try:
-            ist = timezone.utc
-        except Exception:
-            ist = None
-    if ist is not None:
-        try:
-            body['timestamp'] = datetime.now(ist).isoformat()
-        except Exception:
-            try:
-                body['timestamp'] = datetime.now().isoformat()
-            except Exception:
-                body['timestamp'] = None
-    # prune None values before returning
-    try:
-        body = _prune_none(body)
-    except Exception:
-        current_app.logger.exception('Failed to prune None in respond_error')
+    # Add timestamp
+    body['timestamp'] = datetime.now(IST_TZ).isoformat()
+    
+    # Prune None values
+    body = {k: v for k, v in body.items() if v is not None}
+    
     return jsonify(body), status
 
 

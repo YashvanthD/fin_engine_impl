@@ -37,6 +37,7 @@ class MongoRepo:
         #  USER DB REPOSITORIES
         self.users: Any = None
         self.fish_mapping: Any = None
+        self.companies = None
 
         # MEDIA DB REPOSITORIES
         self.message: Any = None
@@ -89,11 +90,12 @@ class MongoRepo:
                 FishAnalyticsRepository, SamplingRepository, FeedingRepository
             from fin_server.repository.media import MessageRepository, NotificationRepository, NotificationQueueRepository, \
                 TaskRepository
-            from fin_server.repository.user import UserRepository, FishMappingRepository
+            from fin_server.repository.user import UserRepository, FishMappingRepository, CompanyRepository
             # USER DB REPOSITORIES
             self.init_dbs()
             self.users = UserRepository(self.user_db)
             self.fish_mapping = FishMappingRepository(self.user_db)
+            self.companies = CompanyRepository(self.user_db)
 
             # MEDIA DB REPOSITORIES
             self.message = MessageRepository(self.media_db)
