@@ -1,10 +1,9 @@
 import argparse
 import warnings
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 
 from config import config
-from fin_server.repository.mongo_helper import MongoRepo
 # Register canonical blueprints and their API blueprints from route modules
 from fin_server.routes.auth import auth_bp, auth_api_bp
 from fin_server.routes.user import user_bp, user_api_bp
@@ -141,8 +140,10 @@ def create_app() -> Flask:
             return {}, 500
 
     @app.route('/')
-    def index():  # type: ignore[func-returns-value]
-        return render_template('API_DOC.html')
+    def index():
+        """Redirect to API documentation."""
+        from flask import redirect
+        return redirect('/docs')
 
     @app.route('/docs')
     @app.route('/docs/')
