@@ -1,0 +1,147 @@
+{
+  "id": "fish",
+  "name": "Fish Management",
+  "description": "Fish species management and analytics endpoints.",
+  "endpoints": [
+    {
+      "id": "fish-list",
+      "method": "GET",
+      "path": "/fish",
+      "summary": "List all fish species",
+      "auth": true,
+      "tags": ["fish", "list"],
+      "request": {
+        "queryParams": [
+          {"name": "include_analytics", "type": "boolean", "required": false, "default": false, "description": "Include growth analytics"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "example": {
+            "success": true,
+            "data": {
+              "fish": [
+                {
+                  "species_code": "TILAPIA_NILE",
+                  "common_name": "Nile Tilapia",
+                  "scientific_name": "Oreochromis niloticus",
+                  "analytics": {}
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "fish-create",
+      "method": "POST",
+      "path": "/fish",
+      "summary": "Add a new fish species",
+      "auth": true,
+      "tags": ["fish", "create"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "species_code": {"type": "string", "required": true, "description": "Unique identifier"},
+          "common_name": {"type": "string", "required": true},
+          "scientific_name": {"type": "string", "required": false},
+          "description": {"type": "string", "required": false}
+        },
+        "example": {
+          "species_code": "TILAPIA_NILE",
+          "common_name": "Nile Tilapia",
+          "scientific_name": "Oreochromis niloticus",
+          "description": "Common freshwater fish"
+        }
+      },
+      "responses": {
+        "201": {"description": "Fish species created"},
+        "409": {"description": "Species code already exists"}
+      }
+    },
+    {
+      "id": "fish-get",
+      "method": "GET",
+      "path": "/fish/{species_code}",
+      "summary": "Get fish species details",
+      "auth": true,
+      "tags": ["fish"],
+      "request": {
+        "pathParams": [
+          {"name": "species_code", "type": "string", "required": true}
+        ]
+      },
+      "responses": {
+        "200": {"description": "Fish species details"},
+        "404": {"description": "Species not found"}
+      }
+    },
+    {
+      "id": "fish-update",
+      "method": "PUT",
+      "path": "/fish/{species_code}",
+      "summary": "Update fish species",
+      "auth": true,
+      "tags": ["fish"],
+      "request": {
+        "pathParams": [
+          {"name": "species_code", "type": "string", "required": true}
+        ],
+        "contentType": "application/json",
+        "body": {
+          "common_name": {"type": "string", "required": false},
+          "scientific_name": {"type": "string", "required": false},
+          "description": {"type": "string", "required": false}
+        }
+      },
+      "responses": {
+        "200": {"description": "Species updated"}
+      }
+    },
+    {
+      "id": "fish-delete",
+      "method": "DELETE",
+      "path": "/fish/{species_code}",
+      "summary": "Remove fish species",
+      "auth": true,
+      "tags": ["fish"],
+      "request": {
+        "pathParams": [
+          {"name": "species_code", "type": "string", "required": true}
+        ]
+      },
+      "responses": {
+        "200": {"description": "Species deleted"}
+      }
+    },
+    {
+      "id": "fish-analytics",
+      "method": "GET",
+      "path": "/fish/{species_code}/analytics",
+      "summary": "Get growth analytics for species",
+      "auth": true,
+      "tags": ["fish", "analytics"],
+      "request": {
+        "pathParams": [
+          {"name": "species_code", "type": "string", "required": true}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Growth analytics data",
+          "example": {
+            "success": true,
+            "data": {
+              "species_code": "TILAPIA_NILE",
+              "growth_data": [],
+              "avg_weight": 500,
+              "mortality_rate": 5.2
+            }
+          }
+        }
+      }
+    }
+  ]
+}
+

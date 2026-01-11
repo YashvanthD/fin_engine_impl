@@ -144,6 +144,23 @@ def create_app() -> Flask:
     def index():  # type: ignore[func-returns-value]
         return render_template('API_DOC.html')
 
+    @app.route('/docs')
+    @app.route('/docs/')
+    def api_docs():
+        """Serve API documentation."""
+        from flask import send_from_directory
+        import os
+        docs_dir = os.path.join(os.path.dirname(__file__), 'static', 'api_docs')
+        return send_from_directory(docs_dir, 'index.html')
+
+    @app.route('/docs/<path:filename>')
+    def api_docs_static(filename):
+        """Serve API documentation static files."""
+        from flask import send_from_directory
+        import os
+        docs_dir = os.path.join(os.path.dirname(__file__), 'static', 'api_docs')
+        return send_from_directory(docs_dir, filename)
+
     return app
 
 

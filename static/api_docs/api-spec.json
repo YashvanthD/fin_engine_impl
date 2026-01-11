@@ -1,0 +1,48 @@
+{
+  "info": {
+    "title": "Fin Engine API",
+    "version": "1.0.0",
+    "description": "Complete API reference for the Fin Engine fish farming management platform.",
+    "baseUrl": "http://localhost:5000",
+    "lastUpdated": "2026-01-11"
+  },
+  "sections": [
+    {"id": "auth", "name": "Authentication", "file": "sections/auth.json", "icon": "🔐"},
+    {"id": "user", "name": "User Management", "file": "sections/user.json", "icon": "👤"},
+    {"id": "company", "name": "Company", "file": "sections/company.json", "icon": "🏢"},
+    {"id": "fish", "name": "Fish Management", "file": "sections/fish.json", "icon": "🐟"},
+    {"id": "pond", "name": "Pond Management", "file": "sections/pond.json", "icon": "🌊"},
+    {"id": "feeding", "name": "Feeding & Sampling", "file": "sections/feeding.json", "icon": "🍽️"},
+    {"id": "expenses", "name": "Expenses & Transactions", "file": "sections/expenses.json", "icon": "💰"},
+    {"id": "ai-openai", "name": "AI Services (OpenAI)", "file": "sections/ai-openai.json", "icon": "🤖"},
+    {"id": "mcp", "name": "MCP Server", "file": "sections/mcp.json", "icon": "🔌"},
+    {"id": "tasks", "name": "Tasks", "file": "sections/tasks.json", "icon": "📋"}
+  ],
+  "authentication": {
+    "type": "bearer",
+    "header": "Authorization",
+    "format": "Bearer <token>",
+    "description": "Most endpoints require a JWT token in the Authorization header."
+  },
+  "errorCodes": {
+    "400": "Bad Request - Invalid input",
+    "401": "Unauthorized - Missing or invalid token",
+    "403": "Forbidden - Insufficient permissions",
+    "404": "Not Found",
+    "409": "Conflict - Resource already exists",
+    "422": "Unprocessable Entity - Validation error",
+    "500": "Internal Server Error",
+    "503": "Service Unavailable - External service down"
+  },
+  "commonErrors": [
+    {"code": "AUTH_REQUIRED", "description": "Authentication required"},
+    {"code": "INVALID_TOKEN", "description": "Token is invalid or expired"},
+    {"code": "INVALID_CREDENTIALS", "description": "Wrong email or password"},
+    {"code": "USER_EXISTS", "description": "User already registered"},
+    {"code": "NOT_FOUND", "description": "Resource not found"},
+    {"code": "VALIDATION_ERROR", "description": "Input validation failed"},
+    {"code": "PERMISSION_DENIED", "description": "Insufficient permissions"},
+    {"code": "OPENAI_NOT_CONFIGURED", "description": "OpenAI API key not set"}
+  ]
+}
+

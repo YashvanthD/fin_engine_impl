@@ -94,7 +94,9 @@ class AIUsageRepository(BaseRepository):
         tool_name: str = None,
         success: bool = True,
         error: str = None,
-        metadata: Dict[str, Any] = None
+        metadata: Dict[str, Any] = None,
+        image_attached: bool = False,
+        image_url: str = None,
     ) -> str:
         """Log an AI API usage record.
 
@@ -109,6 +111,8 @@ class AIUsageRepository(BaseRepository):
             success: Whether the request was successful
             error: Error message if failed
             metadata: Additional metadata
+            image_attached: Whether an image was included in the request
+            image_url: URL of the image if provided via URL (not stored for base64)
 
         Returns:
             Created record ID
@@ -128,6 +132,8 @@ class AIUsageRepository(BaseRepository):
             'success': success,
             'error': error,
             'metadata': metadata or {},
+            'image_attached': image_attached,
+            'image_url': image_url,
             'created_at': datetime.now(timezone.utc),
         }
 
@@ -329,3 +335,71 @@ class AIUsageRepository(BaseRepository):
         except Exception:
             return []
 
+    def get_image_usage_summary(
+        self,
+        account_key: str,
+        start_date: datetime = None,
+        end_date: datetime = None
+    ) -> Dict[str, Any]:
+        """Get summary of image-related usage for an account.
+
+        Returns:
+            Summary dict with image request counts and token usage.
+        """
+        query = {'account_key': account_key, 'success': True, 'image_attached': True}
+
+        if start_date or end_date:
+            date_query = {}
+            if start_date:
+                date_query['$gte'] = start_date
+            if end_date:
+                date_query['$lte'] = end_date
+            query['created_at'] = date_query
+
+        pipeline = [
+            {'$match': query},
+            {'$group': {
+                '_id': '$account_key',
+                'total_image_requests': {'$sum': 1},
+                'total_tokens': {'$sum': '$tokens.total_tokens'},
+                'requests_with_url': {
+                    '$sum': {'$cond': [{'$ne': ['$image_url', None]}, 1, 0]}
+                },
+                'requests_with_base64': {
+                    '$sum': {'$cond': [{'$eq': ['$image_url', None]}, 1, 0]}
+                },
+            }}
+        ]
+
+        try:
+            results = list(self.collection.aggregate(pipeline))
+            if results:
+                result = results[0]
+                result.pop('_id', None)
+                return result
+        except Exception:
+            pass
+
+        return {
+            'total_image_requests': 0,
+            'total_tokens': 0,
+            'requests_with_url': 0,
+            'requests_with_base64': 0,
+        }
+
+    def get_requests_with_images(
+        self,
+        account_key: str,
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """Get usage records that include images.
+
+        Args:
+            account_key: Account identifier
+            limit: Max records to return
+
+        Returns:
+            List of usage records with images
+        """
+        query = {'account_key': account_key, 'image_attached': True}
+        return self.find_many(query, limit=limit)

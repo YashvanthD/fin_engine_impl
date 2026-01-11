@@ -1,0 +1,143 @@
+{
+  "id": "feeding",
+  "name": "Feeding & Sampling",
+  "description": "Feeding records and water quality sampling endpoints.",
+  "endpoints": [
+    {
+      "id": "feeding-list",
+      "method": "GET",
+      "path": "/feeding",
+      "summary": "List feeding records",
+      "auth": true,
+      "tags": ["feeding", "list"],
+      "request": {
+        "queryParams": [
+          {"name": "pond_id", "type": "string", "required": false, "description": "Filter by pond"},
+          {"name": "start_date", "type": "string", "required": false, "format": "date"},
+          {"name": "end_date", "type": "string", "required": false, "format": "date"},
+          {"name": "limit", "type": "integer", "required": false, "default": 50}
+        ]
+      },
+      "responses": {
+        "200": {
+          "example": {
+            "success": true,
+            "data": {
+              "records": [
+                {
+                  "feeding_id": "feed_001",
+                  "pond_id": "pond_001",
+                  "feed_type": "pellet",
+                  "quantity": 50,
+                  "unit": "kg",
+                  "feeding_time": "2026-01-10T08:00:00Z"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "feeding-create",
+      "method": "POST",
+      "path": "/feeding",
+      "summary": "Record feeding",
+      "auth": true,
+      "tags": ["feeding", "create"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "pond_id": {"type": "string", "required": true},
+          "feed_type": {"type": "string", "required": true},
+          "quantity": {"type": "number", "required": true},
+          "unit": {"type": "string", "required": false, "default": "kg"},
+          "feeding_time": {"type": "string", "required": false, "format": "datetime"},
+          "notes": {"type": "string", "required": false}
+        },
+        "example": {
+          "pond_id": "pond_001",
+          "feed_type": "pellet",
+          "quantity": 50,
+          "unit": "kg",
+          "feeding_time": "2026-01-10T08:00:00Z",
+          "notes": "Morning feeding"
+        }
+      },
+      "responses": {
+        "201": {"description": "Feeding recorded"}
+      }
+    },
+    {
+      "id": "sampling-list",
+      "method": "GET",
+      "path": "/sampling",
+      "summary": "List water quality samples",
+      "auth": true,
+      "tags": ["sampling", "water-quality"],
+      "request": {
+        "queryParams": [
+          {"name": "pond_id", "type": "string", "required": false},
+          {"name": "start_date", "type": "string", "required": false, "format": "date"},
+          {"name": "end_date", "type": "string", "required": false, "format": "date"},
+          {"name": "limit", "type": "integer", "required": false, "default": 50}
+        ]
+      },
+      "responses": {
+        "200": {
+          "example": {
+            "success": true,
+            "data": {
+              "samples": [
+                {
+                  "sample_id": "samp_001",
+                  "pond_id": "pond_001",
+                  "temperature": 28.5,
+                  "ph": 7.2,
+                  "dissolved_oxygen": 6.5,
+                  "sample_date": "2026-01-10T10:00:00Z"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "sampling-create",
+      "method": "POST",
+      "path": "/sampling",
+      "summary": "Record water quality sample",
+      "auth": true,
+      "tags": ["sampling", "water-quality", "create"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "pond_id": {"type": "string", "required": true},
+          "temperature": {"type": "number", "required": false, "description": "Water temperature in °C"},
+          "ph": {"type": "number", "required": false, "description": "pH level (0-14)"},
+          "dissolved_oxygen": {"type": "number", "required": false, "description": "DO in mg/L"},
+          "ammonia": {"type": "number", "required": false, "description": "Ammonia in mg/L"},
+          "nitrite": {"type": "number", "required": false, "description": "Nitrite in mg/L"},
+          "nitrate": {"type": "number", "required": false, "description": "Nitrate in mg/L"},
+          "salinity": {"type": "number", "required": false, "description": "Salinity in ppt"},
+          "turbidity": {"type": "number", "required": false},
+          "sample_date": {"type": "string", "required": false, "format": "datetime"}
+        },
+        "example": {
+          "pond_id": "pond_001",
+          "temperature": 28.5,
+          "ph": 7.2,
+          "dissolved_oxygen": 6.5,
+          "ammonia": 0.02,
+          "nitrite": 0.01,
+          "sample_date": "2026-01-10T10:00:00Z"
+        }
+      },
+      "responses": {
+        "201": {"description": "Sample recorded"}
+      }
+    }
+  ]
+}
+

@@ -1,0 +1,151 @@
+{
+  "id": "company",
+  "name": "Company Management",
+  "description": "Company registration and employee management endpoints.",
+  "endpoints": [
+    {
+      "id": "company-register",
+      "method": "POST",
+      "path": "/company/register",
+      "summary": "Register a new company",
+      "auth": false,
+      "tags": ["registration"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "company_name": {"type": "string", "required": true},
+          "address": {"type": "string", "required": false},
+          "phone": {"type": "string", "required": false},
+          "email": {"type": "string", "required": false},
+          "admin_email": {"type": "string", "required": true},
+          "admin_password": {"type": "string", "required": true},
+          "admin_name": {"type": "string", "required": true},
+          "master_password": {"type": "string", "required": true}
+        },
+        "example": {
+          "company_name": "Fish Farm Co.",
+          "address": "123 Farm Road",
+          "phone": "+1234567890",
+          "email": "contact@fishfarm.com",
+          "admin_email": "admin@fishfarm.com",
+          "admin_password": "securepassword",
+          "admin_name": "Admin User",
+          "master_password": "server_master_password"
+        }
+      },
+      "responses": {
+        "200": {"description": "Company registered"},
+        "409": {"description": "Company or admin email already exists"}
+      }
+    },
+    {
+      "id": "company-get",
+      "method": "GET",
+      "path": "/company",
+      "summary": "Get company details",
+      "auth": true,
+      "tags": ["company"],
+      "request": {},
+      "responses": {
+        "200": {
+          "example": {
+            "success": true,
+            "data": {
+              "company_key": "comp_xyz",
+              "name": "Fish Farm Co.",
+              "address": "123 Farm Road",
+              "phone": "+1234567890",
+              "email": "contact@fishfarm.com"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "company-update",
+      "method": "PUT",
+      "path": "/company",
+      "summary": "Update company details",
+      "auth": true,
+      "tags": ["company"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "name": {"type": "string", "required": false},
+          "address": {"type": "string", "required": false},
+          "phone": {"type": "string", "required": false},
+          "email": {"type": "string", "required": false}
+        }
+      },
+      "responses": {
+        "200": {"description": "Company updated"}
+      }
+    },
+    {
+      "id": "company-employees-list",
+      "method": "GET",
+      "path": "/company/employees",
+      "summary": "List company employees",
+      "auth": true,
+      "tags": ["employees"],
+      "request": {},
+      "responses": {
+        "200": {
+          "example": {
+            "success": true,
+            "data": {
+              "employees": [
+                {"user_key": "usr_abc", "email": "emp@company.com", "name": "Employee", "role": "staff"}
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "company-employees-add",
+      "method": "POST",
+      "path": "/company/employees",
+      "summary": "Add employee to company",
+      "auth": true,
+      "tags": ["employees"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "email": {"type": "string", "required": true},
+          "password": {"type": "string", "required": true},
+          "name": {"type": "string", "required": true},
+          "role": {"type": "string", "required": false, "default": "staff", "enum": ["admin", "manager", "staff"]}
+        },
+        "example": {
+          "email": "employee@fishfarm.com",
+          "password": "temppassword",
+          "name": "Employee Name",
+          "role": "staff"
+        }
+      },
+      "responses": {
+        "200": {"description": "Employee added"},
+        "409": {"description": "Email already exists"}
+      }
+    },
+    {
+      "id": "company-employees-remove",
+      "method": "DELETE",
+      "path": "/company/employees/{user_key}",
+      "summary": "Remove employee from company",
+      "auth": true,
+      "tags": ["employees"],
+      "request": {
+        "pathParams": [
+          {"name": "user_key", "type": "string", "required": true}
+        ]
+      },
+      "responses": {
+        "200": {"description": "Employee removed"},
+        "404": {"description": "Employee not found"}
+      }
+    }
+  ]
+}
+

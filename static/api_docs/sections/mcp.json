@@ -1,0 +1,192 @@
+{
+  "id": "mcp",
+  "name": "MCP (Model Context Protocol)",
+  "description": "MCP server for AI assistant integration. Allows AI assistants to interact with farm data.",
+  "endpoints": [
+    {
+      "id": "mcp-info",
+      "method": "GET",
+      "path": "/mcp/info",
+      "summary": "Get MCP server information",
+      "auth": false,
+      "tags": ["info"],
+      "request": {},
+      "responses": {
+        "200": {
+          "example": {
+            "success": true,
+            "data": {
+              "name": "fin-engine-mcp",
+              "version": "1.0.0",
+              "protocolVersion": "2024-11-05",
+              "capabilities": {"tools": {"listChanged": true}}
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "mcp-tools",
+      "method": "GET",
+      "path": "/mcp/tools",
+      "summary": "List available MCP tools",
+      "auth": false,
+      "tags": ["tools"],
+      "request": {},
+      "responses": {
+        "200": {
+          "description": "List of available tools",
+          "example": {
+            "success": true,
+            "data": {
+              "tools": [
+                {"name": "get_dashboard_summary", "description": "Get complete dashboard overview"},
+                {"name": "list_fish_species", "description": "List fish species with analytics"}
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "mcp-tools-call",
+      "method": "POST",
+      "path": "/mcp/tools/call",
+      "summary": "Execute an MCP tool",
+      "auth": true,
+      "tags": ["tools", "execute"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "name": {"type": "string", "required": true, "description": "Tool name to execute"},
+          "arguments": {"type": "object", "required": false, "description": "Tool arguments"}
+        },
+        "example": {
+          "name": "get_dashboard_summary",
+          "arguments": {}
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Tool execution result"
+        }
+      }
+    },
+    {
+      "id": "mcp-tools-name",
+      "method": "POST",
+      "path": "/mcp/tools/{tool_name}",
+      "summary": "Execute a specific tool by name",
+      "auth": true,
+      "tags": ["tools", "execute"],
+      "request": {
+        "pathParams": [
+          {"name": "tool_name", "type": "string", "required": true, "description": "Name of the tool"}
+        ],
+        "contentType": "application/json",
+        "body": {}
+      },
+      "responses": {
+        "200": {"description": "Tool result"}
+      }
+    },
+    {
+      "id": "mcp-session",
+      "method": "POST",
+      "path": "/mcp/session",
+      "summary": "Create an MCP session",
+      "auth": true,
+      "tags": ["session"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "session_id": {"type": "string", "required": false, "description": "Custom session ID (auto-generated if not provided)"}
+        }
+      },
+      "responses": {
+        "200": {
+          "example": {
+            "success": true,
+            "data": {"session_id": "uuid", "status": "created"}
+          }
+        }
+      }
+    },
+    {
+      "id": "mcp-session-delete",
+      "method": "DELETE",
+      "path": "/mcp/session/{session_id}",
+      "summary": "End an MCP session",
+      "auth": true,
+      "tags": ["session"],
+      "request": {
+        "pathParams": [
+          {"name": "session_id", "type": "string", "required": true}
+        ]
+      },
+      "responses": {
+        "200": {
+          "example": {"success": true, "data": {"status": "ended"}}
+        }
+      }
+    },
+    {
+      "id": "mcp-protocol",
+      "method": "POST",
+      "path": "/mcp/protocol",
+      "summary": "Handle MCP protocol requests (JSON-RPC)",
+      "auth": false,
+      "tags": ["protocol", "jsonrpc"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "jsonrpc": {"type": "string", "required": true, "example": "2.0"},
+          "id": {"type": "string|number", "required": true},
+          "method": {"type": "string", "required": true, "description": "MCP method"},
+          "params": {"type": "object", "required": false}
+        },
+        "example": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "tools/list",
+          "params": {}
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "JSON-RPC response"
+        }
+      }
+    },
+    {
+      "id": "mcp-dashboard",
+      "method": "GET",
+      "path": "/mcp/dashboard",
+      "summary": "Get dashboard summary",
+      "description": "Convenience endpoint to get complete dashboard data.",
+      "auth": true,
+      "tags": ["dashboard"],
+      "request": {},
+      "responses": {
+        "200": {
+          "description": "Dashboard data"
+        }
+      }
+    }
+  ],
+  "availableTools": [
+    {"name": "get_user_info", "description": "Get user information"},
+    {"name": "get_company_info", "description": "Get company details"},
+    {"name": "list_fish_species", "description": "List fish species with analytics"},
+    {"name": "get_fish_analytics", "description": "Get detailed fish analytics"},
+    {"name": "list_ponds", "description": "List all ponds"},
+    {"name": "get_pond_details", "description": "Get specific pond details"},
+    {"name": "get_expenses", "description": "Get expense records"},
+    {"name": "get_financial_summary", "description": "Get financial summary"},
+    {"name": "get_feeding_records", "description": "Get feeding history"},
+    {"name": "get_sampling_data", "description": "Get water quality samples"},
+    {"name": "search_data", "description": "Search across collections"},
+    {"name": "get_dashboard_summary", "description": "Get complete dashboard"}
+  ]
+}
+

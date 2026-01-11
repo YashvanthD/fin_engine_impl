@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fin Engine API Documentation</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #64748b;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg: #f8fafc;
+            --bg-card: #ffffff;
+            --text: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --code-bg: #1e293b;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        .container { display: flex; min-height: 100vh; }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            padding: 20px 0;
+            z-index: 100;
+        }
+        .sidebar-header {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .sidebar-header h1 {
+            font-size: 1.25rem;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sidebar-header .version {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+        .search-box {
+            padding: 10px 20px;
+            margin-bottom: 10px;
+        }
+        .search-box input {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+        .search-box input:focus { outline: none; border-color: var(--primary); }
+
+        .nav-section { padding: 10px 0; }
+        .nav-section-title {
+            padding: 8px 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .nav-section-title:hover { background: var(--bg); }
+        .nav-section-title .icon { font-size: 1rem; }
+        .nav-section-title .arrow { margin-left: auto; transition: transform 0.2s; }
+        .nav-section.collapsed .arrow { transform: rotate(-90deg); }
+        .nav-section.collapsed .nav-items { display: none; }
+        .nav-items { padding-left: 20px; }
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 6px 20px;
+            color: var(--text);
+            text-decoration: none;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+            gap: 8px;
+        }
+        .nav-link:hover { background: var(--bg); color: var(--primary); }
+        .nav-link.active { background: #eff6ff; color: var(--primary); border-right: 3px solid var(--primary); }
+        .nav-link .method {
+            font-size: 0.65rem;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-weight: 600;
+            min-width: 35px;
+            text-align: center;
+        }
+        .nav-link .method.get { background: #dbeafe; color: #1d4ed8; }
+        .nav-link .method.post { background: #dcfce7; color: #16a34a; }
+        .nav-link .method.put { background: #fef3c7; color: #d97706; }
+        .nav-link .method.delete { background: #fee2e2; color: #dc2626; }
+
+        /* Main Content */
+        .main { margin-left: 280px; flex: 1; padding: 40px; max-width: 1000px; }
+
+        h2 { font-size: 1.75rem; margin: 40px 0 20px; padding-bottom: 10px; border-bottom: 2px solid var(--border); display: flex; align-items: center; gap: 10px; }
+        h2 .icon { font-size: 1.5rem; }
+        h3 { font-size: 1.25rem; margin: 30px 0 15px; color: var(--text); }
+        h4 { font-size: 1rem; margin: 20px 0 10px; }
+        p { margin: 10px 0; color: var(--text-muted); }
+
+        /* Endpoint Cards */
+        .endpoint {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin: 20px 0;
+            overflow: hidden;
+        }
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            background: var(--bg);
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            gap: 12px;
+        }
+        .endpoint-header:hover { background: #f1f5f9; }
+        .method {
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            min-width: 60px;
+            text-align: center;
+        }
+        .method.get { background: #dbeafe; color: #1d4ed8; }
+        .method.post { background: #dcfce7; color: #16a34a; }
+        .method.put { background: #fef3c7; color: #d97706; }
+        .method.delete { background: #fee2e2; color: #dc2626; }
+        .endpoint-path { font-family: 'Monaco', 'Consolas', monospace; font-size: 0.875rem; }
+        .endpoint-summary { margin-left: auto; color: var(--text-muted); font-size: 0.875rem; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; margin-left: 10px; }
+        .badge-auth { background: #fef3c7; color: #92400e; }
+        .badge-new { background: #dcfce7; color: #166534; }
+        .endpoint-body { padding: 20px; display: none; }
+        .endpoint.open .endpoint-body { display: block; }
+        .endpoint.open .endpoint-header { border-bottom: 1px solid var(--border); }
+
+        /* Code Blocks */
+        pre {
+            background: var(--code-bg);
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 0.8rem;
+            margin: 10px 0;
+            position: relative;
+        }
+        pre .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #374151;
+            border: none;
+            color: #e2e8f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.7rem;
+        }
+        pre .copy-btn:hover { background: #4b5563; }
+        code { font-family: 'Monaco', 'Consolas', monospace; }
+        .inline-code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-size: 0.85rem; color: var(--primary-dark); }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin: 15px 0; font-size: 0.875rem; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background: var(--bg); font-weight: 600; }
+        td.required { color: var(--danger); }
+
+        /* Tabs */
+        .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 15px; }
+        .tab { padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-muted); font-size: 0.875rem; }
+        .tab:hover { color: var(--text); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Tags */
+        .tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+        .tag { background: #f1f5f9; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; color: var(--secondary); }
+
+        /* Loading */
+        .loading { text-align: center; padding: 40px; color: var(--text-muted); }
+        .loading .spinner { display: inline-block; width: 30px; height: 30px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .sidebar { transform: translateX(-100%); transition: transform 0.3s; }
+            .sidebar.open { transform: translateX(0); }
+            .main { margin-left: 0; padding: 20px; }
+            .mobile-toggle { display: block; position: fixed; top: 10px; left: 10px; z-index: 200; background: var(--primary); color: white; border: none; padding: 10px 15px; border-radius: 6px; cursor: pointer; }
+        }
+        @media (min-width: 769px) { .mobile-toggle { display: none; } }
+    </style>
+</head>
+<body>
+    <button class="mobile-toggle" onclick="toggleSidebar()">☰ Menu</button>
+
+    <div class="container">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1><span>🐟</span> Fin Engine API</h1>
+                <div class="version" id="api-version">Loading...</div>
+            </div>
+            <div class="search-box">
+                <input type="text" id="search" placeholder="Search endpoints...">
+            </div>
+            <nav id="nav-container">
+                <div class="loading"><div class="spinner"></div></div>
+            </nav>
+        </aside>
+
+        <main class="main" id="main-content">
+            <div class="loading"><div class="spinner"></div><p>Loading API documentation...</p></div>
+        </main>
+    </div>
+
+    <script>
+        // State
+        let apiSpec = null;
+        let sections = {};
+        let currentSection = null;
+
+        // Base path for API docs
+        const BASE_PATH = '/docs';
+
+        // Load API spec
+        async function loadApiSpec() {
+            try {
+                const response = await fetch(`${BASE_PATH}/api-spec.json`);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                apiSpec = await response.json();
+                document.getElementById('api-version').textContent = `v${apiSpec.info.version} | ${apiSpec.info.lastUpdated}`;
+                await loadSections();
+                renderNav();
+                renderIntro();
+            } catch (error) {
+                console.error('Failed to load API spec:', error);
+                document.getElementById('main-content').innerHTML = '<p class="error">Failed to load API documentation. Error: ' + error.message + '</p>';
+            }
+        }
+
+        // Load all sections
+        async function loadSections() {
+            const promises = apiSpec.sections.map(async (section) => {
+                try {
+                    const response = await fetch(`${BASE_PATH}/${section.file}`);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    sections[section.id] = await response.json();
+                } catch (error) {
+                    console.error(`Failed to load section ${section.id}:`, error);
+                    sections[section.id] = { id: section.id, name: section.name, endpoints: [] };
+                }
+            });
+            await Promise.all(promises);
+        }
+
+        // Render navigation
+        function renderNav() {
+            const nav = document.getElementById('nav-container');
+            let html = `
+                <div class="nav-section">
+                    <a href="#" class="nav-link" onclick="renderIntro(); return false;">📖 Introduction</a>
+                </div>
+            `;
+
+            for (const section of apiSpec.sections) {
+                const sectionData = sections[section.id];
+                if (!sectionData) continue;
+
+                html += `
+                    <div class="nav-section" id="nav-${section.id}">
+                        <div class="nav-section-title" onclick="toggleNavSection('${section.id}')">
+                            <span class="icon">${section.icon}</span>
+                            <span>${section.name}</span>
+                            <span class="arrow">▼</span>
+                        </div>
+                        <div class="nav-items">
+                `;
+
+                for (const endpoint of sectionData.endpoints || []) {
+                    html += `
+                        <a href="#" class="nav-link" onclick="renderEndpoint('${section.id}', '${endpoint.id}'); return false;" data-search="${endpoint.path} ${endpoint.summary}">
+                            <span class="method ${endpoint.method.toLowerCase()}">${endpoint.method}</span>
+                            <span>${endpoint.path.split('/').pop() || '/'}</span>
+                        </a>
+                    `;
+                }
+
+                html += `</div></div>`;
+            }
+
+            html += `
+                <div class="nav-section">
+                    <a href="#" class="nav-link" onclick="renderErrors(); return false;">⚠️ Error Codes</a>
+                </div>
+            `;
+
+            nav.innerHTML = html;
+        }
+
+        // Toggle nav section
+        function toggleNavSection(sectionId) {
+            const section = document.getElementById(`nav-${sectionId}`);
+            section.classList.toggle('collapsed');
+        }
+
+        // Render introduction
+        function renderIntro() {
+            const main = document.getElementById('main-content');
+            main.innerHTML = `
+                <section>
+                    <h2><span class="icon">🐟</span> ${apiSpec.info.title}</h2>
+                    <p>${apiSpec.info.description}</p>
+
+                    <h3>Base URL</h3>
+                    <pre><code>${apiSpec.info.baseUrl}</code></pre>
+
+                    <h3>Authentication</h3>
+                    <p>${apiSpec.authentication.description}</p>
+                    <pre><code>${apiSpec.authentication.header}: ${apiSpec.authentication.format}</code></pre>
+
+                    <h3>Response Format</h3>
+                    <p>All responses follow this format:</p>
+                    <pre><code>${JSON.stringify({success: true, data: {}}, null, 2)}
+
+// Error response
+${JSON.stringify({success: false, error: {message: "Error description", code: "ERROR_CODE"}}, null, 2)}</code></pre>
+
+                    <h3>API Sections</h3>
+                    <table>
+                        <tr><th>Section</th><th>Description</th><th>Endpoints</th></tr>
+                        ${apiSpec.sections.map(s => `
+                            <tr>
+                                <td>${s.icon} ${s.name}</td>
+                                <td>${sections[s.id]?.description || ''}</td>
+                                <td>${sections[s.id]?.endpoints?.length || 0}</td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                </section>
+            `;
+        }
+
+        // Render endpoint
+        function renderEndpoint(sectionId, endpointId) {
+            const section = sections[sectionId];
+            const endpoint = section.endpoints.find(e => e.id === endpointId);
+            if (!endpoint) return;
+
+            const main = document.getElementById('main-content');
+            main.innerHTML = `
+                <section>
+                    <h2><span class="icon">${apiSpec.sections.find(s => s.id === sectionId)?.icon || ''}</span> ${endpoint.summary}</h2>
+                    <p>${endpoint.description || ''}</p>
+
+                    <div class="endpoint open">
+                        <div class="endpoint-header">
+                            <span class="method ${endpoint.method.toLowerCase()}">${endpoint.method}</span>
+                            <span class="endpoint-path">${endpoint.path}</span>
+                            ${endpoint.auth ? '<span class="badge badge-auth">Auth Required</span>' : ''}
+                        </div>
+                        <div class="endpoint-body">
+                            ${endpoint.tags ? `<div class="tags">${endpoint.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>` : ''}
+
+                            ${renderRequest(endpoint)}
+                            ${renderResponses(endpoint)}
+                            ${renderCurlExamples(endpoint)}
+                        </div>
+                    </div>
+                </section>
+            `;
+
+            // Scroll to top
+            main.scrollTop = 0;
+        }
+
+        // Render request section
+        function renderRequest(endpoint) {
+            if (!endpoint.request || Object.keys(endpoint.request).length === 0) {
+                return '<h4>Request</h4><p>No request body required.</p>';
+            }
+
+            let html = '<h4>Request</h4>';
+
+            // Path params
+            if (endpoint.request.pathParams?.length) {
+                html += `
+                    <h5>Path Parameters</h5>
+                    <table>
+                        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        ${endpoint.request.pathParams.map(p => `
+                            <tr>
+                                <td><code>${p.name}</code></td>
+                                <td>${p.type}</td>
+                                <td class="${p.required ? 'required' : ''}">${p.required ? 'Yes' : 'No'}</td>
+                                <td>${p.description || ''}</td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                `;
+            }
+
+            // Query params
+            if (endpoint.request.queryParams?.length) {
+                html += `
+                    <h5>Query Parameters</h5>
+                    <table>
+                        <tr><th>Name</th><th>Type</th><th>Default</th><th>Description</th></tr>
+                        ${endpoint.request.queryParams.map(p => `
+                            <tr>
+                                <td><code>${p.name}</code></td>
+                                <td>${p.type}${p.enum ? ` (${p.enum.join(', ')})` : ''}</td>
+                                <td>${p.default !== undefined ? p.default : '-'}</td>
+                                <td>${p.description || ''}</td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                `;
+            }
+
+            // Body params
+            if (endpoint.request.body && Object.keys(endpoint.request.body).length > 0) {
+                html += `
+                    <h5>Body Parameters</h5>
+                    <table>
+                        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        ${Object.entries(endpoint.request.body).map(([name, p]) => `
+                            <tr>
+                                <td><code>${name}</code></td>
+                                <td>${p.type}${p.enum ? ` (${p.enum.join(', ')})` : ''}</td>
+                                <td class="${p.required ? 'required' : ''}">${p.required ? 'Yes' : 'No'}</td>
+                                <td>${p.description || ''}${p.default !== undefined ? ` (default: ${p.default})` : ''}</td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                `;
+            }
+
+            // Form fields
+            if (endpoint.request.formFields?.length) {
+                html += `
+                    <h5>Form Fields (multipart/form-data)</h5>
+                    <table>
+                        <tr><th>Name</th><th>Type</th><th>Required</th><th>Description</th></tr>
+                        ${endpoint.request.formFields.map(p => `
+                            <tr>
+                                <td><code>${p.name}</code></td>
+                                <td>${p.type}</td>
+                                <td class="${p.required ? 'required' : ''}">${p.required ? 'Yes' : 'No'}</td>
+                                <td>${p.description || ''}</td>
+                            </tr>
+                        `).join('')}
+                    </table>
+                `;
+            }
+
+            // Example
+            if (endpoint.request.example) {
+                html += `
+                    <h5>Example Request</h5>
+                    <pre><code>${JSON.stringify(endpoint.request.example, null, 2)}</code><button class="copy-btn" onclick="copyCode(this)">Copy</button></pre>
+                `;
+            }
+
+            // Multiple examples
+            if (endpoint.request.examples) {
+                html += '<h5>Example Requests</h5>';
+                html += '<div class="tabs">';
+                Object.keys(endpoint.request.examples).forEach((key, i) => {
+                    html += `<div class="tab ${i === 0 ? 'active' : ''}" onclick="showTab(this, 'example-${key}')">${key.replace(/_/g, ' ')}</div>`;
+                });
+                html += '</div>';
+                Object.entries(endpoint.request.examples).forEach(([key, example], i) => {
+                    html += `<div id="example-${key}" class="tab-content ${i === 0 ? 'active' : ''}"><pre><code>${JSON.stringify(example, null, 2)}</code><button class="copy-btn" onclick="copyCode(this)">Copy</button></pre></div>`;
+                });
+            }
+
+            return html;
+        }
+
+        // Render responses
+        function renderResponses(endpoint) {
+            if (!endpoint.responses) return '';
+
+            let html = '<h4>Responses</h4>';
+
+            for (const [code, response] of Object.entries(endpoint.responses)) {
+                html += `
+                    <h5>${code} ${response.description || ''}</h5>
+                    ${response.example ? `<pre><code>${JSON.stringify(response.example, null, 2)}</code><button class="copy-btn" onclick="copyCode(this)">Copy</button></pre>` : ''}
+                `;
+            }
+
+            return html;
+        }
+
+        // Render curl examples
+        function renderCurlExamples(endpoint) {
+            if (!endpoint.curlExamples?.length) return '';
+
+            let html = '<h4>cURL Examples</h4>';
+
+            for (const example of endpoint.curlExamples) {
+                html += `
+                    <h5>${example.title}</h5>
+                    <pre><code>${example.command}</code><button class="copy-btn" onclick="copyCode(this)">Copy</button></pre>
+                `;
+            }
+
+            return html;
+        }
+
+        // Render errors
+        function renderErrors() {
+            const main = document.getElementById('main-content');
+            main.innerHTML = `
+                <section>
+                    <h2><span class="icon">⚠️</span> Error Handling</h2>
+
+                    <h3>HTTP Status Codes</h3>
+                    <table>
+                        <tr><th>Code</th><th>Description</th></tr>
+                        ${Object.entries(apiSpec.errorCodes).map(([code, desc]) => `
+                            <tr><td><code>${code}</code></td><td>${desc}</td></tr>
+                        `).join('')}
+                    </table>
+
+                    <h3>Error Codes</h3>
+                    <table>
+                        <tr><th>Code</th><th>Description</th></tr>
+                        ${apiSpec.commonErrors.map(e => `
+                            <tr><td><code>${e.code}</code></td><td>${e.description}</td></tr>
+                        `).join('')}
+                    </table>
+
+                    <h3>Error Response Format</h3>
+                    <pre><code>${JSON.stringify({
+                        success: false,
+                        error: {
+                            message: "Error description",
+                            code: "ERROR_CODE"
+                        }
+                    }, null, 2)}</code></pre>
+                </section>
+            `;
+        }
+
+        // Search
+        document.getElementById('search').addEventListener('input', function(e) {
+            const query = e.target.value.toLowerCase();
+            document.querySelectorAll('.nav-link[data-search]').forEach(link => {
+                const searchText = link.getAttribute('data-search').toLowerCase();
+                link.style.display = searchText.includes(query) ? 'flex' : 'none';
+            });
+            // Expand all sections when searching
+            if (query) {
+                document.querySelectorAll('.nav-section.collapsed').forEach(s => s.classList.remove('collapsed'));
+            }
+        });
+
+        // Tab switching
+        function showTab(tab, contentId) {
+            const parent = tab.closest('.endpoint-body') || tab.parentElement.parentElement;
+            parent.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            parent.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById(contentId).classList.add('active');
+        }
+
+        // Copy code
+        function copyCode(btn) {
+            const code = btn.previousSibling.textContent;
+            navigator.clipboard.writeText(code);
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy', 2000);
+        }
+
+        // Mobile toggle
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+        }
+
+        // Initialize
+        loadApiSpec();
+    </script>
+</body>
+</html>
+

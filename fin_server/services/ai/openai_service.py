@@ -81,7 +81,9 @@ class OpenAIService:
         endpoint: str = None,
         tool_name: str = None,
         success: bool = True,
-        error: str = None
+        error: str = None,
+        image_attached: bool = False,
+        image_url: str = None,
     ) -> Optional[str]:
         """Log AI usage to the database."""
         repo = _get_ai_usage_repo()
@@ -99,7 +101,9 @@ class OpenAIService:
                 endpoint=endpoint,
                 tool_name=tool_name,
                 success=success,
-                error=error
+                error=error,
+                image_attached=image_attached,
+                image_url=image_url,
             )
         except Exception as e:
             logger.warning(f"Failed to log AI usage: {e}")
@@ -128,6 +132,9 @@ class OpenAIService:
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
         system_prompt: Optional[str] = None,
+        account_key: Optional[str] = None,
+        user_key: Optional[str] = None,
+        endpoint: str = None,
     ) -> Dict[str, Any]:
         """Send a single query to OpenAI.
 
@@ -137,6 +144,9 @@ class OpenAIService:
             max_tokens: Maximum tokens in response
             temperature: Creativity (0-2, default 0.7)
             system_prompt: Optional system context
+            account_key: Account key for usage tracking
+            user_key: User key for usage tracking
+            endpoint: API endpoint for usage tracking
 
         Returns:
             Dict with content, model, usage, finish_reason
@@ -151,12 +161,25 @@ class OpenAIService:
 
         messages.append({"role": "user", "content": prompt})
 
-        return self._chat_completion(
+        result = self._chat_completion(
             messages=messages,
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
         )
+
+        # Log usage if account_key provided
+        if account_key and result.get('usage'):
+            self._log_usage(
+                account_key=account_key,
+                user_key=user_key or 'unknown',
+                tokens=result['usage'],
+                model=result.get('model'),
+                endpoint=endpoint or '/ai/openai/query',
+                success=True
+            )
+
+        return result
 
     def chat(
         self,
@@ -164,6 +187,9 @@ class OpenAIService:
         model: Optional[str] = None,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
+        account_key: Optional[str] = None,
+        user_key: Optional[str] = None,
+        endpoint: str = None,
     ) -> Dict[str, Any]:
         """Multi-turn chat conversation.
 
@@ -172,6 +198,9 @@ class OpenAIService:
             model: Model to use
             max_tokens: Maximum tokens
             temperature: Creativity
+            account_key: Account key for usage tracking
+            user_key: User key for usage tracking
+            endpoint: API endpoint for usage tracking
 
         Returns:
             Dict with content, model, usage, finish_reason
@@ -179,12 +208,25 @@ class OpenAIService:
         if not self.is_configured():
             raise ValueError("OpenAI is not configured")
 
-        return self._chat_completion(
+        result = self._chat_completion(
             messages=messages,
             model=model,
             max_tokens=max_tokens,
             temperature=temperature,
         )
+
+        # Log usage if account_key provided
+        if account_key and result.get('usage'):
+            self._log_usage(
+                account_key=account_key,
+                user_key=user_key or 'unknown',
+                tokens=result['usage'],
+                model=result.get('model'),
+                endpoint=endpoint or '/ai/openai/chat',
+                success=True
+            )
+
+        return result
 
     def _chat_completion(
         self,
@@ -224,6 +266,263 @@ class OpenAIService:
         except Exception as e:
             logger.error(f"OpenAI API error: {e}")
             raise
+
+    # =========================================================================
+    # Image Analysis Methods (Vision API)
+    # =========================================================================
+
+    def analyze_image(
+        self,
+        image_url: Optional[str] = None,
+        image_base64: Optional[str] = None,
+        prompt: str = "What's in this image?",
+        model: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        account_key: Optional[str] = None,
+        user_key: Optional[str] = None,
+        detail: str = "auto",
+    ) -> Dict[str, Any]:
+        """Analyze an image using OpenAI Vision.
+
+        Args:
+            image_url: URL of the image to analyze
+            image_base64: Base64 encoded image data
+            prompt: Question or instruction about the image
+            model: Model to use (must support vision, e.g., gpt-4o, gpt-4o-mini)
+            max_tokens: Maximum tokens in response
+            account_key: Account key for usage tracking
+            user_key: User key for usage tracking
+            detail: Image detail level - "low", "high", or "auto"
+
+        Returns:
+            Dict with content, model, usage, finish_reason
+        """
+        if not self.is_configured():
+            raise ValueError("OpenAI is not configured")
+
+        if not image_url and not image_base64:
+            raise ValueError("Either image_url or image_base64 is required")
+
+        # Build image content
+        if image_url:
+            image_content = {
+                "type": "image_url",
+                "image_url": {
+                    "url": image_url,
+                    "detail": detail,
+                }
+            }
+        else:
+            # Determine image type from base64 header or default to jpeg
+            if image_base64.startswith('/9j/'):
+                mime_type = "image/jpeg"
+            elif image_base64.startswith('iVBOR'):
+                mime_type = "image/png"
+            elif image_base64.startswith('R0lG'):
+                mime_type = "image/gif"
+            elif image_base64.startswith('UklGR'):
+                mime_type = "image/webp"
+            else:
+                mime_type = "image/jpeg"
+
+            image_content = {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{mime_type};base64,{image_base64}",
+                    "detail": detail,
+                }
+            }
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    image_content,
+                ]
+            }
+        ]
+
+        # Use vision-capable model
+        vision_model = model or self._default_model
+        # Ensure model supports vision
+        if vision_model not in ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4-vision-preview']:
+            vision_model = 'gpt-4o-mini'  # Default to gpt-4o-mini which supports vision
+
+        result = self._chat_completion(
+            messages=messages,
+            model=vision_model,
+            max_tokens=max_tokens or 1000,
+        )
+
+        # Log usage
+        if account_key and result.get('usage'):
+            self._log_usage(
+                account_key=account_key,
+                user_key=user_key or 'unknown',
+                tokens=result['usage'],
+                model=result.get('model'),
+                endpoint='/ai/openai/analyze-image',
+                success=True,
+                image_attached=True,
+                image_url=image_url,  # Will be None if base64 was used
+            )
+
+        return result
+
+    def analyze_multiple_images(
+        self,
+        images: List[Dict[str, str]],
+        prompt: str = "Analyze these images",
+        model: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        account_key: Optional[str] = None,
+        user_key: Optional[str] = None,
+        detail: str = "auto",
+    ) -> Dict[str, Any]:
+        """Analyze multiple images together.
+
+        Args:
+            images: List of dicts with either 'url' or 'base64' key
+            prompt: Question or instruction about the images
+            model: Model to use
+            max_tokens: Maximum tokens in response
+            account_key: Account key for usage tracking
+            user_key: User key for usage tracking
+            detail: Image detail level
+
+        Returns:
+            Dict with content, model, usage, finish_reason
+        """
+        if not self.is_configured():
+            raise ValueError("OpenAI is not configured")
+
+        if not images:
+            raise ValueError("At least one image is required")
+
+        content = [{"type": "text", "text": prompt}]
+
+        for img in images:
+            if 'url' in img:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": img['url'], "detail": detail}
+                })
+            elif 'base64' in img:
+                base64_data = img['base64']
+                mime_type = img.get('mime_type', 'image/jpeg')
+                content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:{mime_type};base64,{base64_data}",
+                        "detail": detail
+                    }
+                })
+
+        messages = [{"role": "user", "content": content}]
+
+        vision_model = model or 'gpt-4o-mini'
+
+        result = self._chat_completion(
+            messages=messages,
+            model=vision_model,
+            max_tokens=max_tokens or 2000,
+        )
+
+        if account_key and result.get('usage'):
+            # Collect image URLs if any provided via URL
+            image_urls = [img.get('url') for img in images if img.get('url')]
+            self._log_usage(
+                account_key=account_key,
+                user_key=user_key or 'unknown',
+                tokens=result['usage'],
+                model=result.get('model'),
+                endpoint='/ai/openai/analyze-images',
+                success=True,
+                image_attached=True,
+                image_url=','.join(image_urls) if image_urls else None,  # Store comma-separated URLs
+            )
+
+        return result
+
+    def analyze_fish_image(
+        self,
+        image_url: Optional[str] = None,
+        image_base64: Optional[str] = None,
+        analysis_type: str = "general",
+        account_key: Optional[str] = None,
+        user_key: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Specialized fish image analysis.
+
+        Args:
+            image_url: URL of the fish image
+            image_base64: Base64 encoded image
+            analysis_type: Type of analysis - "general", "health", "species", "size"
+            account_key: Account key for usage tracking
+            user_key: User key for usage tracking
+
+        Returns:
+            Dict with analysis results
+        """
+        prompts = {
+            "general": """Analyze this fish farm image. Describe:
+1. What type of fish you see (if visible)
+2. Approximate number of fish
+3. Water clarity and color
+4. Any visible health issues or concerns
+5. Overall condition assessment""",
+
+            "health": """Analyze this fish image for health indicators:
+1. Body condition and shape
+2. Fin condition (any damage, rot, or abnormalities)
+3. Scale condition
+4. Eye clarity and condition
+5. Any visible lesions, spots, or parasites
+6. Swimming behavior if visible
+7. Overall health score (1-10) with explanation""",
+
+            "species": """Identify the fish species in this image:
+1. Most likely species identification
+2. Confidence level
+3. Key identifying features observed
+4. Similar species it could be confused with
+5. Typical characteristics of this species""",
+
+            "size": """Estimate the size and weight of fish in this image:
+1. Estimated length (cm)
+2. Estimated weight (grams/kg)
+3. Growth stage (fry, fingerling, juvenile, adult)
+4. Body condition factor estimation
+5. Comparison to typical size for the species (if identifiable)""",
+        }
+
+        prompt = prompts.get(analysis_type, prompts["general"])
+
+        system_context = """You are an expert aquaculture and fisheries specialist with extensive knowledge of:
+- Fish species identification
+- Fish health assessment
+- Aquaculture practices
+- Water quality indicators
+- Common fish diseases and conditions
+
+Provide detailed, professional analysis based on what you can observe in the image."""
+
+        result = self.analyze_image(
+            image_url=image_url,
+            image_base64=image_base64,
+            prompt=f"{system_context}\n\n{prompt}",
+            account_key=account_key,
+            user_key=user_key,
+            detail="high",  # Use high detail for fish analysis
+        )
+
+        return {
+            "analysis_type": analysis_type,
+            "content": result.get("content"),
+            "model": result.get("model"),
+            "usage": result.get("usage"),
+        }
 
     # =========================================================================
     # Specialized Methods

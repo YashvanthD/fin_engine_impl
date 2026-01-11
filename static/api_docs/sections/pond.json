@@ -1,0 +1,179 @@
+{
+  "id": "pond",
+  "name": "Pond Management",
+  "description": "Pond creation, management, stocking, and harvesting endpoints.",
+  "endpoints": [
+    {
+      "id": "pond-list",
+      "method": "GET",
+      "path": "/pond",
+      "summary": "List all ponds",
+      "auth": true,
+      "tags": ["pond", "list"],
+      "request": {},
+      "responses": {
+        "200": {
+          "example": {
+            "success": true,
+            "data": {
+              "ponds": [
+                {
+                  "pond_id": "pond_001",
+                  "name": "Pond A",
+                  "size": 1000,
+                  "size_unit": "sqm",
+                  "location": "North Section",
+                  "status": "active"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "pond-create",
+      "method": "POST",
+      "path": "/pond",
+      "summary": "Create a new pond",
+      "auth": true,
+      "tags": ["pond", "create"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "name": {"type": "string", "required": true},
+          "size": {"type": "number", "required": true},
+          "size_unit": {"type": "string", "required": false, "default": "sqm", "enum": ["sqm", "acre", "hectare"]},
+          "location": {"type": "string", "required": false},
+          "depth": {"type": "number", "required": false},
+          "water_source": {"type": "string", "required": false}
+        },
+        "example": {
+          "name": "Pond A",
+          "size": 1000,
+          "size_unit": "sqm",
+          "location": "North Section",
+          "depth": 2.5,
+          "water_source": "well"
+        }
+      },
+      "responses": {
+        "201": {"description": "Pond created"}
+      }
+    },
+    {
+      "id": "pond-get",
+      "method": "GET",
+      "path": "/pond/{pond_id}",
+      "summary": "Get pond details",
+      "auth": true,
+      "tags": ["pond"],
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true}
+        ]
+      },
+      "responses": {
+        "200": {"description": "Pond details"},
+        "404": {"description": "Pond not found"}
+      }
+    },
+    {
+      "id": "pond-update",
+      "method": "PUT",
+      "path": "/pond/{pond_id}",
+      "summary": "Update pond",
+      "auth": true,
+      "tags": ["pond"],
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true}
+        ],
+        "contentType": "application/json",
+        "body": {
+          "name": {"type": "string", "required": false},
+          "size": {"type": "number", "required": false},
+          "location": {"type": "string", "required": false},
+          "status": {"type": "string", "required": false, "enum": ["active", "inactive", "maintenance"]}
+        }
+      },
+      "responses": {
+        "200": {"description": "Pond updated"}
+      }
+    },
+    {
+      "id": "pond-delete",
+      "method": "DELETE",
+      "path": "/pond/{pond_id}",
+      "summary": "Delete pond",
+      "auth": true,
+      "tags": ["pond"],
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true}
+        ]
+      },
+      "responses": {
+        "200": {"description": "Pond deleted"}
+      }
+    },
+    {
+      "id": "pond-stock",
+      "method": "POST",
+      "path": "/pond/{pond_id}/stock",
+      "summary": "Add fish stock to pond",
+      "auth": true,
+      "tags": ["pond", "stock"],
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true}
+        ],
+        "contentType": "application/json",
+        "body": {
+          "species_code": {"type": "string", "required": true},
+          "count": {"type": "integer", "required": true},
+          "avg_weight": {"type": "number", "required": false, "description": "Average weight in grams"},
+          "source": {"type": "string", "required": false},
+          "stock_date": {"type": "string", "required": false, "format": "date"}
+        },
+        "example": {
+          "species_code": "TILAPIA_NILE",
+          "count": 5000,
+          "avg_weight": 10,
+          "source": "Hatchery A",
+          "stock_date": "2026-01-10"
+        }
+      },
+      "responses": {
+        "200": {"description": "Stock added"}
+      }
+    },
+    {
+      "id": "pond-harvest",
+      "method": "POST",
+      "path": "/pond/{pond_id}/harvest",
+      "summary": "Record harvest from pond",
+      "auth": true,
+      "tags": ["pond", "harvest"],
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true}
+        ],
+        "contentType": "application/json",
+        "body": {
+          "species_code": {"type": "string", "required": true},
+          "count": {"type": "integer", "required": false},
+          "total_weight": {"type": "number", "required": true, "description": "Total weight in kg"},
+          "avg_weight": {"type": "number", "required": false},
+          "harvest_date": {"type": "string", "required": false, "format": "date"},
+          "buyer": {"type": "string", "required": false},
+          "price_per_kg": {"type": "number", "required": false}
+        }
+      },
+      "responses": {
+        "200": {"description": "Harvest recorded"}
+      }
+    }
+  ]
+}
+

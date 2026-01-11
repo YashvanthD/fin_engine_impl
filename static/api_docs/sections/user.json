@@ -1,0 +1,79 @@
+{
+  "id": "user",
+  "name": "User Management",
+  "description": "User profile and account management endpoints.",
+  "endpoints": [
+    {
+      "id": "user-profile-get",
+      "method": "GET",
+      "path": "/user/profile",
+      "summary": "Get user profile",
+      "auth": true,
+      "tags": ["profile"],
+      "request": {},
+      "responses": {
+        "200": {
+          "example": {
+            "success": true,
+            "data": {
+              "user_key": "usr_abc123",
+              "email": "user@example.com",
+              "name": "John Doe",
+              "phone": "+1234567890",
+              "role": "admin",
+              "created_at": "2026-01-01T00:00:00Z"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "user-profile-update",
+      "method": "PUT",
+      "path": "/user/profile",
+      "summary": "Update user profile",
+      "auth": true,
+      "tags": ["profile"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "name": {"type": "string", "required": false},
+          "phone": {"type": "string", "required": false},
+          "avatar_url": {"type": "string", "required": false}
+        },
+        "example": {
+          "name": "John Doe",
+          "phone": "+1234567890",
+          "avatar_url": "https://..."
+        }
+      },
+      "responses": {
+        "200": {"description": "Profile updated"}
+      }
+    },
+    {
+      "id": "user-password",
+      "method": "PUT",
+      "path": "/user/password",
+      "summary": "Change password",
+      "auth": true,
+      "tags": ["password", "security"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "current_password": {"type": "string", "required": true},
+          "new_password": {"type": "string", "required": true, "description": "Min 8 characters"}
+        },
+        "example": {
+          "current_password": "oldpassword",
+          "new_password": "newpassword"
+        }
+      },
+      "responses": {
+        "200": {"description": "Password changed"},
+        "401": {"description": "Current password incorrect"}
+      }
+    }
+  ]
+}
+

@@ -1,0 +1,453 @@
+{
+  "id": "ai-openai",
+  "name": "AI Services (OpenAI)",
+  "description": "AI-powered query, chat, and image analysis endpoints using OpenAI.",
+  "endpoints": [
+    {
+      "id": "ai-health",
+      "method": "GET",
+      "path": "/ai/openai/health",
+      "summary": "Check OpenAI service status",
+      "description": "Check if OpenAI service is configured and available.",
+      "auth": false,
+      "tags": ["health", "status"],
+      "request": {},
+      "responses": {
+        "200": {
+          "description": "Status retrieved",
+          "example": {
+            "success": true,
+            "data": {
+              "status": "ok",
+              "configured": true,
+              "model": "gpt-4o-mini"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "ai-models",
+      "method": "GET",
+      "path": "/ai/openai/models",
+      "summary": "List available OpenAI models",
+      "description": "Get list of available GPT models.",
+      "auth": true,
+      "tags": ["models"],
+      "request": {},
+      "responses": {
+        "200": {
+          "description": "Models list",
+          "example": {
+            "success": true,
+            "data": {
+              "models": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "ai-query",
+      "method": "POST",
+      "path": "/ai/openai/query",
+      "summary": "Query AI (text + optional image)",
+      "description": "Send a text query to OpenAI. Optionally include an image for vision analysis. Supports both JSON and multipart form data.",
+      "auth": true,
+      "tags": ["query", "vision", "image"],
+      "request": {
+        "contentType": ["application/json", "multipart/form-data"],
+        "body": {
+          "prompt": {"type": "string", "required": true, "description": "Your question or instruction", "example": "What is the best feeding schedule?"},
+          "model": {"type": "string", "required": false, "description": "Model name", "default": "gpt-4o-mini"},
+          "max_tokens": {"type": "integer", "required": false, "description": "Maximum response tokens", "default": 1000},
+          "temperature": {"type": "number", "required": false, "description": "Creativity (0-2)", "default": 0.7},
+          "system_prompt": {"type": "string", "required": false, "description": "System context for the AI"},
+          "image_url": {"type": "string", "required": false, "description": "URL of image for vision analysis"},
+          "image_base64": {"type": "string", "required": false, "description": "Base64 encoded image data"},
+          "detail": {"type": "string", "required": false, "description": "Image detail level", "enum": ["low", "high", "auto"], "default": "auto"}
+        },
+        "formFields": [
+          {"name": "prompt", "type": "text", "required": true, "description": "Your question"},
+          {"name": "image", "type": "file", "required": false, "description": "Image file (jpg, png, gif, webp)"},
+          {"name": "model", "type": "text", "required": false, "description": "Model name"},
+          {"name": "system_prompt", "type": "text", "required": false, "description": "System context"},
+          {"name": "max_tokens", "type": "number", "required": false, "description": "Max tokens"},
+          {"name": "temperature", "type": "number", "required": false, "description": "Temperature"},
+          {"name": "detail", "type": "text", "required": false, "description": "Image detail: low, high, auto"}
+        ],
+        "examples": {
+          "json_text_only": {
+            "prompt": "What is the best feeding schedule for tilapia?",
+            "system_prompt": "You are a fish farming expert.",
+            "max_tokens": 1000
+          },
+          "json_with_image_url": {
+            "prompt": "What type of fish is this?",
+            "image_url": "https://example.com/fish.jpg",
+            "detail": "high"
+          },
+          "json_with_base64": {
+            "prompt": "Analyze this pond image",
+            "image_base64": "base64_encoded_data...",
+            "detail": "auto"
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Query successful",
+          "example": {
+            "success": true,
+            "data": {
+              "response": "For tilapia, I recommend feeding 2-3 times daily...",
+              "model": "gpt-4o-mini",
+              "usage": {
+                "prompt_tokens": 150,
+                "completion_tokens": 200,
+                "total_tokens": 350
+              },
+              "finish_reason": "stop"
+            }
+          }
+        },
+        "400": {"description": "Prompt is required"},
+        "503": {"description": "OpenAI is not configured"}
+      },
+      "curlExamples": [
+        {
+          "title": "Text-only query",
+          "command": "curl -X POST http://localhost:5000/ai/openai/query -H \"Authorization: Bearer TOKEN\" -H \"Content-Type: application/json\" -d '{\"prompt\":\"What is tilapia?\"}'"
+        },
+        {
+          "title": "Query with image URL",
+          "command": "curl -X POST http://localhost:5000/ai/openai/query -H \"Authorization: Bearer TOKEN\" -H \"Content-Type: application/json\" -d '{\"prompt\":\"What fish is this?\",\"image_url\":\"https://example.com/fish.jpg\"}'"
+        },
+        {
+          "title": "Query with file upload",
+          "command": "curl -X POST http://localhost:5000/ai/openai/query -H \"Authorization: Bearer TOKEN\" -F \"prompt=What type of fish is this?\" -F \"image=@fish.jpg\""
+        }
+      ]
+    },
+    {
+      "id": "ai-chat",
+      "method": "POST",
+      "path": "/ai/openai/chat",
+      "summary": "Multi-turn chat conversation",
+      "description": "Send a multi-turn conversation with message history to OpenAI.",
+      "auth": true,
+      "tags": ["chat", "conversation"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "messages": {"type": "array", "required": true, "description": "Array of message objects with role and content"},
+          "model": {"type": "string", "required": false, "default": "gpt-4o-mini"},
+          "max_tokens": {"type": "integer", "required": false, "default": 1000},
+          "temperature": {"type": "number", "required": false, "default": 0.7}
+        },
+        "example": {
+          "messages": [
+            {"role": "system", "content": "You are a fish farming expert."},
+            {"role": "user", "content": "What causes ammonia spikes?"},
+            {"role": "assistant", "content": "Ammonia spikes are typically caused by..."},
+            {"role": "user", "content": "How do I fix it?"}
+          ],
+          "model": "gpt-4o-mini",
+          "max_tokens": 1000
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Chat response",
+          "example": {
+            "success": true,
+            "data": {
+              "message": "To reduce ammonia levels, you should...",
+              "role": "assistant",
+              "model": "gpt-4o-mini",
+              "usage": {"prompt_tokens": 250, "completion_tokens": 150, "total_tokens": 400}
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "ai-analyze",
+      "method": "POST",
+      "path": "/ai/openai/analyze",
+      "summary": "Analyze data using AI",
+      "description": "Send structured data to be analyzed by AI.",
+      "auth": true,
+      "tags": ["analyze", "data"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "data": {"type": "object|array", "required": true, "description": "Data to analyze"},
+          "question": {"type": "string", "required": true, "description": "Question about the data"},
+          "context": {"type": "string", "required": false, "description": "Additional context"}
+        },
+        "example": {
+          "data": {"ponds": [], "expenses": [], "growth_data": []},
+          "question": "What trends do you see in the growth data?",
+          "context": "This is data from a tilapia farm in Southeast Asia."
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Analysis result",
+          "example": {
+            "success": true,
+            "data": {
+              "analysis": "Based on the data provided...",
+              "model": "gpt-4o-mini",
+              "usage": {}
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "ai-summarize",
+      "method": "POST",
+      "path": "/ai/openai/summarize",
+      "summary": "Summarize text",
+      "description": "Summarize long text content.",
+      "auth": true,
+      "tags": ["summarize"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "text": {"type": "string", "required": true, "description": "Text to summarize"},
+          "max_length": {"type": "string", "required": false, "enum": ["short", "medium", "long"], "default": "medium"}
+        },
+        "example": {
+          "text": "Long text to summarize...",
+          "max_length": "medium"
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Summary",
+          "example": {
+            "success": true,
+            "data": {
+              "summary": "The text discusses...",
+              "model": "gpt-4o-mini",
+              "usage": {}
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "ai-analyze-image",
+      "method": "POST",
+      "path": "/ai/openai/analyze-image",
+      "summary": "Analyze single image",
+      "description": "Dedicated endpoint for analyzing a single image with OpenAI Vision.",
+      "auth": true,
+      "tags": ["image", "vision"],
+      "request": {
+        "contentType": ["application/json", "multipart/form-data"],
+        "body": {
+          "image_url": {"type": "string", "required": false, "description": "URL of image"},
+          "image_base64": {"type": "string", "required": false, "description": "Base64 image data"},
+          "prompt": {"type": "string", "required": false, "default": "What's in this image?"},
+          "model": {"type": "string", "required": false, "default": "gpt-4o-mini"},
+          "max_tokens": {"type": "integer", "required": false, "default": 1000},
+          "detail": {"type": "string", "required": false, "enum": ["low", "high", "auto"], "default": "auto"}
+        },
+        "formFields": [
+          {"name": "image", "type": "file", "required": true, "description": "Image file"},
+          {"name": "prompt", "type": "text", "required": false, "description": "Question about image"},
+          {"name": "model", "type": "text", "required": false},
+          {"name": "detail", "type": "text", "required": false}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Image analysis",
+          "example": {
+            "success": true,
+            "data": {
+              "analysis": "The image shows...",
+              "model": "gpt-4o-mini",
+              "usage": {},
+              "finish_reason": "stop"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "ai-analyze-images",
+      "method": "POST",
+      "path": "/ai/openai/analyze-images",
+      "summary": "Analyze multiple images",
+      "description": "Analyze multiple images together (max 10).",
+      "auth": true,
+      "tags": ["image", "vision", "compare"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "images": {"type": "array", "required": true, "description": "Array of image objects with url or base64"},
+          "prompt": {"type": "string", "required": false, "default": "Analyze these images"},
+          "model": {"type": "string", "required": false, "default": "gpt-4o-mini"},
+          "max_tokens": {"type": "integer", "required": false, "default": 2000},
+          "detail": {"type": "string", "required": false, "enum": ["low", "high", "auto"], "default": "auto"}
+        },
+        "example": {
+          "images": [
+            {"url": "https://example.com/image1.jpg"},
+            {"url": "https://example.com/image2.jpg"},
+            {"base64": "base64_data...", "mime_type": "image/png"}
+          ],
+          "prompt": "Compare these images and describe differences",
+          "max_tokens": 2000
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Analysis result",
+          "example": {
+            "success": true,
+            "data": {
+              "analysis": "Comparing the images...",
+              "model": "gpt-4o-mini",
+              "usage": {}
+            }
+          }
+        },
+        "400": {"description": "Maximum 10 images allowed"}
+      }
+    },
+    {
+      "id": "ai-analyze-fish",
+      "method": "POST",
+      "path": "/ai/openai/analyze-fish",
+      "summary": "Specialized fish image analysis",
+      "description": "Analyze fish images for health, species identification, or size estimation using expert prompts.",
+      "auth": true,
+      "tags": ["fish", "image", "health", "species"],
+      "request": {
+        "contentType": ["application/json", "multipart/form-data"],
+        "body": {
+          "image_url": {"type": "string", "required": false, "description": "URL of fish image"},
+          "image_base64": {"type": "string", "required": false, "description": "Base64 image data"},
+          "analysis_type": {"type": "string", "required": false, "enum": ["general", "health", "species", "size"], "default": "general"}
+        },
+        "formFields": [
+          {"name": "image", "type": "file", "required": true, "description": "Fish image file"},
+          {"name": "analysis_type", "type": "text", "required": false, "description": "Type of analysis"}
+        ],
+        "analysisTypes": [
+          {"type": "general", "description": "Overall assessment: fish type, count, water clarity, health concerns"},
+          {"type": "health", "description": "Health indicators: fins, scales, lesions, parasites, health score (1-10)"},
+          {"type": "species", "description": "Species identification with confidence level and key features"},
+          {"type": "size", "description": "Size/weight estimation, growth stage, body condition factor"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Fish analysis result",
+          "example": {
+            "success": true,
+            "data": {
+              "analysis_type": "health",
+              "analysis": "Based on the image analysis:\n\n1. Body condition: Good...\n2. Fin condition: Minor fraying...\n...\n7. Overall health score: 7/10",
+              "model": "gpt-4o-mini",
+              "usage": {"prompt_tokens": 1200, "completion_tokens": 450, "total_tokens": 1650}
+            }
+          }
+        }
+      },
+      "curlExamples": [
+        {
+          "title": "Analyze fish health",
+          "command": "curl -X POST http://localhost:5000/ai/openai/analyze-fish -H \"Authorization: Bearer TOKEN\" -F \"image=@fish.jpg\" -F \"analysis_type=health\""
+        }
+      ]
+    },
+    {
+      "id": "ai-usage",
+      "method": "GET",
+      "path": "/ai/openai/usage",
+      "summary": "Get AI usage statistics",
+      "description": "Get token usage statistics for the account.",
+      "auth": true,
+      "tags": ["usage", "stats"],
+      "request": {
+        "queryParams": [
+          {"name": "days", "type": "integer", "required": false, "default": 30, "description": "Number of days to look back"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Usage statistics",
+          "example": {
+            "success": true,
+            "data": {
+              "summary": {
+                "total_requests": 150,
+                "total_prompt_tokens": 45000,
+                "total_completion_tokens": 12000,
+                "total_tokens": 57000,
+                "models_used": ["gpt-4o-mini", "gpt-4o"]
+              },
+              "by_model": [
+                {"model": "gpt-4o-mini", "request_count": 120, "total_tokens": 45000}
+              ],
+              "daily_usage": [
+                {"date": "2026-01-10", "request_count": 25, "total_tokens": 8500}
+              ],
+              "image_usage": {
+                "total_image_requests": 25,
+                "total_tokens": 45000,
+                "requests_with_url": 10,
+                "requests_with_base64": 15
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "ai-usage-history",
+      "method": "GET",
+      "path": "/ai/openai/usage/history",
+      "summary": "Get detailed usage history",
+      "description": "Get detailed individual request history.",
+      "auth": true,
+      "tags": ["usage", "history"],
+      "request": {
+        "queryParams": [
+          {"name": "limit", "type": "integer", "required": false, "default": 50, "description": "Max records"},
+          {"name": "skip", "type": "integer", "required": false, "default": 0, "description": "Records to skip"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Usage history",
+          "example": {
+            "success": true,
+            "data": {
+              "records": [
+                {
+                  "request_id": "uuid",
+                  "model": "gpt-4o-mini",
+                  "endpoint": "/ai/openai/query",
+                  "tokens": {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150},
+                  "image_attached": true,
+                  "image_url": "https://example.com/img.jpg",
+                  "created_at": "2026-01-11T10:00:00Z"
+                }
+              ],
+              "count": 50
+            }
+          }
+        }
+      }
+    }
+  ]
+}
+

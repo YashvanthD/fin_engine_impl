@@ -1,0 +1,128 @@
+{
+  "id": "tasks",
+  "name": "Tasks",
+  "description": "Task management and scheduling endpoints.",
+  "endpoints": [
+    {
+      "id": "tasks-list",
+      "method": "GET",
+      "path": "/tasks",
+      "summary": "List tasks",
+      "auth": true,
+      "tags": ["tasks", "list"],
+      "request": {
+        "queryParams": [
+          {"name": "status", "type": "string", "required": false, "enum": ["pending", "in_progress", "completed", "cancelled"]},
+          {"name": "priority", "type": "string", "required": false, "enum": ["low", "medium", "high"]},
+          {"name": "assigned_to", "type": "string", "required": false},
+          {"name": "limit", "type": "integer", "required": false, "default": 50}
+        ]
+      },
+      "responses": {
+        "200": {
+          "example": {
+            "success": true,
+            "data": {
+              "tasks": [
+                {
+                  "task_id": "task_001",
+                  "title": "Check water quality",
+                  "description": "Daily water quality check for all ponds",
+                  "status": "pending",
+                  "priority": "high",
+                  "due_date": "2026-01-11"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "tasks-create",
+      "method": "POST",
+      "path": "/tasks",
+      "summary": "Create a task",
+      "auth": true,
+      "tags": ["tasks", "create"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "title": {"type": "string", "required": true},
+          "description": {"type": "string", "required": false},
+          "priority": {"type": "string", "required": false, "enum": ["low", "medium", "high"], "default": "medium"},
+          "due_date": {"type": "string", "required": false, "format": "date"},
+          "assigned_to": {"type": "string", "required": false, "description": "User key of assignee"},
+          "pond_id": {"type": "string", "required": false}
+        },
+        "example": {
+          "title": "Check water quality",
+          "description": "Daily water quality check for Pond A",
+          "priority": "high",
+          "due_date": "2026-01-11",
+          "pond_id": "pond_001"
+        }
+      },
+      "responses": {
+        "201": {"description": "Task created"}
+      }
+    },
+    {
+      "id": "tasks-get",
+      "method": "GET",
+      "path": "/tasks/{task_id}",
+      "summary": "Get task details",
+      "auth": true,
+      "tags": ["tasks"],
+      "request": {
+        "pathParams": [
+          {"name": "task_id", "type": "string", "required": true}
+        ]
+      },
+      "responses": {
+        "200": {"description": "Task details"},
+        "404": {"description": "Task not found"}
+      }
+    },
+    {
+      "id": "tasks-update",
+      "method": "PUT",
+      "path": "/tasks/{task_id}",
+      "summary": "Update task",
+      "auth": true,
+      "tags": ["tasks"],
+      "request": {
+        "pathParams": [
+          {"name": "task_id", "type": "string", "required": true}
+        ],
+        "contentType": "application/json",
+        "body": {
+          "title": {"type": "string", "required": false},
+          "description": {"type": "string", "required": false},
+          "status": {"type": "string", "required": false, "enum": ["pending", "in_progress", "completed", "cancelled"]},
+          "priority": {"type": "string", "required": false}
+        }
+      },
+      "responses": {
+        "200": {"description": "Task updated"}
+      }
+    },
+    {
+      "id": "tasks-delete",
+      "method": "DELETE",
+      "path": "/tasks/{task_id}",
+      "summary": "Delete task",
+      "auth": true,
+      "tags": ["tasks"],
+      "request": {
+        "pathParams": [
+          {"name": "task_id", "type": "string", "required": true}
+        ]
+      },
+      "responses": {
+        "200": {"description": "Task deleted"}
+      }
+    }
+  ]
+}
+

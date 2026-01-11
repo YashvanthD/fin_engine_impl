@@ -1,0 +1,197 @@
+{
+  "id": "expenses",
+  "name": "Expenses & Transactions",
+  "description": "Expense tracking and financial transaction endpoints.",
+  "endpoints": [
+    {
+      "id": "expenses-list",
+      "method": "GET",
+      "path": "/expenses",
+      "summary": "List expenses",
+      "auth": true,
+      "tags": ["expenses", "list"],
+      "request": {
+        "queryParams": [
+          {"name": "category", "type": "string", "required": false, "description": "Filter by category"},
+          {"name": "start_date", "type": "string", "required": false, "format": "date"},
+          {"name": "end_date", "type": "string", "required": false, "format": "date"},
+          {"name": "limit", "type": "integer", "required": false, "default": 50}
+        ]
+      },
+      "responses": {
+        "200": {
+          "example": {
+            "success": true,
+            "data": {
+              "expenses": [
+                {
+                  "expense_id": "exp_001",
+                  "category": "feed",
+                  "amount": 5000,
+                  "description": "Fish feed purchase",
+                  "date": "2026-01-10",
+                  "vendor": "Feed Supplier Inc."
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "expenses-create",
+      "method": "POST",
+      "path": "/expenses",
+      "summary": "Create expense record",
+      "auth": true,
+      "tags": ["expenses", "create"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "category": {"type": "string", "required": true, "enum": ["feed", "labor", "equipment", "utilities", "medicine", "transport", "other"]},
+          "amount": {"type": "number", "required": true},
+          "description": {"type": "string", "required": false},
+          "date": {"type": "string", "required": false, "format": "date"},
+          "pond_id": {"type": "string", "required": false},
+          "vendor": {"type": "string", "required": false}
+        },
+        "example": {
+          "category": "feed",
+          "amount": 5000,
+          "description": "Fish feed purchase",
+          "date": "2026-01-10",
+          "pond_id": "pond_001",
+          "vendor": "Feed Supplier Inc."
+        }
+      },
+      "responses": {
+        "201": {"description": "Expense created"}
+      }
+    },
+    {
+      "id": "expenses-get",
+      "method": "GET",
+      "path": "/expenses/{expense_id}",
+      "summary": "Get expense details",
+      "auth": true,
+      "tags": ["expenses"],
+      "request": {
+        "pathParams": [
+          {"name": "expense_id", "type": "string", "required": true}
+        ]
+      },
+      "responses": {
+        "200": {"description": "Expense details"},
+        "404": {"description": "Expense not found"}
+      }
+    },
+    {
+      "id": "expenses-update",
+      "method": "PUT",
+      "path": "/expenses/{expense_id}",
+      "summary": "Update expense",
+      "auth": true,
+      "tags": ["expenses"],
+      "request": {
+        "pathParams": [
+          {"name": "expense_id", "type": "string", "required": true}
+        ],
+        "contentType": "application/json",
+        "body": {
+          "category": {"type": "string", "required": false},
+          "amount": {"type": "number", "required": false},
+          "description": {"type": "string", "required": false}
+        }
+      },
+      "responses": {
+        "200": {"description": "Expense updated"}
+      }
+    },
+    {
+      "id": "expenses-delete",
+      "method": "DELETE",
+      "path": "/expenses/{expense_id}",
+      "summary": "Delete expense",
+      "auth": true,
+      "tags": ["expenses"],
+      "request": {
+        "pathParams": [
+          {"name": "expense_id", "type": "string", "required": true}
+        ]
+      },
+      "responses": {
+        "200": {"description": "Expense deleted"}
+      }
+    },
+    {
+      "id": "expenses-summary",
+      "method": "GET",
+      "path": "/expenses/summary",
+      "summary": "Get expense summary by category",
+      "auth": true,
+      "tags": ["expenses", "summary"],
+      "request": {
+        "queryParams": [
+          {"name": "start_date", "type": "string", "required": false, "format": "date"},
+          {"name": "end_date", "type": "string", "required": false, "format": "date"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "example": {
+            "success": true,
+            "data": {
+              "summary": {
+                "feed": 50000,
+                "labor": 20000,
+                "equipment": 15000,
+                "total": 85000
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "transactions-list",
+      "method": "GET",
+      "path": "/transactions",
+      "summary": "List all transactions",
+      "auth": true,
+      "tags": ["transactions", "list"],
+      "request": {
+        "queryParams": [
+          {"name": "type", "type": "string", "required": false, "enum": ["income", "expense"]},
+          {"name": "start_date", "type": "string", "required": false, "format": "date"},
+          {"name": "end_date", "type": "string", "required": false, "format": "date"},
+          {"name": "limit", "type": "integer", "required": false, "default": 50}
+        ]
+      },
+      "responses": {
+        "200": {"description": "Transaction list"}
+      }
+    },
+    {
+      "id": "transactions-create",
+      "method": "POST",
+      "path": "/transactions",
+      "summary": "Create transaction",
+      "auth": true,
+      "tags": ["transactions", "create"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "type": {"type": "string", "required": true, "enum": ["income", "expense"]},
+          "amount": {"type": "number", "required": true},
+          "category": {"type": "string", "required": true},
+          "description": {"type": "string", "required": false},
+          "date": {"type": "string", "required": false, "format": "date"}
+        }
+      },
+      "responses": {
+        "201": {"description": "Transaction created"}
+      }
+    }
+  ]
+}
+
