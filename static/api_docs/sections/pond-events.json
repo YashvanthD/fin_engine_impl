@@ -1,41 +1,42 @@
 {
   "id": "pond-events",
   "name": "Pond Events",
-  "description": "Manage pond events like adding, removing, selling, sampling, and shifting fish between ponds.",
+  "description": "Manage pond events like adding, removing, selling, sampling, and shifting fish between ponds. Each event type updates pond metadata and fish analytics accordingly.",
   "endpoints": [
     {
-      "id": "pond-event-action",
+      "id": "pond-event-add",
       "method": "POST",
-      "path": "/pond_event/{pond_id}/event/{event_type}",
-      "summary": "Create a pond event",
-      "description": "Record a pond event such as adding fish, selling, sampling, or shifting fish. This updates pond metadata and fish analytics.",
+      "path": "/pond_event/{pond_id}/event/add",
+      "summary": "Add fish to pond (Stocking)",
+      "description": "Add new fish to a pond. Use this when stocking new fish or receiving fish from a purchase. This increases the pond's fish count and creates a positive entry in fish analytics.",
       "auth": true,
-      "tags": ["pond-event", "fish", "create"],
+      "tags": ["pond-event", "fish", "stocking", "create"],
+      "effect": "Increases pond fish count (+count)",
       "request": {
         "pathParams": [
-          {"name": "pond_id", "type": "string", "required": true, "description": "The pond ID"},
-          {"name": "event_type", "type": "string", "required": true, "description": "Event type", "enum": ["add", "sell", "sample", "remove", "shift_in", "shift_out"]}
+          {"name": "pond_id", "type": "string", "required": true, "description": "The pond ID to add fish to"}
         ],
         "contentType": "application/json",
         "body": {
-          "fish_id": {"type": "string", "required": true, "description": "Species code of the fish"},
-          "count": {"type": "integer", "required": true, "description": "Number of fish involved in the event"},
-          "fish_age_in_month": {"type": "integer", "required": false, "description": "Age of the fish in months"},
-          "details": {"type": "object", "required": false, "description": "Additional event details"},
-          "samples": {"type": "array", "required": false, "description": "Sample data for sample/add events"}
+          "fish_id": {"type": "string", "required": true, "description": "Species code of the fish (e.g., TILAPIA_NILE)"},
+          "count": {"type": "integer", "required": true, "description": "Number of fish to add"},
+          "fish_age_in_month": {"type": "integer", "required": false, "description": "Age of the fish in months (used for growth analytics tracking)"},
+          "details": {"type": "object", "required": false, "description": "Additional details like source, notes, purchase info"}
         },
         "example": {
           "fish_id": "TILAPIA_NILE",
           "count": 500,
           "fish_age_in_month": 3,
           "details": {
-            "notes": "Initial stocking of pond"
+            "notes": "Initial stocking of pond",
+            "source": "Supplier ABC",
+            "purchase_price": 25000
           }
         }
       },
       "responses": {
         "201": {
-          "description": "Event created successfully",
+          "description": "Fish added successfully",
           "example": {
             "success": true,
             "data": {
@@ -43,15 +44,243 @@
             }
           }
         },
-        "400": {
-          "description": "Invalid request payload",
+        "400": {"description": "Invalid request - fish_id and count are required"},
+        "401": {"description": "Unauthorized - Authentication required"},
+        "500": {"description": "Server error"}
+      }
+    },
+    {
+      "id": "pond-event-sell",
+      "method": "POST",
+      "path": "/pond_event/{pond_id}/event/sell",
+      "summary": "Sell fish from pond (Harvest)",
+      "description": "Record fish sold from the pond. Use this when harvesting fish for sale. This decreases the pond count and can be linked to transaction/expense records for revenue tracking.",
+      "auth": true,
+      "tags": ["pond-event", "fish", "harvest", "sales", "create"],
+      "effect": "Decreases pond fish count (-count)",
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true, "description": "The pond ID to sell fish from"}
+        ],
+        "contentType": "application/json",
+        "body": {
+          "fish_id": {"type": "string", "required": true, "description": "Species code of the fish being sold"},
+          "count": {"type": "integer", "required": true, "description": "Number of fish sold"},
+          "details": {"type": "object", "required": false, "description": "Sale details like buyer, price, weight"}
+        },
+        "example": {
+          "fish_id": "TILAPIA_NILE",
+          "count": 200,
+          "details": {
+            "notes": "Sold to local market",
+            "buyer": "ABC Traders",
+            "price_per_kg": 150,
+            "total_weight_kg": 100,
+            "total_amount": 15000
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Sale recorded successfully",
           "example": {
-            "success": false,
-            "error": {
-              "message": "fish_id and count are required"
+            "success": true,
+            "data": {
+              "event_id": "65f1a2b3c4d5e6f7a8b9c0d2"
             }
           }
         },
+        "400": {"description": "Invalid request - fish_id and count are required"},
+        "401": {"description": "Unauthorized - Authentication required"},
+        "500": {"description": "Server error"}
+      }
+    },
+    {
+      "id": "pond-event-sample",
+      "method": "POST",
+      "path": "/pond_event/{pond_id}/event/sample",
+      "summary": "Sample fish for growth measurement",
+      "description": "Record fish sampled for growth measurement or quality testing. Sampled fish are typically removed from the population for weighing/measuring. Use this for periodic growth monitoring.",
+      "auth": true,
+      "tags": ["pond-event", "fish", "sampling", "growth", "create"],
+      "effect": "Decreases pond fish count (-count)",
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true, "description": "The pond ID to sample from"}
+        ],
+        "contentType": "application/json",
+        "body": {
+          "fish_id": {"type": "string", "required": true, "description": "Species code of the fish being sampled"},
+          "count": {"type": "integer", "required": true, "description": "Number of fish sampled"},
+          "fish_age_in_month": {"type": "integer", "required": false, "description": "Current age of fish in months"},
+          "details": {"type": "object", "required": false, "description": "Sampling notes and observations"},
+          "samples": {"type": "array", "required": false, "description": "Array of individual sample measurements (weight, length per fish)"}
+        },
+        "example": {
+          "fish_id": "TILAPIA_NILE",
+          "count": 20,
+          "fish_age_in_month": 4,
+          "details": {
+            "notes": "Monthly growth sampling",
+            "weather": "Sunny",
+            "water_temp": 28
+          },
+          "samples": [
+            {"weight": 250, "length": 18},
+            {"weight": 275, "length": 19},
+            {"weight": 230, "length": 17},
+            {"weight": 260, "length": 18.5}
+          ]
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Sampling recorded successfully",
+          "example": {
+            "success": true,
+            "data": {
+              "event_id": "65f1a2b3c4d5e6f7a8b9c0d3"
+            }
+          }
+        },
+        "400": {"description": "Invalid request - fish_id and count are required"},
+        "401": {"description": "Unauthorized - Authentication required"},
+        "500": {"description": "Server error"}
+      }
+    },
+    {
+      "id": "pond-event-remove",
+      "method": "POST",
+      "path": "/pond_event/{pond_id}/event/remove",
+      "summary": "Remove fish from pond (Mortality/Loss)",
+      "description": "Remove fish from a pond due to mortality, disease culling, or other losses. Use this to record fish that are no longer in the pond but were not sold. Important for tracking mortality rates.",
+      "auth": true,
+      "tags": ["pond-event", "fish", "mortality", "loss", "create"],
+      "effect": "Decreases pond fish count (-count)",
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true, "description": "The pond ID to remove fish from"}
+        ],
+        "contentType": "application/json",
+        "body": {
+          "fish_id": {"type": "string", "required": true, "description": "Species code of the fish being removed"},
+          "count": {"type": "integer", "required": true, "description": "Number of fish removed/lost"},
+          "details": {"type": "object", "required": false, "description": "Details about the removal reason"}
+        },
+        "example": {
+          "fish_id": "TILAPIA_NILE",
+          "count": 15,
+          "details": {
+            "reason": "Disease outbreak",
+            "disease_type": "Bacterial infection",
+            "notes": "Found dead fish during morning check",
+            "action_taken": "Isolated remaining fish, treated water"
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Removal recorded successfully",
+          "example": {
+            "success": true,
+            "data": {
+              "event_id": "65f1a2b3c4d5e6f7a8b9c0d4"
+            }
+          }
+        },
+        "400": {"description": "Invalid request - fish_id and count are required"},
+        "401": {"description": "Unauthorized - Authentication required"},
+        "500": {"description": "Server error"}
+      }
+    },
+    {
+      "id": "pond-event-shift-out",
+      "method": "POST",
+      "path": "/pond_event/{pond_id}/event/shift_out",
+      "summary": "Transfer fish OUT to another pond",
+      "description": "Record fish transferred OUT of this pond to another pond within your farm. The destination pond should have a corresponding 'shift_in' event to maintain accurate counts across ponds.",
+      "auth": true,
+      "tags": ["pond-event", "fish", "transfer", "shift", "create"],
+      "effect": "Decreases pond fish count (-count)",
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true, "description": "The source pond ID (fish are leaving this pond)"}
+        ],
+        "contentType": "application/json",
+        "body": {
+          "fish_id": {"type": "string", "required": true, "description": "Species code of the fish being transferred"},
+          "count": {"type": "integer", "required": true, "description": "Number of fish to transfer out"},
+          "fish_age_in_month": {"type": "integer", "required": false, "description": "Age of fish being transferred"},
+          "details": {"type": "object", "required": false, "description": "Transfer details including destination pond"}
+        },
+        "example": {
+          "fish_id": "TILAPIA_NILE",
+          "count": 100,
+          "fish_age_in_month": 6,
+          "details": {
+            "destination_pond": "pond_002",
+            "notes": "Moving larger fish to grow-out pond",
+            "reason": "Size grading"
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Transfer out recorded successfully",
+          "example": {
+            "success": true,
+            "data": {
+              "event_id": "65f1a2b3c4d5e6f7a8b9c0d5"
+            }
+          }
+        },
+        "400": {"description": "Invalid request - fish_id and count are required"},
+        "401": {"description": "Unauthorized - Authentication required"},
+        "500": {"description": "Server error"}
+      }
+    },
+    {
+      "id": "pond-event-shift-in",
+      "method": "POST",
+      "path": "/pond_event/{pond_id}/event/shift_in",
+      "summary": "Transfer fish INTO this pond",
+      "description": "Record fish transferred INTO this pond from another pond within your farm. The source pond should have a corresponding 'shift_out' event to maintain accurate counts across ponds.",
+      "auth": true,
+      "tags": ["pond-event", "fish", "transfer", "shift", "create"],
+      "effect": "Increases pond fish count (+count)",
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true, "description": "The destination pond ID (fish are entering this pond)"}
+        ],
+        "contentType": "application/json",
+        "body": {
+          "fish_id": {"type": "string", "required": true, "description": "Species code of the fish being received"},
+          "count": {"type": "integer", "required": true, "description": "Number of fish received"},
+          "fish_age_in_month": {"type": "integer", "required": false, "description": "Age of fish being received"},
+          "details": {"type": "object", "required": false, "description": "Transfer details including source pond"}
+        },
+        "example": {
+          "fish_id": "TILAPIA_NILE",
+          "count": 100,
+          "fish_age_in_month": 6,
+          "details": {
+            "source_pond": "pond_001",
+            "notes": "Received from nursery pond",
+            "reason": "Size grading - larger fish for grow-out"
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Transfer in recorded successfully",
+          "example": {
+            "success": true,
+            "data": {
+              "event_id": "65f1a2b3c4d5e6f7a8b9c0d6"
+            }
+          }
+        },
+        "400": {"description": "Invalid request - fish_id and count are required"},
         "401": {"description": "Unauthorized - Authentication required"},
         "500": {"description": "Server error"}
       }
