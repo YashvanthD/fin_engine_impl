@@ -158,6 +158,128 @@
             </div>
         </div>
 
+        <!-- NEW: Expense Categories -->
+        <div class="card">
+            <div class="card-header" onclick="toggleCard('card-expenses-categories')">
+                <div class="endpoint"><span class="method method-get">GET</span> /expenses/categories</div>
+                <span class="card-toggle">▾ details</span>
+            </div>
+            <div id="card-expenses-categories" class="card-body">
+                <div class="small"><strong>NEW:</strong> Get the full expense category catalog. No authentication required.</div>
+                <table class="fields-table">
+                    <tr><th>Query</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                    <tr><td>flat</td><td>boolean</td><td>No</td><td>If true, returns flattened list instead of hierarchy</td></tr>
+                    <tr><td>level</td><td>int</td><td>No</td><td>Filter by level (0=top, 1=sub, 2=detail)</td></tr>
+                </table>
+                <div class="example small"><strong>Response:</strong> Hierarchical or flat list of expense categories</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header" onclick="toggleCard('card-expenses-categories-options')">
+                <div class="endpoint"><span class="method method-get">GET</span> /expenses/categories/options</div>
+                <span class="card-toggle">▾ details</span>
+            </div>
+            <div id="card-expenses-categories-options" class="card-body">
+                <div class="small"><strong>NEW:</strong> Get category options for dropdown/form selection.</div>
+                <pre><code>// Response
+{
+  "options": {
+    "Infrastructure": ["Land", "Buildings", "Culture System"],
+    "Operational": ["Utilities", "Maintenance", "Feeding"],
+    "Human Resources": ["Salaries", "Benefits", "Training"]
+  }
+}</code></pre>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header" onclick="toggleCard('card-expenses-categories-search')">
+                <div class="endpoint"><span class="method method-get">GET</span> /expenses/categories/search?q=</div>
+                <span class="card-toggle">▾ details</span>
+            </div>
+            <div id="card-expenses-categories-search" class="card-body">
+                <div class="small"><strong>NEW:</strong> Search categories by name (case-insensitive partial match).</div>
+                <table class="fields-table">
+                    <tr><th>Query</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                    <tr><td>q</td><td>string</td><td>Yes</td><td>Search query</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <!-- NEW: Expense Summary -->
+        <div class="card">
+            <div class="card-header" onclick="toggleCard('card-expenses-summary')">
+                <div class="endpoint"><span class="method method-get">GET</span> /expenses/summary</div>
+                <span class="card-toggle">▾ details</span>
+            </div>
+            <div id="card-expenses-summary" class="card-body">
+                <div class="small"><strong>NEW:</strong> Get expense analytics grouped by category, type, status, or month.</div>
+                <table class="fields-table">
+                    <tr><th>Query</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                    <tr><td>account_key</td><td>string</td><td>No</td><td>Defaults to authenticated account</td></tr>
+                    <tr><td>start_date</td><td>datetime</td><td>No</td><td>Start of date range</td></tr>
+                    <tr><td>end_date</td><td>datetime</td><td>No</td><td>End of date range</td></tr>
+                    <tr><td>group_by</td><td>string</td><td>No</td><td>category, subcategory, type, status, month</td></tr>
+                </table>
+                <pre><code>// Response
+{
+  "summary": [
+    {"category": "Operational", "total": 450000, "count": 45, "average": 10000},
+    {"category": "Infrastructure", "total": 200000, "count": 5, "average": 40000}
+  ],
+  "grandTotal": 650000,
+  "totalCount": 50,
+  "groupBy": "category"
+}</code></pre>
+            </div>
+        </div>
+
+        <!-- NEW: Expense Workflow -->
+        <div class="card">
+            <div class="card-header" onclick="toggleCard('card-expenses-approve')">
+                <div class="endpoint"><span class="method method-post">POST</span> /expenses/&lt;expense_id&gt;/approve</div>
+                <span class="card-toggle">▾ details</span>
+            </div>
+            <div id="card-expenses-approve" class="card-body">
+                <div class="small"><strong>NEW:</strong> Approve an expense. Requires admin role.</div>
+                <table class="fields-table">
+                    <tr><th>Body</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                    <tr><td>notes</td><td>string</td><td>No</td><td>Approval notes</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header" onclick="toggleCard('card-expenses-reject')">
+                <div class="endpoint"><span class="method method-post">POST</span> /expenses/&lt;expense_id&gt;/reject</div>
+                <span class="card-toggle">▾ details</span>
+            </div>
+            <div id="card-expenses-reject" class="card-body">
+                <div class="small"><strong>NEW:</strong> Reject an expense.</div>
+                <table class="fields-table">
+                    <tr><th>Body</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                    <tr><td>reason</td><td>string</td><td>Yes</td><td>Rejection reason</td></tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header" onclick="toggleCard('card-expenses-pay')">
+                <div class="endpoint"><span class="method method-post">POST</span> /expenses/&lt;expense_id&gt;/pay</div>
+                <span class="card-toggle">▾ details</span>
+            </div>
+            <div id="card-expenses-pay" class="card-body">
+                <div class="small">Mark an expense as paid. Updates bank balance and creates statement line.</div>
+                <table class="fields-table">
+                    <tr><th>Body</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                    <tr><td>payment.amount</td><td>float</td><td>No</td><td>Payment amount (defaults to expense amount)</td></tr>
+                    <tr><td>payment.method</td><td>string</td><td>No</td><td>e.g. cash, bank_transfer</td></tr>
+                    <tr><td>payment.reference</td><td>string</td><td>No</td><td>Payment reference number</td></tr>
+                </table>
+            </div>
+        </div>
+
     </div>
 
 </div>

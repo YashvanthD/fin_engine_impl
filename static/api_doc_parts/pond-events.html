@@ -11,22 +11,99 @@
                     <span class="card-toggle">▾ details</span>
                 </div>
                 <div id="card-pond-event-add" class="card-body">
-                    <div class="small">Supported <code>event_type</code>: add, sell, sample, remove, shift_in, shift_out. Updates pond metadata, fish analytics, and mapping.</div>
+                    <div class="small">Create a pond event. Automatically updates pond metadata, fish analytics, and mapping.</div>
+                    <h4>Event Types:</h4>
+                    <table class="fields-table">
+                        <tr><th>Type</th><th>Effect</th><th>Use Case</th></tr>
+                        <tr><td><code>add</code></td><td>+fish</td><td>New fish purchase/stocking</td></tr>
+                        <tr><td><code>sell</code></td><td>-fish, +income</td><td>Fish sale (creates expense record)</td></tr>
+                        <tr><td><code>sample</code></td><td>-fish</td><td>Growth sampling (removes sample fish)</td></tr>
+                        <tr><td><code>remove</code></td><td>-fish</td><td>Fish mortality/removal</td></tr>
+                        <tr><td><code>shift_out</code></td><td>-fish (source)</td><td>Transfer out to another pond</td></tr>
+                        <tr><td><code>shift_in</code></td><td>+fish (dest)</td><td>Transfer in from another pond</td></tr>
+                    </table>
+                    <h4>Path Parameters:</h4>
                     <table class="fields-table">
                         <tr><th>Path</th><th>Type</th><th>Req</th><th>Notes</th></tr>
                         <tr><td>pond_id</td><td>string</td><td>Yes</td><td>Pond identifier</td></tr>
-                        <tr><td>event_type</td><td>string</td><td>Yes</td><td>One of add, sell, sample, remove, shift_in, shift_out</td></tr>
+                        <tr><td>event_type</td><td>string</td><td>Yes</td><td>One of: add, sell, sample, remove, shift_in, shift_out</td></tr>
                     </table>
+                    <h4>Request Body:</h4>
                     <table class="fields-table">
                         <tr><th>Body field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
-                        <tr><td>fish_id</td><td>string</td><td>Yes</td><td>Fish species id</td></tr>
-                        <tr><td>count</td><td>int</td><td>Yes</td><td>&gt; 0</td></tr>
+                        <tr><td>fish_id</td><td>string</td><td>Yes</td><td>Fish species code (e.g., TILAPIA_NILE)</td></tr>
+                        <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish (&gt; 0)</td></tr>
                         <tr><td>fish_age_in_month</td><td>int</td><td>Yes*</td><td>Required for add/shift_in events</td></tr>
-                        <tr><td>details</td><td>object</td><td>No</td><td>Arbitrary extra info</td></tr>
-                        <tr><td>timestamp</td><td>datetime/string</td><td>No</td><td>If omitted, server uses current time</td></tr>
-                        <tr><td>samples</td><td>array</td><td>No</td><td>For sample/add events, weight samples etc.</td></tr>
+                        <tr><td>details</td><td>object</td><td>No</td><td>Event-specific data (see below)</td></tr>
+                        <tr><td>timestamp</td><td>datetime</td><td>No</td><td>Event time (default: now)</td></tr>
+                        <tr><td>samples</td><td>array</td><td>No</td><td>Sample data for sample/add events</td></tr>
                     </table>
-                    <div class="example"><strong>Response (201):</strong> <code>{"success": true, "data": {"event_id": "..."}}</code></div>
+                    <h4>Details Object by Event Type:</h4>
+                    <pre><code>// For sell events:
+{
+  "price_per_kg": 150,
+  "total_weight_kg": 500,
+  "total_amount": 75000,  // Optional if price_per_kg provided
+  "buyer": "Local Market"
+}
+
+// For remove events:
+{
+  "reason": "disease",
+  "disease_type": "bacterial_infection"
+}
+
+// For shift_out/shift_in events:
+{
+  "source_pond": "ACC001-001",    // shift_in only
+  "destination_pond": "ACC001-002" // shift_out only
+}</code></pre>
+                    <div class="example"><strong>Response (201):</strong> <code>{"success": true, "data": {"event_id": "...", "expense_id": "..." }}</code></div>
+                </div>
+            </div>
+
+            <!-- NEW: Atomic Transfer Endpoint -->
+            <div class="card">
+                <div class="card-header" onclick="toggleCard('card-pond-event-transfer')">
+                    <div class="endpoint"><span class="method method-post">POST</span> /pond_event/transfer</div>
+                    <span class="card-toggle">▾ details</span>
+                </div>
+                <div id="card-pond-event-transfer" class="card-body">
+                    <div class="small"><strong>NEW:</strong> Atomic fish transfer between ponds. Creates both shift_out and shift_in events in a single request with automatic rollback on failure.</div>
+                    <h4>Request Body:</h4>
+                    <table class="fields-table">
+                        <tr><th>Field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
+                        <tr><td>source_pond_id</td><td>string</td><td>Yes</td><td>Source pond ID</td></tr>
+                        <tr><td>destination_pond_id</td><td>string</td><td>Yes</td><td>Destination pond ID</td></tr>
+                        <tr><td>fish_id</td><td>string</td><td>Yes</td><td>Fish species code</td></tr>
+                        <tr><td>count</td><td>int</td><td>Yes</td><td>Number of fish to transfer</td></tr>
+                        <tr><td>fish_age_in_month</td><td>int</td><td>No</td><td>Fish age for analytics</td></tr>
+                        <tr><td>details</td><td>object</td><td>No</td><td>Additional transfer info</td></tr>
+                    </table>
+                    <h4>Example Request:</h4>
+                    <pre><code>{
+  "source_pond_id": "ACC001-001",
+  "destination_pond_id": "ACC001-002",
+  "fish_id": "TILAPIA_NILE",
+  "count": 100,
+  "fish_age_in_month": 3,
+  "details": {
+    "reason": "Size grading",
+    "transferred_by": "Farm Manager"
+  }
+}</code></pre>
+                    <h4>Response (201):</h4>
+                    <pre><code>{
+  "success": true,
+  "data": {
+    "transfer_id": "TXF-20260112-ABC123",
+    "shift_out_event_id": "...",
+    "shift_in_event_id": "...",
+    "source_pond": "ACC001-001",
+    "destination_pond": "ACC001-002",
+    "count": 100
+  }
+}</code></pre>
                 </div>
             </div>
 
@@ -36,7 +113,7 @@
                     <span class="card-toggle">▾ details</span>
                 </div>
                 <div id="card-pond-event-list" class="card-body">
-                    <div class="small">Get all events for a pond (normalized DTO where possible).</div>
+                    <div class="small">Get all events for a pond. Filtered by account_key for data isolation.</div>
                     <div class="example small"><strong>Response:</strong> <code>{"success": true, "data": {"events": [ PondEventDTO..., ... ]}}</code></div>
                 </div>
             </div>
@@ -47,7 +124,8 @@
                     <span class="card-toggle">▾ details</span>
                 </div>
                 <div id="card-pond-event-delete" class="card-body">
-                    <div class="small">Delete an existing pond event by ObjectId.</div>
+                    <div class="small">Delete a pond event. <strong>Automatically reverses effects</strong> on pond metadata and fish analytics.</div>
+                    <div class="example"><strong>Response:</strong> <code>{"success": true, "data": {"deleted": true, "reversed": true}}</code></div>
                 </div>
             </div>
 
@@ -57,16 +135,17 @@
                     <span class="card-toggle">▾ details</span>
                 </div>
                 <div id="card-pond-event-put" class="card-body">
-                    <div class="small">Update a pond event and reconcile pond metadata + analytics (reverts old effects and applies new ones).</div>
+                    <div class="small">Update a pond event. Reverts old effects and applies new ones atomically. Validates event type changes.</div>
                     <table class="fields-table">
                         <tr><th>Body field</th><th>Type</th><th>Req</th><th>Notes</th></tr>
                         <tr><td>fish_id</td><td>string</td><td>No</td><td>New fish species id</td></tr>
                         <tr><td>count</td><td>int</td><td>No</td><td>New count (&gt; 0)</td></tr>
-                        <tr><td>event_type</td><td>string</td><td>No</td><td>New event type</td></tr>
+                        <tr><td>event_type</td><td>string</td><td>No</td><td>New event type (with validation)</td></tr>
                         <tr><td>details</td><td>object</td><td>No</td><td>Updated details</td></tr>
                         <tr><td>fish_age_in_month</td><td>int</td><td>No</td><td>Updated age</td></tr>
-                        <tr><td>samples</td><td>array</td><td>No</td><td>For sample/add events, new samples</td></tr>
+                        <tr><td>samples</td><td>array</td><td>No</td><td>Updated samples data</td></tr>
                     </table>
+                    <div class="example"><strong>Response:</strong> <code>{"success": true, "data": {"event_id": "..."}}</code></div>
                 </div>
             </div>
         </div>

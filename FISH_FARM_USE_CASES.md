@@ -4,13 +4,25 @@
 
 This document covers all use cases for managing a modern fish farm - from initial setup to harvest and sales.
 
+> **📊 For comprehensive project analysis, issues, and recommendations, see [PROJECT_ANALYSIS.md](./PROJECT_ANALYSIS.md)**
+
+---
+
+## Document Index
+
+| Document | Description |
+|----------|-------------|
+| [FISH_FARM_USE_CASES.md](./FISH_FARM_USE_CASES.md) | This document - Use cases & API guide |
+| [PROJECT_ANALYSIS.md](./PROJECT_ANALYSIS.md) | **NEW** - Complete project analysis, issues & fixes |
+| [API Documentation](/docs) | Interactive API documentation |
+| [README.md](./README.md) | Project overview and setup |
+
 ---
 
 ## Table of Contents
 
-1. [Overview](#overview)
-2. [Data Flow & Repository Mapping](#data-flow--repository-mapping)
-3. [Phase 1: Farm Setup & Registration](#phase-1-farm-setup--registration)
+1. [Data Flow & Repository Mapping](#data-flow--repository-mapping)
+2. [Phase 1: Farm Setup & Registration](#phase-1-farm-setup--registration)
 3. [Phase 2: Infrastructure Setup (Ponds)](#phase-2-infrastructure-setup-ponds)
 4. [Phase 3: Fish Species Setup](#phase-3-fish-species-setup)
 5. [Phase 4: Fish Purchase & Stocking](#phase-4-fish-purchase--stocking)
@@ -22,8 +34,9 @@ This document covers all use cases for managing a modern fish farm - from initia
 11. [Phase 10: Financial Management](#phase-10-financial-management)
 12. [Phase 11: Reporting & Analytics](#phase-11-reporting--analytics)
 13. [Phase 12: End of Cycle & Pond Reset](#phase-12-end-of-cycle--pond-reset)
-14. [Quick Reference](#quick-reference)
-15. [Pond Event Types Summary](#pond-event-types-summary)
+14. [Expense Management System](#-expense-management-system)
+15. [Quick Reference](#quick-reference)
+16. [Pond Event Types Summary](#pond-event-types-summary)
 
 ---
 
@@ -729,342 +742,9 @@ Legend: ✅ = Created/Updated, ✅✅ = Multiple records affected
 
 ---
 
-## 🐛 Bugs, Loopholes & Data Consistency Issues
+## 🔗 Data Model & Linking Strategy
 
-This section identifies data consistency problems, missing mappings, bugs, and potential loopholes found in the codebase.
-
-### CRITICAL ISSUES 🔴
-
-#### 1. DELETE Pond Event - No Reversal of Effects
-**File:** `fin_server/routes/pond_event.py` (line 193-203)
-
-**Problem:** When a pond event is deleted, the pond metadata and fish analytics are NOT reversed.
-
-```python
-@pond_event_bp.route('/<pond_id>/events/<event_id>', methods=['DELETE'])
-def delete_pond_event(pond_id, event_id):
-    # ...
-    result = pond_event_repository.delete(ObjectId(event_id))  # ❌ Just deletes, no reversal!
-    return respond_success({'deleted': True})
-```
-
-**Impact:**
-- If you delete an "add" event of 500 fish, the pond still shows +500 fish
-- Fish analytics batch remains (orphaned data)
-- Pond metadata.total_fish is incorrect
-
-**Fix Required:**
-```python
-# Before deleting, reverse the event effects:
-old_event = pond_event_repository.find_one({'_id': ObjectId(event_id)})
-if old_event:
-    inverse_type = 'remove' if old_event['event_type'] in ['add', 'shift_in'] else 'add'
-    update_pond_metadata(pond_id, old_event['fish_id'], old_event['count'], inverse_type)
-    update_fish_analytics_and_mapping(account_key, old_event['fish_id'], old_event['count'], inverse_type, ...)
-```
-
----
-
-#### 2. Sell Event - No Expense/Transaction Created
-**File:** `fin_server/routes/pond_event.py`
-
-**Problem:** When fish are sold via pond event, NO expense/transaction record is created automatically.
-
-**Current Flow:**
-```
-POST /pond_event/{pond_id}/event/sell
-  ├── Creates pond_event ✅
-  ├── Updates pond metadata (-count) ✅
-  ├── Updates fish_analytics (-count) ✅
-  └── Creates expense/transaction ❌ MISSING!
-```
-
-**Impact:**
-- Revenue not tracked automatically
-- Bank balance not updated
-- Financial reports incomplete
-
-**Fix Required:** Add expense creation for sell events:
-```python
-if event_type == 'sell':
-    total_amount = data.get('details', {}).get('total_amount')
-    if total_amount:
-        create_expense_with_repo({
-            'category': 'income',
-            'type': 'fish_sale',
-            'action': 'sell',
-            'amount': total_amount,
-            'pond_id': pond_id,
-            'metadata': {'species': fish_id, 'count': count}
-        }, expenses_repo)
-```
-
----
-
-#### 3. Fish Transfer - No Atomic Transaction
-**File:** `fin_server/routes/pond_event.py`
-
-**Problem:** Fish transfers require TWO separate API calls (shift_out + shift_in). If one fails, data becomes inconsistent.
-
-**Current Flow:**
-```
-1. POST /pond_event/pond_A/event/shift_out  → Pond A: -100 fish
-2. POST /pond_event/pond_B/event/shift_in   → Pond B: +100 fish (might fail!)
-```
-
-**Impact:**
-- If shift_in fails, 100 fish "disappear" from the system
-- No rollback mechanism
-- No correlation between the two events
-
-**Fix Required:** Either:
-1. Create atomic transfer endpoint: `POST /pond_event/transfer`
-2. Or link shift_out/shift_in events with a `transfer_id`
-
----
-
-#### 4. Sampling DELETE - Incomplete Cleanup
-**File:** `fin_server/routes/sampling.py` + `fin_server/services/expense_service.py`
-
-**Problem:** `handle_sampling_deletion()` is defined but NOT called from the DELETE route!
-
-**Current DELETE route (missing from code):** The sampling DELETE endpoint needs to call `handle_sampling_deletion()`.
-
-**Impact:**
-- Expenses remain (not cancelled)
-- Pond counts not reversed
-- Fish analytics orphaned
-
----
-
-### HIGH PRIORITY ISSUES 🟠
-
-#### 5. Stock Repository - Duplicate Insert Attempts
-**File:** `fin_server/repository/fish/stock_repository.py` (line 139-146)
-
-**Problem:** When creating a fish doc, both `create()` AND `insert_one()` are called:
-
-```python
-try:
-    self.fish.create(fish_doc)
-    self.fish.insert_one(fish_doc)  # ❌ This will fail with DuplicateKeyError!
-```
-
-**Fix:** Remove the duplicate call.
-
----
-
-#### 6. Expense Creation - Commented Out!
-**File:** `fin_server/repository/fish/stock_repository.py` (line 200-201)
-
-**Problem:** Expense creation is commented out in `add_stock_to_pond`:
-
-```python
-try:
-    # r = self.expenses.insert_one(exp)  # ❌ COMMENTED OUT!
-    logger.debug('Inserted expense for pond=%s amount=%s', pond_id, exp.get('amount'))
-```
-
-**Impact:** Stock operations via StockRepository don't create expenses.
-
----
-
-#### 7. No Account Scoping on GET Pond Events
-**File:** `fin_server/routes/pond_event.py` (line 169-188)
-
-**Problem:** `get_pond_events()` doesn't filter by `account_key`:
-
-```python
-def get_pond_events(pond_id):
-    events = pond_event_repository.get_events_by_pond(pond_id)  # ❌ No account filter!
-```
-
-**Impact:** Potential data leak - users might see events from other accounts if pond_ids collide.
-
-**Fix:** Add account filtering:
-```python
-events = pond_event_repository.find({'pond_id': pond_id, 'account_key': account_key})
-```
-
----
-
-#### 8. Fish current_stock - Multiple Update Paths
-**Files:** Multiple locations update `fish.current_stock`
-
-**Problem:** Fish `current_stock` is updated in multiple places with different logic:
-- `sampling_service.py` - increments via update
-- `stock_repository.py` - increments via update
-- `pond_event.py` - NOT updated!
-- `expense_service.handle_sampling_deletion()` - decrements
-
-**Impact:** Fish current_stock can become out of sync with actual pond totals.
-
-**Fix:** Centralize fish stock updates in one service.
-
----
-
-### MEDIUM PRIORITY ISSUES 🟡
-
-#### 9. Pond Event Update - Creates Duplicate Activity
-**File:** `fin_server/routes/pond_event.py` (line 272-283)
-
-**Problem:** When updating an event, a NEW activity record is always created (not updated):
-
-```python
-if new_type in ['sample', 'add']:
-    fish_activity_repo.create(activity_doc)  # ❌ Creates new, doesn't update existing
-```
-
-**Impact:** Multiple activity records for the same event.
-
----
-
-#### 10. No Validation on Event Type Change
-**File:** `fin_server/routes/pond_event.py`
-
-**Problem:** Event type can be changed from "add" to "sell" without proper validation.
-
-**Impact:** 
-- Changing "add" → "sell" should perhaps create an expense
-- Logic mismatch between what happened and what's recorded
-
----
-
-#### 11. Bank Balance - No Validation for Negative
-**File:** `fin_server/services/expense_service.py`
-
-**Problem:** Bank balance can go negative without warning:
-
-```python
-coll.update_one({'_id': org_acc.get('_id')}, {'$inc': {'balance': float(delta)}})
-```
-
-**Impact:** No overdraft protection or warnings.
-
----
-
-#### 12. Missing `account_key` on Several Collections
-**Problem:** Some records don't have `account_key` stored:
-
-| Collection | Has account_key |
-|------------|-----------------|
-| `pond_event` | Sometimes ❌ |
-| `fish_activity` | Yes ✅ |
-| `fish_analytics` | Yes ✅ |
-| `feeding` | Missing ❌ |
-| `sampling` | Sometimes ❌ |
-
-**Impact:** Cannot properly scope queries by account.
-
----
-
-#### 13. Pond Delete - Doesn't Update Fish current_stock
-**File:** `fin_server/services/pond_service.py`
-
-**Problem:** `delete_pond_and_related()` doesn't decrement `fish.current_stock`:
-
-```python
-def delete_pond_and_related(pond_id):
-    # Deletes sampling, events, activity, analytics, expenses
-    # ❌ Does NOT update fish.current_stock!
-```
-
-**Impact:** After deleting a pond with 1000 fish, the fish species still shows +1000 in current_stock.
-
----
-
-### LOW PRIORITY / IMPROVEMENTS 🟢
-
-#### 14. No Audit Trail for Updates
-**Problem:** When events/sampling are updated, there's no history of what changed.
-
-**Suggestion:** Add `updated_at`, `updated_by`, and `change_history[]` fields.
-
----
-
-#### 15. Inconsistent Field Naming
-**Problem:** Mix of camelCase and snake_case across collections:
-
-| Field | Variations Found |
-|-------|------------------|
-| Pond ID | `pond_id`, `pondId`, `pond` |
-| Fish ID | `fish_id`, `fishId`, `species`, `species_code` |
-| Count | `count`, `quantity`, `total_count`, `totalCount` |
-| Amount | `amount`, `total_amount`, `totalAmount`, `cost` |
-
-**Impact:** Complex query logic, potential bugs when field names mismatch.
-
----
-
-#### 16. No Soft Delete Support
-**Problem:** All deletes are hard deletes. No way to recover data.
-
-**Suggestion:** Add `deleted_at`, `deleted_by` fields and filter queries.
-
----
-
-#### 17. Feeding Records - Not Linked to Expenses
-**Problem:** Feeding records are created but no corresponding expense for feed usage.
-
-**Current Flow:**
-```
-POST /feeding/ 
-  └── Creates feeding record ✅
-  └── Creates expense ❌ (missing)
-```
-
-**Suggestion:** Auto-calculate feed cost and create expense.
-
----
-
-### MISSING DATA CORRELATIONS
-
-#### 18. No Link Between shift_out and shift_in Events
-**Problem:** Transfer events aren't linked:
-
-```javascript
-// shift_out event
-{ pond_id: "A", event_type: "shift_out", count: 100 }
-
-// shift_in event (no reference to source!)
-{ pond_id: "B", event_type: "shift_in", count: 100 }
-```
-
-**Fix:** Add `related_event_id` or `transfer_id` field.
-
----
-
-#### 19. No Link Between Sampling and Pond Event
-**Problem:** When sampling creates a "buy" flow, it creates a pond_event but doesn't link them:
-
-```javascript
-// sampling doc
-{ sampling_id: "SAM001", pond_id: "A", ... }
-
-// pond_event doc (no sampling reference!)
-{ pond_id: "A", event_type: "buy", ... }
-```
-
-**Fix:** Add `sampling_id` to pond_event.
-
----
-
-#### 20. Expenses Not Linked to Specific Events
-**Problem:** Expenses for fish purchase aren't linked to the pond_event:
-
-```javascript
-// expense doc
-{ type: "fish", action: "buy", metadata: { pond_id: "A" } }
-// ❌ No event_id or sampling_id reference
-```
-
-**Fix:** Add `event_id` or `source_id` to expenses.
-
----
-
-### RECOMMENDED DATA MODEL IMPROVEMENTS
-
-#### Proposed Link Structure:
+All related records are now properly linked for full traceability:
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
@@ -1085,57 +765,19 @@ POST /feeding/
                     └─────────────┘
 ```
 
----
+### Key Linking Fields
 
-### SUMMARY TABLE
+| Collection | Links To | Via Field |
+|------------|----------|-----------|
+| `sampling` | `pond_event` | `event_id` |
+| `sampling` | `expenses` | `expense_id` |
+| `pond_event` | `sampling` | `sampling_id` |
+| `pond_event` | `pond_event` | `transfer_id` (for transfers) |
+| `expenses` | `pond_event` | `metadata.event_id` |
+| `expenses` | `sampling` | `metadata.sampling_id` |
+| `expenses` | `transactions` | `transaction_ref` |
 
-| # | Issue | Severity | Type | Affected Collections | Status |
-|---|-------|----------|------|---------------------|--------|
-| 1 | DELETE event no reversal | 🔴 Critical | Bug | ponds, fish_analytics | ✅ FIXED |
-| 2 | Sell event no expense | 🔴 Critical | Missing | expenses, bank_accounts | ✅ FIXED |
-| 3 | Transfer not atomic | 🔴 Critical | Design | pond_event, ponds | ✅ FIXED |
-| 4 | Sampling DELETE incomplete | 🔴 Critical | Bug | Multiple | ✅ FIXED |
-| 5 | Duplicate insert attempts | 🟠 High | Bug | fish | ✅ FIXED |
-| 6 | Expense creation commented | 🟠 High | Bug | expenses | ✅ FIXED |
-| 7 | No account scoping on GET | 🟠 High | Security | pond_event | ✅ FIXED |
-| 8 | Fish stock multiple paths | 🟠 High | Design | fish | ✅ FIXED (centralized) |
-| 9 | Duplicate activity on update | 🟡 Medium | Bug | fish_activity | ✅ FIXED |
-| 10 | No event type change validation | 🟡 Medium | Validation | pond_event | ✅ FIXED |
-| 11 | Negative bank balance allowed | 🟡 Medium | Validation | bank_accounts | ✅ FIXED |
-| 12 | Missing account_key | 🟡 Medium | Data | Multiple | ✅ FIXED |
-| 13 | Pond delete no fish update | 🟡 Medium | Bug | fish | ✅ FIXED |
-| 14 | No audit trail | 🟢 Low | Feature | All | ✅ FIXED |
-| 15 | Inconsistent field naming | 🟢 Low | Design | All | ⏳ In Progress |
-| 16 | No soft delete | 🟢 Low | Feature | All | ✅ FIXED |
-| 17 | Feeding no expense | 🟢 Low | Feature | expenses | ✅ FIXED |
-| 18 | Transfers not linked | 🟢 Low | Design | pond_event | ✅ FIXED |
-| 19 | Sampling-event not linked | 🟢 Low | Design | sampling, pond_event | ✅ FIXED |
-| 20 | Expense-event not linked | 🟢 Low | Design | expenses | ✅ FIXED |
-
----
-
-### PRIORITY FIX ORDER
-
-1. **Immediate (Before Production):** ✅ ALL COMPLETE
-   - Fix #1: DELETE event reversal ✅ FIXED
-   - Fix #4: Sampling DELETE cleanup ✅ FIXED
-   - Fix #7: Account scoping security ✅ FIXED
-
-2. **Short Term (Next Sprint):** ✅ ALL COMPLETE
-   - Fix #2: Sell event expenses ✅ FIXED
-   - Fix #3: Atomic transfers ✅ FIXED
-   - Fix #6: Uncomment expense creation ✅ FIXED
-   - Fix #13: Pond delete fish update ✅ FIXED
-
-3. **Medium Term:** ✅ ALL COMPLETE
-   - Fix #8: Centralize fish stock updates ✅ FIXED
-   - Fix #12: Add account_key everywhere ✅ FIXED
-   - Add correlation IDs (#18 ✅, #19 ✅, #20 ✅)
-
-4. **Long Term:**
-   - Implement soft deletes
-   - Add audit trail
-   - Standardize field naming
+> **📊 For detailed project analysis, bug fixes, and recommendations, see [PROJECT_ANALYSIS.md](./PROJECT_ANALYSIS.md)**
 
 ---
 
@@ -3657,6 +3299,7 @@ Content-Type: application/json
 | **Pond Events** | `/pond_event/{pond_id}/event/remove` | POST | Yes |
 | **Pond Events** | `/pond_event/{pond_id}/event/shift_in` | POST | Yes |
 | **Pond Events** | `/pond_event/{pond_id}/event/shift_out` | POST | Yes |
+| **Pond Events** | `/pond_event/transfer` | POST | Yes |
 | **Pond Events** | `/pond_event/{pond_id}/events` | GET | Yes |
 | **Pond Events** | `/pond_event/{pond_id}/events/{event_id}` | PUT, DELETE | Yes |
 | **Sampling** | `/sampling` | POST | Yes |
@@ -3666,7 +3309,20 @@ Content-Type: application/json
 | **Feeding** | `/feeding/` | GET, POST | Yes |
 | **Feeding** | `/feeding/pond/{pond_id}` | GET | Yes |
 | **Expenses** | `/expenses` | GET, POST | Yes |
+| **Expenses** | `/expenses/{expense_id}` | GET, PUT, DELETE | Yes |
+| **Expenses** | `/expenses/{expense_id}/approve` | POST | Yes |
+| **Expenses** | `/expenses/{expense_id}/reject` | POST | Yes |
+| **Expenses** | `/expenses/{expense_id}/cancel` | POST | Yes |
 | **Expenses** | `/expenses/{expense_id}/pay` | POST | Yes |
+| **Expenses** | `/expenses/summary` | GET | Yes |
+| **Expenses** | `/expenses/by-pond/{pond_id}` | GET | Yes |
+| **Expenses** | `/expenses/categories` | GET | No |
+| **Expenses** | `/expenses/categories/top` | GET | No |
+| **Expenses** | `/expenses/categories/options` | GET | No |
+| **Expenses** | `/expenses/categories/subcategories` | GET | No |
+| **Expenses** | `/expenses/categories/validate` | POST | No |
+| **Expenses** | `/expenses/categories/search` | GET | No |
+| **Expenses** | `/expenses/categories/suggest` | GET | No |
 | **Expenses** | `/expenses/payments` | POST | Yes |
 | **Expenses** | `/expenses/payments/{payment_id}` | GET | Yes |
 | **Expenses** | `/expenses/transactions` | POST | Yes |
@@ -3696,11 +3352,12 @@ Content-Type: application/json
 | Phase 5: Daily Operations | 5 |
 | Phase 6: Growth Monitoring & Sampling | 4 |
 | Phase 7: Fish Mortality & Health | 3 |
-| Phase 8: Fish Transfer Between Ponds | 3 |
+| Phase 8: Fish Transfer Between Ponds | 4 |
 | Phase 9: Harvest & Sales | 4 |
-| Phase 10: Financial Management | 5 |
+| Phase 10: Financial Management | 6 |
 | Phase 11: Reporting & Analytics | 5 |
 | Phase 12: End of Cycle & Pond Reset | 4 |
+| **Additional: Expense Management** | 15 |
 | **Additional: User Profile & Settings** | 9 |
 | **Additional: Company Management** | 5 |
 | **Additional: Advanced Pond Features** | 3 |
@@ -3709,7 +3366,7 @@ Content-Type: application/json
 | **Additional: AI/OpenAI Services** | 5 |
 | **Additional: Public APIs** | 5 |
 | **Additional: Token Management** | 1 |
-| **TOTAL** | **79 Use Cases** |
+| **TOTAL** | **96 Use Cases** |
 
 ---
 
