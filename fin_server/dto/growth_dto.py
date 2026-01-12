@@ -6,7 +6,8 @@ from fin_server.utils.normalizers import first_present
 class GrowthRecordDTO:
     def __init__(self, id: Optional[str], pondId: str, species: str, samplingDate: str, sampleSize: int,
                  averageWeight: float, averageLength: float, survivalRate: float, feedConversionRatio: float,
-                 cost: float, recordedBy: Optional[str], notes: Optional[str], extra: Dict[str, Any] = None):
+                 cost: float, recordedBy: Optional[str], notes: Optional[str], account_key: Optional[str] = None,
+                 user_key: Optional[str] = None, extra: Dict[str, Any] = None):
         self.id = id
         self.pondId = pondId
         self.species = species
@@ -18,7 +19,9 @@ class GrowthRecordDTO:
         self.feedConversionRatio = float(feedConversionRatio) if feedConversionRatio is not None else None
         self.cost = float(cost) if cost is not None else None
         self.recordedBy = recordedBy
+        self.user_key = user_key or recordedBy  # Who performed the action
         self.notes = notes
+        self.account_key = account_key
         self.extra = extra or {}
 
     @classmethod
@@ -35,8 +38,10 @@ class GrowthRecordDTO:
             survivalRate=first_present(d, ['survival_rate', 'survivalRate']),
             feedConversionRatio=first_present(d, ['feed_conversion_ratio', 'feedConversionRatio']),
             cost=first_present(d, ['cost', 'cost_amount', 'total_cost']),
-            recordedBy=first_present(d, ['recordedBy', 'recorded_by']),
+            recordedBy=first_present(d, ['recordedBy', 'recorded_by', 'user_key']),
             notes=d.get('notes'),
+            account_key=d.get('account_key') or d.get('accountKey'),
+            user_key=d.get('user_key') or d.get('userKey') or first_present(d, ['recorded_by', 'recordedBy']),
             extra={k: v for k, v in d.items()}
         )
 
@@ -53,8 +58,10 @@ class GrowthRecordDTO:
             survivalRate=first_present(payload, ['survivalRate', 'survival_rate']),
             feedConversionRatio=first_present(payload, ['feedConversionRatio', 'feed_conversion_ratio']),
             cost=first_present(payload, ['cost', 'cost_amount', 'total_cost']),
-            recordedBy=first_present(payload, ['recordedBy', 'recorded_by']),
+            recordedBy=first_present(payload, ['recordedBy', 'recorded_by', 'user_key']),
             notes=payload.get('notes'),
+            account_key=payload.get('account_key') or payload.get('accountKey'),
+            user_key=payload.get('user_key') or payload.get('userKey') or first_present(payload, ['recorded_by', 'recordedBy']),
             extra={k: v for k, v in payload.items()}
         )
 
@@ -72,7 +79,9 @@ class GrowthRecordDTO:
             'feedConversionRatio': self.feedConversionRatio,
             'cost': self.cost,
             'recordedBy': self.recordedBy,
+            'userKey': self.user_key,
             'notes': self.notes,
+            'accountKey': self.account_key,
         }
 
         # Promote some canonical snake_case extras (if present) into camelCase response fields
@@ -128,7 +137,9 @@ class GrowthRecordDTO:
             'feed_conversion_ratio': self.feedConversionRatio,
             'cost': self.cost,
             'recorded_by': self.recordedBy,
-            'notes': self.notes
+            'user_key': self.user_key,  # Who performed the action
+            'notes': self.notes,
+            'account_key': self.account_key
         }
         # Persist sampling-specific metadata if present in extra
         # - type -> type

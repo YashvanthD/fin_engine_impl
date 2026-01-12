@@ -7,7 +7,8 @@ from fin_server.repository.mongo_helper import get_collection
 
 class PondEventDTO:
     def __init__(self, id: Optional[str], pondId: str, eventType: str, timestamp: Optional[str], species: Optional[str],
-                 count: Optional[int], details: Optional[Dict[str, Any]] = None, recordedBy: Optional[str] = None, extra: Dict[str, Any] = None):
+                 count: Optional[int], details: Optional[Dict[str, Any]] = None, recordedBy: Optional[str] = None,
+                 account_key: Optional[str] = None, user_key: Optional[str] = None, extra: Dict[str, Any] = None):
         self.id = id
         self.pondId = pondId
         self.eventType = eventType
@@ -16,6 +17,8 @@ class PondEventDTO:
         self.count = int(count) if count is not None else None
         self.details = details or {}
         self.recordedBy = recordedBy
+        self.user_key = user_key or recordedBy  # Who performed the action
+        self.account_key = account_key
         self.extra = extra or {}
 
     @classmethod
@@ -29,7 +32,9 @@ class PondEventDTO:
             species=d.get('species') or d.get('species_code') or d.get('fish_id'),
             count=d.get('count'),
             details=d.get('details') or {},
-            recordedBy=d.get('recordedBy') or d.get('recorded_by'),
+            recordedBy=d.get('recordedBy') or d.get('recorded_by') or d.get('user_key'),
+            account_key=d.get('account_key') or d.get('accountKey'),
+            user_key=d.get('user_key') or d.get('userKey') or d.get('recorded_by') or d.get('recordedBy'),
             extra={k: v for k, v in d.items()}
         )
 
@@ -43,7 +48,9 @@ class PondEventDTO:
             species=payload.get('species') or payload.get('species_code') or payload.get('fish_id'),
             count=payload.get('count'),
             details=payload.get('details') or payload.get('data') or {},
-            recordedBy=payload.get('recordedBy') or payload.get('recorded_by'),
+            recordedBy=payload.get('recordedBy') or payload.get('recorded_by') or payload.get('user_key'),
+            account_key=payload.get('account_key') or payload.get('accountKey'),
+            user_key=payload.get('user_key') or payload.get('userKey') or payload.get('recorded_by') or payload.get('recordedBy'),
             extra={k: v for k, v in payload.items()}
         )
 
@@ -57,6 +64,8 @@ class PondEventDTO:
             'count': self.count,
             'details': self.details,
             'recordedBy': self.recordedBy,
+            'userKey': self.user_key,
+            'accountKey': self.account_key,
             **self.extra
         }
 
@@ -67,12 +76,14 @@ class PondEventDTO:
             'fish_id': self.species,
             'count': self.count,
             'details': self.details,
-            'user_key': self.recordedBy
+            'user_key': self.user_key,  # Who performed the action
+            'account_key': self.account_key
         }
         for k, v in (self.extra or {}).items():
             if k not in doc:
                 doc[k] = v
-        return doc
+        # Remove None values
+        return {k: v for k, v in doc.items() if v is not None}
 
     def save(self, collection=None, repo=None, collection_name: Optional[str] = 'pond_events', upsert: bool = False):
         doc = self.to_db_doc()

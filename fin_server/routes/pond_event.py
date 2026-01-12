@@ -143,10 +143,14 @@ def pond_event_action(pond_id, event_type):
                 'species': fish_id,
                 'count': count,
                 'details': data.get('details', {}),
-                'timestamp': data.get('timestamp') or data.get('created_at')
+                'timestamp': data.get('timestamp') or data.get('created_at'),
+                'account_key': payload.get('account_key'),
+                'user_key': payload.get('user_key')  # Who performed the action
             }
             dto = PondEventDTO.from_request(dto_payload)
             dto.recordedBy = payload.get('user_key')
+            dto.user_key = payload.get('user_key')  # Who performed the action
+            dto.account_key = payload.get('account_key')  # Which organization
             if fish_age_in_month is not None:
                 dto.extra['fish_age_in_month'] = fish_age_in_month
             # Persist via DTO save
@@ -170,7 +174,8 @@ def pond_event_action(pond_id, event_type):
                 'event_type': event_type,
                 'details': data.get('details', {}),
                 'created_at': get_time_date_dt(include_time=True),
-                'user_key': payload.get('user_key')
+                'user_key': payload.get('user_key'),
+                'account_key': payload.get('account_key')  # Ensure account_key is set
             }
             if fish_age_in_month is not None:
                 event_doc_db['fish_age_in_month'] = fish_age_in_month
@@ -239,10 +244,24 @@ def pond_event_action(pond_id, event_type):
 
 @pond_event_bp.route('/<pond_id>/events', methods=['GET'])
 def get_pond_events(pond_id):
+    """Get all events for a pond with account isolation."""
     current_app.logger.debug('GET /pond_event/%s/events called', pond_id)
     try:
-        _ = get_request_payload(request)
-        events = pond_event_repository.get_events_by_pond(pond_id)
+        payload = get_request_payload(request)
+        account_key = payload.get('account_key')
+
+        # Build query with account_key filter for data isolation
+        query = {'pond_id': pond_id}
+        if account_key:
+            query['account_key'] = account_key
+
+        # Try to get events with account filter
+        try:
+            events = list(pond_event_repository.collection.find(query).sort('created_at', -1))
+        except Exception:
+            # Fallback to basic get_events_by_pond
+            events = pond_event_repository.get_events_by_pond(pond_id)
+
         out = []
         for e in events:
             try:
@@ -410,7 +429,7 @@ def transfer_fish_between_ponds():
     Request body:
     {
         "source_pond_id": "pond-001",
-        "destination_pond_id": "pond-002", 
+        "destination_pond_id": "pond-002",
         "fish_id": "TILAPIA_NILE",
         "count": 100,
         "fish_age_in_month": 3,

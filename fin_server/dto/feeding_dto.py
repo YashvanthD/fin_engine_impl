@@ -10,7 +10,8 @@ from fin_server.utils.time_utils import get_time_date_dt
 class FeedingRecordDTO:
     def __init__(self, id: Optional[str], pondId: str, feedType: str, quantity: float,
                  feedingTime: Optional[str], waterTemperature: Optional[float], fishBehavior: Optional[str],
-                 recordedBy: Optional[str], notes: Optional[str], extra: Dict[str, Any] = None):
+                 recordedBy: Optional[str], notes: Optional[str], account_key: Optional[str] = None,
+                 user_key: Optional[str] = None, extra: Dict[str, Any] = None):
         self.id = id
         self.pondId = pondId
         self.feedType = feedType
@@ -19,7 +20,9 @@ class FeedingRecordDTO:
         self.waterTemperature = float(waterTemperature) if waterTemperature is not None else None
         self.fishBehavior = fishBehavior
         self.recordedBy = recordedBy
+        self.user_key = user_key or recordedBy  # user_key is who performed the action
         self.notes = notes
+        self.account_key = account_key
         self.extra = extra or {}
         # default collection (use manager helper)
         try:
@@ -35,11 +38,13 @@ class FeedingRecordDTO:
             pondId=d.get('pondId') or d.get('pond_id') or d.get('pond'),
             feedType=d.get('feedType') or d.get('feed_type') or d.get('feed'),
             quantity=d.get('quantity') or d.get('feedQuantity') or d.get('feed_quantity') or 0,
-            feedingTime=d.get('feedingTime') or d.get('date'),
+            feedingTime=d.get('feedingTime') or d.get('date') or d.get('feeding_time'),
             waterTemperature=d.get('waterTemperature') or d.get('water_temperature'),
             fishBehavior=d.get('fishBehavior') or d.get('fish_behavior'),
             recordedBy=d.get('recordedBy') or d.get('recorded_by'),
             notes=d.get('notes') or d.get('remark') or d.get('remarks'),
+            account_key=d.get('account_key') or d.get('accountKey'),
+            user_key=d.get('user_key') or d.get('userKey') or d.get('recorded_by') or d.get('recordedBy'),
             extra={k: v for k, v in d.items()}
         )
 
@@ -50,11 +55,13 @@ class FeedingRecordDTO:
             pondId=payload.get('pondId') or payload.get('pond_id') or payload.get('pond'),
             feedType=payload.get('feedType') or payload.get('feed_type') or payload.get('feed'),
             quantity=payload.get('quantity') or payload.get('feedQuantity') or payload.get('feed_quantity') or 0,
-            feedingTime=payload.get('feedingTime') or payload.get('date'),
+            feedingTime=payload.get('feedingTime') or payload.get('date') or payload.get('feeding_time'),
             waterTemperature=payload.get('waterTemperature') or payload.get('water_temperature'),
             fishBehavior=payload.get('fishBehavior') or payload.get('fish_behavior'),
             recordedBy=payload.get('recordedBy') or payload.get('recorded_by'),
             notes=payload.get('notes') or payload.get('remark') or payload.get('remarks'),
+            account_key=payload.get('account_key') or payload.get('accountKey'),
+            user_key=payload.get('user_key') or payload.get('userKey') or payload.get('recorded_by') or payload.get('recordedBy'),
             extra={k: v for k, v in payload.items()}
         )
 
@@ -68,7 +75,9 @@ class FeedingRecordDTO:
             'waterTemperature': self.waterTemperature,
             'fishBehavior': self.fishBehavior,
             'recordedBy': self.recordedBy,
+            'userKey': self.user_key,
             'notes': self.notes,
+            'accountKey': self.account_key,
             **self.extra
         }
 
@@ -82,13 +91,16 @@ class FeedingRecordDTO:
             'water_temperature': self.waterTemperature,
             'fish_behavior': self.fishBehavior,
             'recorded_by': self.recordedBy,
-            'notes': self.notes
+            'user_key': self.user_key,  # Who performed the action
+            'notes': self.notes,
+            'account_key': self.account_key
         }
         # merge extras (but don't overwrite core fields)
         for k, v in (self.extra or {}).items():
             if k not in doc:
                 doc[k] = v
-        return doc
+        # Remove None values
+        return {k: v for k, v in doc.items() if v is not None}
 
     def save(self, collection=None, repo=None, collection_name: Optional[str] = None, upsert: bool = False):
         """Persist the feeding record. Accepts either a pymongo collection or a repo object. Returns insert result."""

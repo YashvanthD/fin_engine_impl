@@ -34,9 +34,13 @@ def create_sampling_route():
         # Build DTO from request
         dto = GrowthRecordDTO.from_request(data)
         dto.recordedBy = payload.get('user_key')
+        dto.user_key = payload.get('user_key')  # Who performed the action
+        dto.account_key = payload.get('account_key')  # Which organization
         # Normalize extra
         dto.extra = dto.extra or {}
         dto.extra.setdefault('type', 'sampling')
+        dto.extra['account_key'] = payload.get('account_key')  # Also store in extra for backward compat
+        dto.extra['user_key'] = payload.get('user_key')  # Also store in extra for backward compat
 
         # Ensure sampling_id exists
         if not dto.extra.get('sampling_id'):

@@ -63,6 +63,8 @@ def create_feeding_route(auth_payload):
     # Build DTO
     dto = FeedingRecordDTO.from_request(data)
     dto.recordedBy = auth_payload.get('user_key')
+    dto.user_key = auth_payload.get('user_key')  # Who performed the action
+    dto.account_key = auth_payload.get('account_key')  # Which organization
 
     # Persist
     try:
@@ -84,9 +86,14 @@ def list_feeding_route(auth_payload):
     """List all feeding records."""
     q = {}
 
+    # Filter by account_key for data isolation
+    account_key = auth_payload.get('account_key')
+    if account_key:
+        q['account_key'] = account_key
+
     pond_id = request.args.get('pondId') or request.args.get('pond_id')
     if pond_id:
-        q['pondId'] = pond_id
+        q['pond_id'] = pond_id
 
     feeds = _get_feeding_list(q)
     return respond_success(feeds)

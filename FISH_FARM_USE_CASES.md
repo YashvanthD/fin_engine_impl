@@ -55,6 +55,57 @@ This section documents which MongoDB collections (repositories) are created/upda
 
 ---
 
+### Key Fields for Data Tracking
+
+Every record in the system should include these key fields for proper tracking and data isolation:
+
+#### `account_key` - Organization Identifier
+- **Purpose:** Identifies which organization/company owns the record
+- **Used for:** Data isolation, multi-tenancy, scoping queries
+- **Example:** `"ACC001"`, `"FARM_XYZ"`
+- **Required:** YES - All records MUST have this field
+
+#### `user_key` - User Identifier
+- **Purpose:** Identifies who performed/created/modified the action
+- **Used for:** Audit trail, accountability, access control
+- **Example:** `"USR001"`, `"admin_ravi"`
+- **Required:** YES - All records MUST have this field
+
+#### Standard Fields in All Collections
+
+```javascript
+{
+  // Identity & Tracking
+  "account_key": "ACC001",      // Organization that owns this record
+  "user_key": "USR001",         // User who created/performed this action
+  
+  // Timestamps
+  "created_at": "2026-01-12T10:30:00+05:30",
+  "updated_at": "2026-01-12T11:00:00+05:30",
+  
+  // For updates - who modified
+  "updated_by": "USR002"        // Optional - who last modified
+}
+```
+
+#### Collections with account_key & user_key Support
+
+| Collection | account_key | user_key | Notes |
+|------------|:-----------:|:--------:|-------|
+| `users` | ✅ | - | user_key IS the record |
+| `companies` | ✅ | ✅ (admin_user_key) | |
+| `ponds` | ✅ | ✅ | |
+| `pond_event` | ✅ | ✅ | |
+| `sampling` | ✅ | ✅ | |
+| `feeding` | ✅ | ✅ | |
+| `fish_activity` | ✅ | ✅ | |
+| `fish_analytics` | ✅ | ✅ | |
+| `expenses` | ✅ | ✅ (recorded_by) | |
+| `transactions` | ✅ | ✅ (recorded_by) | |
+| `tasks` | ✅ | ✅ | |
+
+---
+
 ### Flow 1: Company/Admin Registration
 
 **Trigger:** `POST /auth/signup` or `POST /company/register`
@@ -1038,28 +1089,28 @@ POST /feeding/
 
 ### SUMMARY TABLE
 
-| # | Issue | Severity | Type | Affected Collections |
-|---|-------|----------|------|---------------------|
-| 1 | DELETE event no reversal | 🔴 Critical | Bug | ponds, fish_analytics |
-| 2 | Sell event no expense | 🔴 Critical | Missing | expenses, bank_accounts |
-| 3 | Transfer not atomic | 🔴 Critical | Design | pond_event, ponds |
-| 4 | Sampling DELETE incomplete | 🔴 Critical | Bug | Multiple |
-| 5 | Duplicate insert attempts | 🟠 High | Bug | fish |
-| 6 | Expense creation commented | 🟠 High | Bug | expenses |
-| 7 | No account scoping on GET | 🟠 High | Security | pond_event |
-| 8 | Fish stock multiple paths | 🟠 High | Design | fish |
-| 9 | Duplicate activity on update | 🟡 Medium | Bug | fish_activity |
-| 10 | No event type change validation | 🟡 Medium | Validation | pond_event |
-| 11 | Negative bank balance allowed | 🟡 Medium | Validation | bank_accounts |
-| 12 | Missing account_key | 🟡 Medium | Data | Multiple |
-| 13 | Pond delete no fish update | 🟡 Medium | Bug | fish |
-| 14 | No audit trail | 🟢 Low | Feature | All |
-| 15 | Inconsistent field naming | 🟢 Low | Design | All |
-| 16 | No soft delete | 🟢 Low | Feature | All |
-| 17 | Feeding no expense | 🟢 Low | Feature | expenses |
-| 18 | Transfers not linked | 🟢 Low | Design | pond_event |
-| 19 | Sampling-event not linked | 🟢 Low | Design | sampling, pond_event |
-| 20 | Expense-event not linked | 🟢 Low | Design | expenses |
+| # | Issue | Severity | Type | Affected Collections | Status |
+|---|-------|----------|------|---------------------|--------|
+| 1 | DELETE event no reversal | 🔴 Critical | Bug | ponds, fish_analytics | ✅ FIXED |
+| 2 | Sell event no expense | 🔴 Critical | Missing | expenses, bank_accounts | ✅ FIXED |
+| 3 | Transfer not atomic | 🔴 Critical | Design | pond_event, ponds | ✅ FIXED |
+| 4 | Sampling DELETE incomplete | 🔴 Critical | Bug | Multiple | ✅ FIXED |
+| 5 | Duplicate insert attempts | 🟠 High | Bug | fish | |
+| 6 | Expense creation commented | 🟠 High | Bug | expenses | |
+| 7 | No account scoping on GET | 🟠 High | Security | pond_event | ✅ FIXED |
+| 8 | Fish stock multiple paths | 🟠 High | Design | fish | |
+| 9 | Duplicate activity on update | 🟡 Medium | Bug | fish_activity | |
+| 10 | No event type change validation | 🟡 Medium | Validation | pond_event | |
+| 11 | Negative bank balance allowed | 🟡 Medium | Validation | bank_accounts | |
+| 12 | Missing account_key | 🟡 Medium | Data | Multiple | ✅ FIXED |
+| 13 | Pond delete no fish update | 🟡 Medium | Bug | fish | |
+| 14 | No audit trail | 🟢 Low | Feature | All | |
+| 15 | Inconsistent field naming | 🟢 Low | Design | All | |
+| 16 | No soft delete | 🟢 Low | Feature | All | |
+| 17 | Feeding no expense | 🟢 Low | Feature | expenses | |
+| 18 | Transfers not linked | 🟢 Low | Design | pond_event | ✅ FIXED |
+| 19 | Sampling-event not linked | 🟢 Low | Design | sampling, pond_event | |
+| 20 | Expense-event not linked | 🟢 Low | Design | expenses | |
 
 ---
 
@@ -1068,7 +1119,7 @@ POST /feeding/
 1. **Immediate (Before Production):**
    - Fix #1: DELETE event reversal ✅ FIXED
    - Fix #4: Sampling DELETE cleanup ✅ FIXED
-   - Fix #7: Account scoping security
+   - Fix #7: Account scoping security ✅ FIXED
 
 2. **Short Term (Next Sprint):**
    - Fix #2: Sell event expenses ✅ FIXED
@@ -1078,8 +1129,8 @@ POST /feeding/
 
 3. **Medium Term:**
    - Fix #8: Centralize fish stock updates
-   - Fix #12: Add account_key everywhere
-   - Add correlation IDs (#18, #19, #20)
+   - Fix #12: Add account_key everywhere ✅ FIXED
+   - Add correlation IDs (#18 ✅ FIXED, #19, #20)
 
 4. **Long Term:**
    - Implement soft deletes
