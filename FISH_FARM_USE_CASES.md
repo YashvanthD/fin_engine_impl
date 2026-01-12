@@ -1095,42 +1095,42 @@ POST /feeding/
 | 2 | Sell event no expense | 🔴 Critical | Missing | expenses, bank_accounts | ✅ FIXED |
 | 3 | Transfer not atomic | 🔴 Critical | Design | pond_event, ponds | ✅ FIXED |
 | 4 | Sampling DELETE incomplete | 🔴 Critical | Bug | Multiple | ✅ FIXED |
-| 5 | Duplicate insert attempts | 🟠 High | Bug | fish | |
-| 6 | Expense creation commented | 🟠 High | Bug | expenses | |
+| 5 | Duplicate insert attempts | 🟠 High | Bug | fish | ✅ FIXED |
+| 6 | Expense creation commented | 🟠 High | Bug | expenses | ✅ FIXED |
 | 7 | No account scoping on GET | 🟠 High | Security | pond_event | ✅ FIXED |
-| 8 | Fish stock multiple paths | 🟠 High | Design | fish | |
-| 9 | Duplicate activity on update | 🟡 Medium | Bug | fish_activity | |
-| 10 | No event type change validation | 🟡 Medium | Validation | pond_event | |
-| 11 | Negative bank balance allowed | 🟡 Medium | Validation | bank_accounts | |
+| 8 | Fish stock multiple paths | 🟠 High | Design | fish | ✅ FIXED (centralized) |
+| 9 | Duplicate activity on update | 🟡 Medium | Bug | fish_activity | ✅ FIXED |
+| 10 | No event type change validation | 🟡 Medium | Validation | pond_event | ✅ FIXED |
+| 11 | Negative bank balance allowed | 🟡 Medium | Validation | bank_accounts | ✅ FIXED |
 | 12 | Missing account_key | 🟡 Medium | Data | Multiple | ✅ FIXED |
-| 13 | Pond delete no fish update | 🟡 Medium | Bug | fish | |
-| 14 | No audit trail | 🟢 Low | Feature | All | |
-| 15 | Inconsistent field naming | 🟢 Low | Design | All | |
-| 16 | No soft delete | 🟢 Low | Feature | All | |
-| 17 | Feeding no expense | 🟢 Low | Feature | expenses | |
+| 13 | Pond delete no fish update | 🟡 Medium | Bug | fish | ✅ FIXED |
+| 14 | No audit trail | 🟢 Low | Feature | All | ✅ FIXED |
+| 15 | Inconsistent field naming | 🟢 Low | Design | All | ⏳ In Progress |
+| 16 | No soft delete | 🟢 Low | Feature | All | ✅ FIXED |
+| 17 | Feeding no expense | 🟢 Low | Feature | expenses | ✅ FIXED |
 | 18 | Transfers not linked | 🟢 Low | Design | pond_event | ✅ FIXED |
-| 19 | Sampling-event not linked | 🟢 Low | Design | sampling, pond_event | |
-| 20 | Expense-event not linked | 🟢 Low | Design | expenses | |
+| 19 | Sampling-event not linked | 🟢 Low | Design | sampling, pond_event | ✅ FIXED |
+| 20 | Expense-event not linked | 🟢 Low | Design | expenses | ✅ FIXED |
 
 ---
 
 ### PRIORITY FIX ORDER
 
-1. **Immediate (Before Production):**
+1. **Immediate (Before Production):** ✅ ALL COMPLETE
    - Fix #1: DELETE event reversal ✅ FIXED
    - Fix #4: Sampling DELETE cleanup ✅ FIXED
    - Fix #7: Account scoping security ✅ FIXED
 
-2. **Short Term (Next Sprint):**
+2. **Short Term (Next Sprint):** ✅ ALL COMPLETE
    - Fix #2: Sell event expenses ✅ FIXED
    - Fix #3: Atomic transfers ✅ FIXED
-   - Fix #6: Uncomment expense creation
-   - Fix #13: Pond delete fish update
+   - Fix #6: Uncomment expense creation ✅ FIXED
+   - Fix #13: Pond delete fish update ✅ FIXED
 
-3. **Medium Term:**
-   - Fix #8: Centralize fish stock updates
+3. **Medium Term:** ✅ ALL COMPLETE
+   - Fix #8: Centralize fish stock updates ✅ FIXED
    - Fix #12: Add account_key everywhere ✅ FIXED
-   - Add correlation IDs (#18 ✅ FIXED, #19, #20)
+   - Add correlation IDs (#18 ✅, #19 ✅, #20 ✅)
 
 4. **Long Term:**
    - Implement soft deletes

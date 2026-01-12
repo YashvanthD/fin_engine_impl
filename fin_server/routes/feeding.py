@@ -53,6 +53,50 @@ def _get_feeding_list(query):
 # Feeding Endpoints
 # =============================================================================
 
+# Get expenses repo for feed cost tracking
+expenses_repo = get_collection('expenses')
+
+
+def create_feeding_expense(account_key, pond_id, feed_type, quantity, cost, user_key, feeding_id=None):
+    """Create an expense record for feed purchase/usage."""
+    try:
+        if not cost or float(cost) <= 0:
+            return None
+
+        from fin_server.utils.time_utils import get_time_date_dt
+        expense_doc = {
+            'account_key': account_key,
+            'amount': float(cost),
+            'currency': 'INR',
+            'category': 'Operational',
+            'subcategory': 'Feeding',
+            'detail': feed_type or 'Feed',
+            'category_path': f'Operational/Feeding/{feed_type or "Feed"}',
+            'type': 'feed',
+            'action': 'buy',
+            'status': 'SUCCESS',
+            'payment_method': 'cash',
+            'recorded_by': user_key,
+            'user_key': user_key,
+            'notes': f'Feed: {quantity}kg of {feed_type}',
+            'metadata': {
+                'pond_id': pond_id,
+                'feed_type': feed_type,
+                'quantity_kg': quantity,
+                'feeding_id': str(feeding_id) if feeding_id else None
+            },
+            'created_at': get_time_date_dt(include_time=True)
+        }
+
+        from fin_server.services.expense_service import create_expense_with_repo
+        expense_id = create_expense_with_repo(expense_doc, expenses_repo)
+        logger.info(f'Created feed expense {expense_id} for pond={pond_id}, amount={cost}')
+        return expense_id
+    except Exception:
+        logger.exception('Failed to create feeding expense')
+        return None
+
+
 @feeding_bp.route('/', methods=['POST'])
 @handle_errors
 @require_auth
@@ -76,7 +120,26 @@ def create_feeding_route(auth_payload):
         inserted_id = str(r.inserted_id)
 
     dto.id = inserted_id
-    return respond_success(dto.to_dict(), status=201)
+
+    # Create expense if cost is provided
+    expense_id = None
+    feed_cost = data.get('cost') or data.get('feed_cost') or data.get('feedCost')
+    if feed_cost:
+        expense_id = create_feeding_expense(
+            account_key=auth_payload.get('account_key'),
+            pond_id=dto.pondId,
+            feed_type=dto.feedType,
+            quantity=dto.quantity,
+            cost=feed_cost,
+            user_key=auth_payload.get('user_key'),
+            feeding_id=inserted_id
+        )
+
+    response = dto.to_dict()
+    if expense_id:
+        response['expenseId'] = str(expense_id)
+
+    return respond_success(response, status=201)
 
 
 @feeding_bp.route('/', methods=['GET'])

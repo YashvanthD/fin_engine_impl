@@ -141,8 +141,11 @@ class StockRepository:
                     # create minimal fish doc using repo API if present
                     fish_doc = {'_id': species, 'species_code': species, 'common_name': species, 'current_stock': int(count)}
                     try:
-                        self.fish.create(fish_doc)
-                        self.fish.insert_one(fish_doc)
+                        # Use create() OR insert_one(), not both - they do the same thing
+                        if hasattr(self.fish, 'create'):
+                            self.fish.create(fish_doc)
+                        else:
+                            self.fish.insert_one(fish_doc)
                         logger.info('Created fish doc for species=%s current_stock=%s', species, count)
                     except Exception:
                         logger.exception('Failed to create fish doc for stock add for species=%s', species)
@@ -192,30 +195,33 @@ class StockRepository:
                     logger.exception('Error creating analytics batch for add_stock')
 
             # 6) optional expense
-            if create_expense and self.expenses is not None:
+            if create_expense and self.expenses is not None and expense_amount is not None:
                 try:
                     exp = {
                         'pond_id': pond_id,
                         'species': species,
-                        'category': 'buy',
-                        'type': 'buy',
-                        'amount': float(expense_amount) if expense_amount is not None else None,
+                        'category': 'asset',
+                        'subcategory': 'fish',
+                        'type': 'fish',
+                        'action': 'buy',
+                        'amount': float(expense_amount),
                         'currency': 'INR',
                         'recorded_by': recorded_by,
+                        'user_key': recorded_by,
                         'account_key': account_key,
-                        'creditor': None,
-                        'debited': None,
-                        'transaction_id': None,
-                        'gst': None,
-                        'tax': None,
-                        'payment_method': None,
-                        'invoice_no': None,
-                        'vendor': None,
+                        'status': 'SUCCESS',
+                        'notes': f'Fish purchase: {count} {species}',
+                        'metadata': {
+                            'pond_id': pond_id,
+                            'species': species,
+                            'count': int(count),
+                            'sampling_id': sampling_id
+                        },
                         'created_at': get_time_date_dt(include_time=True)
                     }
                     try:
-                        # r = self.expenses.insert_one(exp)
-                        logger.debug('Inserted expense for pond=%s amount=%s', pond_id, exp.get('amount'))
+                        r = self.expenses.insert_one(exp)
+                        logger.info('Created expense for pond=%s amount=%s expense_id=%s', pond_id, exp.get('amount'), getattr(r, 'inserted_id', None))
                     except Exception:
                         logger.exception('Failed to insert expense doc for add_stock')
                 except Exception:

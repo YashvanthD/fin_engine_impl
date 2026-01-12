@@ -136,18 +136,51 @@ def perform_buy_sampling(dto: Any, account_key: str, repos: Dict[str, Any], crea
     except Exception:
         logger.exception('Failed to atomic_update_metadata for pond')
 
-    # 4) Create pond_event
+    # 4) Create pond_event with sampling_id link
+    event_id = None
     try:
+        # Get sampling_id from dto.extra or result
+        sampling_id = (extra.get('sampling_id') or
+                       getattr(dto, 'id', None) or
+                       result.get('stock_id'))
+
         ev = {
             'pond_id': pond_id,
             'event_type': 'buy',
-            'details': {'species': species, 'count': count, 'total_amount': extra.get('totalAmount') or extra.get('total_amount'), 'stock_id': result.get('stock_id')},
-            'recorded_by': getattr(dto, 'recordedBy', None)
+            'fish_id': species,
+            'count': count,
+            'account_key': account_key,
+            'user_key': getattr(dto, 'recordedBy', None),
+            'sampling_id': sampling_id,  # Link to sampling record
+            'details': {
+                'species': species,
+                'count': count,
+                'total_amount': extra.get('totalAmount') or extra.get('total_amount'),
+                'stock_id': result.get('stock_id'),
+                'sampling_id': sampling_id
+            },
+            'recorded_by': getattr(dto, 'recordedBy', None),
+            'created_at': get_time_date_dt(include_time=True)
         }
-        if repos.get('pond_event') is not None and hasattr(repos.get('pond_event'), 'create'):
-            repos.get('pond_event').create(ev)
-        elif repos.get('pond_event') is not None and hasattr(repos.get('pond_event'), 'insert_one'):
-            repos.get('pond_event').insert_one(ev)
+        if repos.get('pond_event') is not None:
+            if hasattr(repos.get('pond_event'), 'create'):
+                res = repos.get('pond_event').create(ev)
+                event_id = getattr(res, 'inserted_id', res)
+            elif hasattr(repos.get('pond_event'), 'insert_one'):
+                res = repos.get('pond_event').insert_one(ev)
+                event_id = getattr(res, 'inserted_id', None)
+
+        # Store event_id back in sampling record for bidirectional link
+        if event_id and sampling_repo is not None:
+            try:
+                sampling_repo.update_one(
+                    {'_id': dto.id} if dto.id else {'sampling_id': sampling_id},
+                    {'$set': {'event_id': str(event_id)}}
+                )
+            except Exception:
+                logger.exception('Failed to link event_id back to sampling')
+
+        result['event_id'] = str(event_id) if event_id else None
     except Exception:
         logger.exception('Failed to create pond_event')
 
@@ -191,22 +224,47 @@ def perform_buy_sampling(dto: Any, account_key: str, repos: Dict[str, Any], crea
                 total_amt = None
 
         if create_expense and expenses_repo is not None and total_amt is not None:
+            # Get sampling_id for linking
+            sampling_id = (extra.get('sampling_id') or
+                           getattr(dto, 'id', None) or
+                           result.get('stock_id'))
+
             expense_doc = {
                 'pond_id': pond_id,
                 'amount': total_amt,
                 'currency': extra.get('currency') or 'INR',
                 'payment_method': extra.get('payment_method') or 'cash',
-                'notes': extra.get('notes') or getattr(dto, 'notes', None),
+                'notes': extra.get('notes') or getattr(dto, 'notes', None) or f'Fish purchase: {count} {species}',
                 'recorded_by': getattr(dto, 'recordedBy', None),
+                'user_key': getattr(dto, 'recordedBy', None),
                 'account_key': account_key,
-                'category': extra.get('category') or 'asset',
-                'action': extra.get('action') or 'buy',
-                'type': extra.get('type') or 'fish',
-                'metadata': {'stock_id': result.get('stock_id')}
+                'category': 'Hatchery & Stock',
+                'subcategory': 'Fingerlings',
+                'type': 'fish',
+                'action': 'buy',
+                'status': 'SUCCESS',
+                'metadata': {
+                    'stock_id': result.get('stock_id'),
+                    'sampling_id': sampling_id,  # Link to sampling record
+                    'event_id': result.get('event_id'),  # Link to pond event
+                    'species': species,
+                    'count': count,
+                    'pond_id': pond_id
+                }
             }
             try:
                 expense_id = create_expense_with_repo(expense_doc, expenses_repo)
                 result['expense_id'] = str(expense_id) if expense_id is not None else None
+
+                # Update sampling record with expense_id for bidirectional link
+                if expense_id and sampling_repo is not None:
+                    try:
+                        sampling_repo.update_one(
+                            {'_id': dto.id} if dto.id else {'sampling_id': sampling_id},
+                            {'$set': {'expense_id': str(expense_id)}}
+                        )
+                    except Exception:
+                        logger.exception('Failed to link expense_id back to sampling')
             except Exception:
                 logger.exception('Failed to create expense for sampling')
     except Exception:

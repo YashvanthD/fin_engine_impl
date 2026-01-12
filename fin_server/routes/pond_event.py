@@ -378,6 +378,46 @@ def update_pond_event(pond_id, event_id):
         if not update_fields:
             return respond_error('No updatable fields provided', status=400)
 
+        # Validate event_type change - certain transitions are not allowed
+        new_event_type = update_fields.get('event_type')
+        if new_event_type and new_event_type != old_type:
+            valid_event_types = ['add', 'sell', 'sample', 'remove', 'shift_in', 'shift_out']
+            if new_event_type not in valid_event_types:
+                return respond_error(f'Invalid event_type: {new_event_type}. Must be one of: {valid_event_types}', status=400)
+
+            # Warn about incompatible transitions (but allow them)
+            # add/shift_in are "positive" events, sell/remove/sample/shift_out are "negative"
+            positive_types = ['add', 'shift_in']
+            negative_types = ['sell', 'remove', 'sample', 'shift_out']
+
+            old_is_positive = old_type in positive_types
+            new_is_positive = new_event_type in positive_types
+
+            if old_is_positive != new_is_positive:
+                current_app.logger.warning(
+                    f'Event type changed from {old_type} to {new_event_type} - this may affect financial records. '
+                    f'Consider creating a new event instead.'
+                )
+                # If changing from non-sell to sell, we should create an expense
+                if new_event_type == 'sell' and old_type != 'sell':
+                    details = update_fields.get('details', {}) or old.get('details', {})
+                    new_count = update_fields.get('count', old_count)
+                    new_fish_id = update_fields.get('fish_id', old_fish_id)
+                    try:
+                        expense_id = create_sell_expense(
+                            account_key=account_key,
+                            pond_id=pond_id,
+                            fish_id=new_fish_id,
+                            count=new_count,
+                            details=details,
+                            user_key=payload.get('user_key'),
+                            event_id=event_id
+                        )
+                        if expense_id:
+                            update_fields['expense_id'] = str(expense_id)
+                    except Exception:
+                        current_app.logger.exception('Failed to create expense for event type change to sell')
+
         # Update event document
         pond_event_repository.update({'_id': oid}, update_fields)
 
@@ -393,7 +433,7 @@ def update_pond_event(pond_id, event_id):
         except Exception:
             current_app.logger.exception('Failed to apply new event effects')
 
-        # If samples or details provided and event is sample/add, record activity
+        # If samples or details provided and event is sample/add, update or create activity
         try:
             if new_type in ['sample', 'add']:
                 samples = update_fields.get('samples') if isinstance(update_fields.get('samples'), list) else None
@@ -405,9 +445,22 @@ def update_pond_event(pond_id, event_id):
                     'count': new_count,
                     'user_key': payload.get('user_key'),
                     'details': update_fields.get('details', {}),
-                    'samples': samples
+                    'samples': samples,
+                    'event_id': event_id,  # Link to the event
+                    'updated_at': get_time_date_dt(include_time=True)
                 }
-                fish_activity_repo.create(activity_doc)
+                # Try to update existing activity for this event, else create new
+                existing_activity = fish_activity_repo.find_one({'event_id': event_id})
+                if existing_activity:
+                    fish_activity_repo.update_one(
+                        {'event_id': event_id},
+                        {'$set': activity_doc}
+                    )
+                    current_app.logger.info(f'Updated existing activity for event {event_id}')
+                else:
+                    activity_doc['created_at'] = get_time_date_dt(include_time=True)
+                    fish_activity_repo.create(activity_doc)
+                    current_app.logger.info(f'Created new activity for event {event_id}')
         except Exception:
             current_app.logger.exception('Failed to record activity for updated event')
 

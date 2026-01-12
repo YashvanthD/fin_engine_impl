@@ -72,6 +72,67 @@ def normalize_type(t: Optional[str], default: str = 'other') -> str:
 
 logger = logging.getLogger(__name__)
 
+# Minimum balance threshold (can be negative to allow overdraft)
+MINIMUM_BALANCE_THRESHOLD = 0.0
+ALLOW_NEGATIVE_BALANCE = False  # Set to True to allow overdraft
+
+
+def validate_bank_balance(account_key: str, amount: float, action: str = 'debit') -> tuple[bool, str, float]:
+    """Validate if bank balance is sufficient for debit operations.
+
+    Args:
+        account_key: The organization account key
+        amount: The amount to debit
+        action: 'debit' or 'credit'
+
+    Returns:
+        (is_valid, message, current_balance)
+    """
+    if action == 'credit':
+        # Credits always allowed
+        return True, 'Credit operations always allowed', 0.0
+
+    if ALLOW_NEGATIVE_BALANCE:
+        return True, 'Negative balance allowed by configuration', 0.0
+
+    try:
+        bank_accounts = get_collection('bank_accounts')
+        try:
+            org_acc = bank_accounts.find_one({'account_key': account_key, 'type': 'organization'})
+        except Exception:
+            coll = getattr(bank_accounts, 'collection', bank_accounts)
+            org_acc = coll.find_one({'account_key': account_key, 'type': 'organization'})
+
+        if not org_acc:
+            # No account found - allow operation but warn
+            logger.warning(f'No organization bank account found for {account_key}, allowing operation')
+            return True, 'No organization account found, operation allowed', 0.0
+
+        current_balance = float(org_acc.get('balance', 0) or 0)
+        new_balance = current_balance - abs(amount)
+
+        if new_balance < MINIMUM_BALANCE_THRESHOLD:
+            return False, f'Insufficient balance. Current: {current_balance}, Required: {amount}, Would result in: {new_balance}', current_balance
+
+        return True, 'Balance sufficient', current_balance
+    except Exception as e:
+        logger.exception('Error validating bank balance')
+        # On error, allow the operation but log
+        return True, f'Balance validation error: {str(e)}', 0.0
+
+
+def check_balance_before_expense(account_key: str, amount: float, action: str) -> Optional[str]:
+    """Check balance before creating expense. Returns error message if insufficient, None if OK."""
+    # Only check for debit actions (payments, purchases)
+    debit_actions = {'buy', 'pay', 'expense', 'debit', 'transfer_out'}
+    if action.lower() not in debit_actions:
+        return None
+
+    is_valid, message, current_balance = validate_bank_balance(account_key, amount, 'debit')
+    if not is_valid:
+        return message
+    return None
+
 
 def build_expense_from_sampling(pond_id: str, account_key: str, total_amount: float, dto: Any, extra: Dict[str, Any] = None) -> Dict[str, Any]:
     """Build an expense document from sampling/buy context.

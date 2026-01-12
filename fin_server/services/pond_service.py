@@ -39,12 +39,15 @@ def delete_pond_and_related(
     fish_activity_collection: str = 'fish_activity',
     fish_analytics_collection: str = 'fish_analytics',
     expenses_collection: str = 'expenses',
+    fish_collection: str = 'fish',
 ) -> Dict[str, Optional[int]]:
     """Delete a pond and related documents using repository singletons from get_collection().
 
-    This simplified implementation assumes `get_collection()` always returns a valid
-    repository object and directly calls the underlying collection APIs. No client or
-    transaction logic is used.
+    This implementation:
+    1. Loads pond metadata to get fish counts by species
+    2. Decrements fish.current_stock for each species
+    3. Deletes all related documents (sampling, events, etc.)
+    4. Deletes the pond
     """
     summary: Dict[str, Optional[int]] = {
         'pond_deleted': None,
@@ -53,19 +56,17 @@ def delete_pond_and_related(
         'fish_activity_deleted': None,
         'fish_analytics_deleted': None,
         'expenses_deleted': None,
+        'fish_stock_updated': None,
     }
 
     def _get_repo(name: str):
-        # Per your instruction, assume this always returns a valid repo
         return get_collection(name)
 
     def _coll_from(repo_obj, repo_name: Optional[str] = None):
-        # prefer repository.collection or .coll if present, else try repo_obj.db[repo_name], else return repo_obj
         if hasattr(repo_obj, 'collection') and getattr(repo_obj, 'collection') is not None:
             return getattr(repo_obj, 'collection')
         if hasattr(repo_obj, 'coll') and getattr(repo_obj, 'coll') is not None:
             return getattr(repo_obj, 'coll')
-        # If repo object exposes a db attribute, use it to fetch named collection
         if hasattr(repo_obj, 'db') and repo_name:
             try:
                 return repo_obj.db[repo_name]
@@ -85,12 +86,45 @@ def delete_pond_and_related(
         res = coll.delete_one(query)
         return getattr(res, 'deleted_count', None)
 
-    # Perform deletions (straightforward, no try/excepts around get_collection)
+    # Step 0: Load pond to get fish counts by species
+    try:
+        pond_repo = _get_repo(pond_collection_name)
+        pond_coll = _coll_from(pond_repo, pond_collection_name)
+        pond = pond_coll.find_one({'pond_id': pond_id}) or pond_coll.find_one({'_id': pond_id})
+
+        if pond:
+            # Get fish_types from metadata: { "TILAPIA": 500, "CATLA": 300 }
+            fish_types = (pond.get('metadata') or {}).get('fish_types', {})
+
+            if fish_types:
+                fish_repo = _get_repo(fish_collection)
+                fish_coll = _coll_from(fish_repo, fish_collection)
+
+                fish_updated_count = 0
+                for species, count in fish_types.items():
+                    if count and int(count) > 0:
+                        try:
+                            # Decrement current_stock for this species
+                            result = fish_coll.update_one(
+                                {'$or': [{'_id': species}, {'species_code': species}]},
+                                {'$inc': {'current_stock': -int(count)}}
+                            )
+                            if result.modified_count > 0:
+                                fish_updated_count += 1
+                                logger.info(f'Decremented fish {species} current_stock by {count} (pond {pond_id} deletion)')
+                        except Exception:
+                            logger.exception(f'Failed to decrement fish {species} stock for pond deletion')
+
+                summary['fish_stock_updated'] = fish_updated_count
+    except Exception:
+        logger.exception('Error loading pond for fish stock update during deletion')
+
+    # Perform deletions
     summary['sampling_deleted'] = _delete_many(sampling_collection, {'pond_id': pond_id})
     summary['pond_events_deleted'] = _delete_many(pond_event_collection, {'pond_id': pond_id})
     summary['fish_activity_deleted'] = _delete_many(fish_activity_collection, {'pond_id': pond_id})
     summary['fish_analytics_deleted'] = _delete_many(fish_analytics_collection, {'pond_id': pond_id})
-    summary['expenses_deleted'] = _delete_many(expenses_collection, {'pond_id': pond_id})
+    summary['expenses_deleted'] = _delete_many(expenses_collection, {'$or': [{'pond_id': pond_id}, {'metadata.pond_id': pond_id}]})
 
     # Delete the pond doc (try by pond_id then by _id)
     deleted = _delete_one(pond_collection_name, {'pond_id': pond_id})
