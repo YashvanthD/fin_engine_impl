@@ -29,12 +29,31 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
 
 ### Key Identifiers
 
-| Field | Description | Example |
-|-------|-------------|---------|
-| `account_key` | Organization/Company ID | `"ACC-123456"` |
-| `user_key` | User identifier | `"USR-ABC123"` |
-| `pond_id` | Pond identifier | `"ACC-123456-001"` |
-| `species_code` | Fish species code | `"TILAPIA_NILE"` |
+| Field | Format | Length | Example |
+|-------|--------|--------|---------|
+| `account_key` | 6 numeric digits | 6 | `"123456"` |
+| `user_key` | 9 numeric digits | 9 | `"123456789"` |
+| `pond_id` | account_key-3 digits | 10 | `"123456-001"` |
+| `message_id` | MSG-9 alphanumeric | 13 | `"MSG-aB3dE5fG7"` |
+| `transaction_id` | TXN-9 alphanumeric | 13 | `"TXN-aB3dE5fG7"` |
+| `expense_id` | EXP-9 alphanumeric | 13 | `"EXP-aB3dE5fG7"` |
+| `pond_event_id` | PEV-9 alphanumeric | 13 | `"PEV-aB3dE5fG7"` |
+| `fish_event_id` | FEV-9 alphanumeric | 13 | `"FEV-aB3dE5fG7"` |
+| `batch_id` | BAT-9 alphanumeric | 13 | `"BAT-aB3dE5fG7"` |
+| `sampling_id` | SMP-9 alphanumeric | 13 | `"SMP-aB3dE5fG7"` |
+| `species_code` | 5 chars-5 digits | 11 | `"TILAP-00001"` |
+| `account_number` | 12 numeric digits | 12 | `"572137000001"` |
+| `task_id` | TSK-9 alphanumeric | 13 | `"TSK-aB3dE5fG7"` |
+| `conversation_id` | CNV-9 alphanumeric | 13 | `"CNV-aB3dE5fG7"` |
+| `feed_id` | FED-9 alphanumeric | 13 | `"FED-aB3dE5fG7"` |
+
+> **ID Generation Rules:**
+> - `account_key`: 6 random numeric digits, unique per organization
+> - `user_key`: 9 random numeric digits, unique across system
+> - `pond_id`: Sequential within account (account_key-001, account_key-002...)
+> - `species_code`: First 5 chars from name + sequential 5-digit number
+> - `account_number`: IFSC prefix (6 digits) + sequential suffix (6 digits)
+> - All alphanumeric IDs: Prefix + 9 random alphanumeric characters
 
 ---
 
@@ -165,8 +184,8 @@ User accounts for authentication and authorization.
 ```javascript
 {
   "_id": ObjectId,
-  "user_key": "USR-ABC123",           // Unique user identifier
-  "account_key": "ACC-123456",         // Organization reference
+  "user_key": "123456789",             // 9 numeric digits - Unique user identifier
+  "account_key": "123456",             // 6 numeric digits - Organization reference
   "username": "john_doe",
   "email": "john@example.com",
   "phone": "+91-9876543210",
@@ -212,12 +231,12 @@ Organization/Farm registration and metadata.
 ```javascript
 {
   "_id": ObjectId,
-  "account_key": "ACC-123456",         // Unique org identifier
+  "account_key": "123456",             // 6 numeric digits - Unique org identifier
   "company_name": "Green Valley Fish Farm",
-  "admin_user_key": "USR-ABC123",      // Primary admin
+  "admin_user_key": "123456789",       // 9 numeric digits - Primary admin
   "users": [
     {
-      "user_key": "USR-ABC123",
+      "user_key": "123456789",
       "username": "admin",
       "roles": ["admin"],
       "joined_date": "2026-01-01",
@@ -257,16 +276,17 @@ Financial accounts for users and organizations.
 ```javascript
 {
   "_id": ObjectId,
-  "account_id": "BANK-001",
-  "account_key": "ACC-123456",         // Organization
-  "user_key": "USR-ABC123",            // Optional: user account
+  "account_id": "BNK-aB3dE5fG7",       // 12 alphanumeric - bank account ID
+  "account_key": "123456",             // 6 numeric digits - Organization
+  "user_key": "123456789",             // 9 numeric digits - Optional: user account
   "type": "organization",              // "organization" | "user"
   "name": "Main Operating Account",
   "balance": 500000.00,
   "currency": "INR",
   "bank_name": "State Bank",
-  "account_number": "XXXX1234",
+  "account_number": "572137000001",    // 12 numeric digits
   "ifsc_code": "SBIN0001234",
+  "_v": 1,                             // Version for optimistic locking
   "created_at": ISODate,
   "updated_at": ISODate
 }
