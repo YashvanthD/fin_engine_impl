@@ -1,7 +1,7 @@
 {
   "id": "feeding",
   "name": "Feeding & Sampling",
-  "description": "Feeding records and water quality sampling endpoints.",
+  "description": "Feeding records, water quality sampling, and fish growth sampling/purchase endpoints.",
   "endpoints": [
     {
       "id": "feeding-list",
@@ -69,9 +69,219 @@
       }
     },
     {
-      "id": "sampling-list",
-      "method": "GET",
+      "id": "fish-sampling-create",
+      "method": "POST",
       "path": "/sampling",
+      "summary": "Create fish growth sampling / purchase record",
+      "description": "Record a fish purchase or sampling event. This creates stock records, expenses, and updates analytics.",
+      "auth": true,
+      "tags": ["sampling", "fish", "purchase", "create"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "pondId": {"type": "string", "required": true, "description": "Pond ID"},
+          "species": {"type": "string", "required": true, "description": "Species code"},
+          "samplingDate": {"type": "string", "required": false, "format": "datetime", "description": "Date of sampling"},
+          "sampleSize": {"type": "integer", "required": false, "description": "Sample size (fish count)"},
+          "averageWeight": {"type": "number", "required": false, "description": "Average weight in grams"},
+          "averageLength": {"type": "number", "required": false, "description": "Average length in cm"},
+          "survivalRate": {"type": "number", "required": false, "description": "Survival rate percentage"},
+          "feedConversionRatio": {"type": "number", "required": false, "description": "Feed conversion ratio"},
+          "totalCount": {"type": "integer", "required": false, "description": "Total fish count for purchase"},
+          "totalAmount": {"type": "number", "required": false, "description": "Total cost/amount"},
+          "notes": {"type": "string", "required": false, "description": "Additional notes"}
+        },
+        "example": {
+          "pondId": "pond_001",
+          "species": "TILAPIA_NILE",
+          "samplingDate": "2026-01-10T10:00:00+05:30",
+          "sampleSize": 50,
+          "averageWeight": 150,
+          "averageLength": 12,
+          "survivalRate": 95,
+          "totalCount": 1000,
+          "totalAmount": 50000,
+          "notes": "Initial stocking purchase"
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Sampling record created",
+          "example": {
+            "success": true,
+            "data": {
+              "id": "65f1a2b3c4d5e6f7a8b9c0d1",
+              "samplingId": "SAM-20260110-001",
+              "pondId": "pond_001",
+              "species": "TILAPIA_NILE",
+              "sampleSize": 50,
+              "averageWeight": 150
+            }
+          }
+        },
+        "401": {"description": "Unauthorized"},
+        "500": {"description": "Server error"}
+      }
+    },
+    {
+      "id": "fish-sampling-list-by-pond",
+      "method": "GET",
+      "path": "/sampling/{pond_id}",
+      "summary": "List sampling records for a pond",
+      "description": "Get all fish growth sampling records for a specific pond.",
+      "auth": true,
+      "tags": ["sampling", "fish", "list"],
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true, "description": "Pond ID"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "List of sampling records",
+          "example": {
+            "success": true,
+            "data": [
+              {
+                "id": "65f1a2b3c4d5e6f7a8b9c0d1",
+                "samplingId": "SAM-20260110-001",
+                "pondId": "pond_001",
+                "species": "TILAPIA_NILE",
+                "samplingDate": "2026-01-10T10:00:00+05:30",
+                "sampleSize": 50,
+                "averageWeight": 150
+              }
+            ]
+          }
+        },
+        "500": {"description": "Server error"}
+      }
+    },
+    {
+      "id": "fish-sampling-history",
+      "method": "GET",
+      "path": "/sampling/history",
+      "summary": "Get sampling history with filters",
+      "description": "Retrieve sampling history with optional date range, pond, and species filters.",
+      "auth": true,
+      "tags": ["sampling", "fish", "history"],
+      "request": {
+        "queryParams": [
+          {"name": "startDate", "type": "string", "required": false, "format": "datetime", "description": "Start date (ISO or epoch)"},
+          {"name": "endDate", "type": "string", "required": false, "format": "datetime", "description": "End date (ISO or epoch)"},
+          {"name": "pondId", "type": "string", "required": false, "description": "Filter by pond ID"},
+          {"name": "species", "type": "string", "required": false, "description": "Filter by species code"},
+          {"name": "limit", "type": "integer", "required": false, "default": 10, "description": "Maximum records to return"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Sampling history records",
+          "example": {
+            "success": true,
+            "data": [
+              {
+                "id": "65f1a2b3c4d5e6f7a8b9c0d1",
+                "samplingId": "SAM-20260110-001",
+                "pondId": "pond_001",
+                "species": "TILAPIA_NILE",
+                "samplingDate": "2026-01-10T10:00:00+05:30",
+                "sampleSize": 50,
+                "averageWeight": 150
+              }
+            ]
+          }
+        },
+        "500": {"description": "Server error"}
+      }
+    },
+    {
+      "id": "fish-sampling-update",
+      "method": "PUT",
+      "path": "/sampling/{sampling_id}",
+      "summary": "Update a sampling record",
+      "description": "Update an existing fish sampling record. Will recalculate stock and expense deltas if count or cost changes.",
+      "auth": true,
+      "tags": ["sampling", "fish", "update"],
+      "request": {
+        "pathParams": [
+          {"name": "sampling_id", "type": "string", "required": true, "description": "Sampling ID or MongoDB ObjectId"}
+        ],
+        "contentType": "application/json",
+        "body": {
+          "pondId": {"type": "string", "required": false, "description": "Pond ID"},
+          "species": {"type": "string", "required": false, "description": "Species code"},
+          "samplingDate": {"type": "string", "required": false, "format": "datetime"},
+          "sampleSize": {"type": "integer", "required": false},
+          "averageWeight": {"type": "number", "required": false},
+          "averageLength": {"type": "number", "required": false},
+          "survivalRate": {"type": "number", "required": false},
+          "feedConversionRatio": {"type": "number", "required": false},
+          "totalCount": {"type": "integer", "required": false},
+          "totalAmount": {"type": "number", "required": false},
+          "notes": {"type": "string", "required": false}
+        },
+        "example": {
+          "averageWeight": 175,
+          "survivalRate": 92,
+          "notes": "Updated after recount"
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Sampling record updated",
+          "example": {
+            "success": true,
+            "data": {
+              "id": "65f1a2b3c4d5e6f7a8b9c0d1",
+              "samplingId": "SAM-20260110-001",
+              "averageWeight": 175,
+              "survivalRate": 92
+            }
+          }
+        },
+        "400": {"description": "No updatable fields provided"},
+        "403": {"description": "Not authorized to modify this sampling"},
+        "404": {"description": "Sampling record not found"},
+        "500": {"description": "Server error"}
+      }
+    },
+    {
+      "id": "fish-sampling-delete",
+      "method": "DELETE",
+      "path": "/sampling/{sampling_id}",
+      "summary": "Delete a sampling record",
+      "description": "Delete a fish sampling record. This will also cancel related expenses and clean up stock/analytics data.",
+      "auth": true,
+      "tags": ["sampling", "fish", "delete"],
+      "request": {
+        "pathParams": [
+          {"name": "sampling_id", "type": "string", "required": true, "description": "Sampling ID or MongoDB ObjectId"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Sampling record deleted",
+          "example": {
+            "success": true,
+            "data": {
+              "deleted": true,
+              "cleanup_summary": {
+                "expenses_cancelled": 1,
+                "stock_adjusted": true
+              }
+            }
+          }
+        },
+        "403": {"description": "Not authorized to delete this sampling"},
+        "404": {"description": "Sampling record not found"},
+        "500": {"description": "Server error"}
+      }
+    },
+    {
+      "id": "water-sampling-list",
+      "method": "GET",
+      "path": "/water-quality/samples",
       "summary": "List water quality samples",
       "auth": true,
       "tags": ["sampling", "water-quality"],
@@ -104,9 +314,9 @@
       }
     },
     {
-      "id": "sampling-create",
+      "id": "water-sampling-create",
       "method": "POST",
-      "path": "/sampling",
+      "path": "/water-quality/samples",
       "summary": "Record water quality sample",
       "auth": true,
       "tags": ["sampling", "water-quality", "create"],

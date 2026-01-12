@@ -116,15 +116,65 @@
       }
     },
     {
+      "id": "fish-analytics-all",
+      "method": "GET",
+      "path": "/fish/analytics",
+      "summary": "Get analytics for all fish",
+      "description": "Get aggregated analytics for all fish species mapped to the current account.",
+      "auth": true,
+      "tags": ["fish", "analytics"],
+      "request": {
+        "queryParams": [
+          {"name": "species_code", "type": "string", "required": false, "description": "Filter by specific species code"},
+          {"name": "min_age", "type": "integer", "required": false, "description": "Minimum fish age in months"},
+          {"name": "max_age", "type": "integer", "required": false, "description": "Maximum fish age in months"},
+          {"name": "min_weight", "type": "number", "required": false, "description": "Minimum average weight"},
+          {"name": "max_weight", "type": "number", "required": false, "description": "Maximum average weight"},
+          {"name": "avg_n", "type": "integer", "required": false, "description": "Number of samples to average"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Analytics for all mapped fish species",
+          "example": {
+            "success": true,
+            "data": {
+              "analytics": [
+                {
+                  "species_code": "TILAPIA_NILE",
+                  "analytics": {
+                    "total_count": 5000,
+                    "age_analytics": {
+                      "3": {"count": 2000, "avg_weight": 150},
+                      "6": {"count": 3000, "avg_weight": 450}
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "404": {"description": "Fish species not found in your farm"}
+      }
+    },
+    {
       "id": "fish-analytics",
       "method": "GET",
-      "path": "/fish/{species_code}/analytics",
-      "summary": "Get growth analytics for species",
+      "path": "/fish/{species_id}/analytics",
+      "summary": "Get analytics for a specific fish species",
+      "description": "Get detailed growth and population analytics for a specific fish species.",
       "auth": true,
       "tags": ["fish", "analytics"],
       "request": {
         "pathParams": [
-          {"name": "species_code", "type": "string", "required": true}
+          {"name": "species_id", "type": "string", "required": true, "description": "Species code/ID"}
+        ],
+        "queryParams": [
+          {"name": "min_age", "type": "integer", "required": false, "description": "Minimum fish age in months"},
+          {"name": "max_age", "type": "integer", "required": false, "description": "Maximum fish age in months"},
+          {"name": "min_weight", "type": "number", "required": false, "description": "Minimum average weight"},
+          {"name": "max_weight", "type": "number", "required": false, "description": "Maximum average weight"},
+          {"name": "avg_n", "type": "integer", "required": false, "description": "Number of samples to average"}
         ]
       },
       "responses": {
@@ -134,12 +184,135 @@
             "success": true,
             "data": {
               "species_code": "TILAPIA_NILE",
-              "growth_data": [],
-              "avg_weight": 500,
-              "mortality_rate": 5.2
+              "analytics": {
+                "total_count": 5000,
+                "age_analytics": {
+                  "3": {"count": 2000, "avg_weight": 150},
+                  "6": {"count": 3000, "avg_weight": 450}
+                },
+                "growth_data": [],
+                "avg_weight": 500,
+                "mortality_rate": 5.2
+              }
+            }
+          }
+        },
+        "404": {"description": "Fish species not found in your farm"}
+      }
+    },
+    {
+      "id": "fish-fields",
+      "method": "GET",
+      "path": "/fish/fields",
+      "summary": "Get available fish fields",
+      "description": "Get a list of all available fields/attributes for fish entities.",
+      "auth": true,
+      "tags": ["fish", "metadata"],
+      "responses": {
+        "200": {
+          "description": "List of available fish fields",
+          "example": {
+            "success": true,
+            "data": {
+              "fields": ["species_code", "common_name", "scientific_name", "description", "created_at"]
             }
           }
         }
+      }
+    },
+    {
+      "id": "fish-distinct",
+      "method": "GET",
+      "path": "/fish/distinct/{field}",
+      "summary": "Get distinct values for a field",
+      "description": "Get all distinct values for a specific fish field.",
+      "auth": true,
+      "tags": ["fish", "metadata"],
+      "request": {
+        "pathParams": [
+          {"name": "field", "type": "string", "required": true, "description": "Field name to get distinct values for"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Distinct values for the field",
+          "example": {
+            "success": true,
+            "data": {
+              "field": "common_name",
+              "values": ["Nile Tilapia", "Catfish", "Carp"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "fish-stats",
+      "method": "GET",
+      "path": "/fish/stats/{field}",
+      "summary": "Get statistics for a field",
+      "description": "Get statistical information (min, max, avg, count) for a specific fish field.",
+      "auth": true,
+      "tags": ["fish", "metadata", "statistics"],
+      "request": {
+        "pathParams": [
+          {"name": "field", "type": "string", "required": true, "description": "Field name to get statistics for"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Statistics for the field",
+          "example": {
+            "success": true,
+            "data": {
+              "field": "weight",
+              "stats": {
+                "min": 100,
+                "max": 1500,
+                "avg": 450,
+                "count": 25
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "fish-batch-add",
+      "method": "POST",
+      "path": "/fish",
+      "summary": "Add a batch of fish to an existing species",
+      "description": "Add a batch of fish (count) to an existing species with age information. This updates fish analytics.",
+      "auth": true,
+      "tags": ["fish", "batch", "create"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "species_code": {"type": "string", "required": true, "description": "Species code of existing fish"},
+          "count": {"type": "integer", "required": true, "description": "Number of fish to add"},
+          "fish_age_in_month": {"type": "integer", "required": true, "description": "Age of the fish in months"},
+          "fish_weight": {"type": "number", "required": false, "description": "Average weight of fish in grams"}
+        },
+        "example": {
+          "species_code": "TILAPIA_NILE",
+          "count": 1000,
+          "fish_age_in_month": 2,
+          "fish_weight": 50
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Batch added successfully",
+          "example": {
+            "success": true,
+            "data": {
+              "species_id": "TILAPIA_NILE",
+              "event_id": "account123-TILAPIA_NILE-abc123def"
+            }
+          }
+        },
+        "400": {"description": "Invalid request - species_code, count, and fish_age_in_month are required"},
+        "404": {"description": "Fish species not found. Create the species first."}
       }
     }
   ]

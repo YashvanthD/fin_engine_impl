@@ -1,0 +1,181 @@
+{
+  "id": "pond-events",
+  "name": "Pond Events",
+  "description": "Manage pond events like adding, removing, selling, sampling, and shifting fish between ponds.",
+  "endpoints": [
+    {
+      "id": "pond-event-action",
+      "method": "POST",
+      "path": "/pond_event/{pond_id}/event/{event_type}",
+      "summary": "Create a pond event",
+      "description": "Record a pond event such as adding fish, selling, sampling, or shifting fish. This updates pond metadata and fish analytics.",
+      "auth": true,
+      "tags": ["pond-event", "fish", "create"],
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true, "description": "The pond ID"},
+          {"name": "event_type", "type": "string", "required": true, "description": "Event type", "enum": ["add", "sell", "sample", "remove", "shift_in", "shift_out"]}
+        ],
+        "contentType": "application/json",
+        "body": {
+          "fish_id": {"type": "string", "required": true, "description": "Species code of the fish"},
+          "count": {"type": "integer", "required": true, "description": "Number of fish involved in the event"},
+          "fish_age_in_month": {"type": "integer", "required": false, "description": "Age of the fish in months"},
+          "details": {"type": "object", "required": false, "description": "Additional event details"},
+          "samples": {"type": "array", "required": false, "description": "Sample data for sample/add events"}
+        },
+        "example": {
+          "fish_id": "TILAPIA_NILE",
+          "count": 500,
+          "fish_age_in_month": 3,
+          "details": {
+            "notes": "Initial stocking of pond"
+          }
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Event created successfully",
+          "example": {
+            "success": true,
+            "data": {
+              "event_id": "65f1a2b3c4d5e6f7a8b9c0d1"
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid request payload",
+          "example": {
+            "success": false,
+            "error": {
+              "message": "fish_id and count are required"
+            }
+          }
+        },
+        "401": {"description": "Unauthorized - Authentication required"},
+        "500": {"description": "Server error"}
+      }
+    },
+    {
+      "id": "pond-event-list",
+      "method": "GET",
+      "path": "/pond_event/{pond_id}/events",
+      "summary": "Get all events for a pond",
+      "description": "Retrieve the history of all events (add, sell, sample, remove, shift) for a specific pond.",
+      "auth": true,
+      "tags": ["pond-event", "list"],
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true, "description": "The pond ID"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "List of pond events",
+          "example": {
+            "success": true,
+            "data": {
+              "events": [
+                {
+                  "id": "65f1a2b3c4d5e6f7a8b9c0d1",
+                  "pondId": "pond-001",
+                  "eventType": "add",
+                  "species": "TILAPIA_NILE",
+                  "count": 500,
+                  "timestamp": "2026-01-10T10:30:00+05:30",
+                  "recordedBy": "user_123"
+                },
+                {
+                  "id": "65f1a2b3c4d5e6f7a8b9c0d2",
+                  "pondId": "pond-001",
+                  "eventType": "sample",
+                  "species": "TILAPIA_NILE",
+                  "count": 50,
+                  "timestamp": "2026-01-11T14:00:00+05:30",
+                  "recordedBy": "user_123"
+                }
+              ]
+            }
+          }
+        },
+        "401": {"description": "Unauthorized"},
+        "500": {"description": "Server error"}
+      }
+    },
+    {
+      "id": "pond-event-update",
+      "method": "PUT",
+      "path": "/pond_event/{pond_id}/events/{event_id}",
+      "summary": "Update a pond event",
+      "description": "Update an existing pond event. This will reconcile pond metadata and fish analytics by reversing the old event effects and applying the new values.",
+      "auth": true,
+      "tags": ["pond-event", "update"],
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true, "description": "The pond ID"},
+          {"name": "event_id", "type": "string", "required": true, "description": "The event ID to update"}
+        ],
+        "contentType": "application/json",
+        "body": {
+          "fish_id": {"type": "string", "required": false, "description": "Species code of the fish"},
+          "count": {"type": "integer", "required": false, "description": "Updated count"},
+          "event_type": {"type": "string", "required": false, "description": "Updated event type", "enum": ["add", "sell", "sample", "remove", "shift_in", "shift_out"]},
+          "fish_age_in_month": {"type": "integer", "required": false, "description": "Updated fish age"},
+          "details": {"type": "object", "required": false, "description": "Updated event details"},
+          "samples": {"type": "array", "required": false, "description": "Updated sample data"}
+        },
+        "example": {
+          "count": 550,
+          "details": {
+            "notes": "Corrected stocking count"
+          }
+        }
+      },
+      "responses": {
+        "200": {
+          "description": "Event updated successfully",
+          "example": {
+            "success": true,
+            "data": {
+              "event_id": "65f1a2b3c4d5e6f7a8b9c0d1"
+            }
+          }
+        },
+        "400": {"description": "Invalid event_id or no updatable fields provided"},
+        "401": {"description": "Unauthorized"},
+        "404": {"description": "Event not found"},
+        "500": {"description": "Server error"}
+      }
+    },
+    {
+      "id": "pond-event-delete",
+      "method": "DELETE",
+      "path": "/pond_event/{pond_id}/events/{event_id}",
+      "summary": "Delete a pond event",
+      "description": "Remove a pond event by its ID.",
+      "auth": true,
+      "tags": ["pond-event", "delete"],
+      "request": {
+        "pathParams": [
+          {"name": "pond_id", "type": "string", "required": true, "description": "The pond ID"},
+          {"name": "event_id", "type": "string", "required": true, "description": "The event ID to delete"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Event deleted successfully",
+          "example": {
+            "success": true,
+            "data": {
+              "deleted": true
+            }
+          }
+        },
+        "401": {"description": "Unauthorized"},
+        "404": {"description": "Event not found"},
+        "500": {"description": "Server error"}
+      }
+    }
+  ]
+}
+
