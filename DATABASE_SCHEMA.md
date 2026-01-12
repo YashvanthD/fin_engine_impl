@@ -49,8 +49,9 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
                                     │   companies   │
                                     │───────────────│
                                     │ account_key●──┼──────────────────────────────────────┐
-                                    │ company_name  │                                      │
+                                    │ (6 digits)    │                                      │
                                     │ admin_user_key│──┐                                   │
+                                    │ (9 digits)    │  │                                   │
                                     └───────────────┘  │                                   │
                                            │           │                                   │
                     ┌──────────────────────┘           │                                   │
@@ -59,11 +60,10 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
             │     users     │◄─────────────────│ bank_accounts │                           │
             │───────────────│                  │───────────────│                           │
             │ user_key●     │                  │ account_id●   │                           │
-            │ account_key○──┼──────────────────│ account_key○  │                           │
-            │ username      │                  │ user_key○     │                           │
-            │ roles[]       │                  │ balance       │                           │
-            └───────────────┘                  │ type          │                           │
-                    │                          └───────────────┘                           │
+            │ (9 digits)    │                  │ account_key○  │                           │
+            │ account_key○──┼──────────────────│ account_number│                           │
+            │ (6 digits)    │                  │ (12 digits)   │                           │
+            └───────────────┘                  └───────────────┘                           │
                     │                                  │                                   │
     ┌───────────────┼───────────────┬─────────────────┼────────────────────────────────────┤
     │               │               │                 │                                    │
@@ -72,18 +72,20 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
 │  tasks  │   │ feeding │   │   ponds   │    │   expenses   │                              │
 │─────────│   │─────────│   │───────────│    │──────────────│                              │
 │ task_id●│   │feed_id● │   │ pond_id●  │    │ expense_id●  │                              │
+│TSK-xxx  │   │FED-xxx  │   │ NNNNNN-NNN│    │ EXP-xxx      │                              │
 │user_key○│   │pond_id○ │   │account_key○────│ account_key○─┼──────────────────────────────┘
 │assignee │   │user_key○│   │ metadata  │    │ amount       │
 └─────────┘   └─────────┘   │ fish_types│    │ category     │
-                            └───────────┘    │ metadata     │
-                                  │          │ event_id○    │
-                    ┌─────────────┤          │ sampling_id○ │
-                    │             │          └──────────────┘
-                    ▼             ▼                  ▲
+                            └───────────┘    │ event_id○    │
+                                  │          │ sampling_id○ │
+                    ┌─────────────┤          └──────────────┘
+                    │             │                  ▲
+                    ▼             ▼                  │
             ┌─────────────┐ ┌───────────────┐       │
             │ pond_event  │ │   sampling    │       │
             │─────────────│ │───────────────│       │
             │ event_id●   │ │ sampling_id●  │       │
+            │ PEV-xxx     │ │ SMP-xxx       │       │
             │ pond_id○    │ │ pond_id○      │       │
             │ fish_id○    │ │ species○      │       │
             │ event_type  │ │ event_id○     │───────┘
@@ -98,11 +100,10 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
             │ fish_analytics  │
             │─────────────────│
             │ batch_id●       │
+            │ BAT-xxx         │
             │ pond_id○        │
             │ species○        │
             │ account_key○    │
-            │ count           │
-            │ fish_age        │
             └─────────────────┘
                     │
                     ▼
@@ -110,9 +111,8 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
             │     fish      │◄─────│ fish_mapping  │
             │───────────────│      │───────────────│
             │ species_code● │      │ account_key●  │
-            │ common_name   │      │ fish_ids[]○   │
-            │ current_stock │      └───────────────┘
-            └───────────────┘
+            │ XXXXX-NNNNN   │      │ fish_ids[]○   │
+            └───────────────┘      └───────────────┘
 
 
 ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -123,11 +123,10 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
 │    users      │◄────────│ conversations │────────►│    messages     │
 │───────────────│         │───────────────│         │─────────────────│
 │ user_key●     │         │ conv_id●      │         │ message_id●     │
+│ (9 digits)    │         │ CNV-xxx       │         │ MSG-xxx         │
 └───────────────┘         │ participants[]│         │ conversation_id○│
-        │                 │ last_message  │         │ sender_key○     │
-        │                 │ account_key○  │         │ content         │
+        │                 │ account_key○  │         │ sender_key○     │
         │                 └───────────────┘         │ reply_to○       │
-        │                         │                 │ forwarded_from○ │
         │                         │                 └─────────────────┘
         │                         │                         │
         ▼                         ▼                         ▼
@@ -135,17 +134,24 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
 │ user_presence │         │  (room/topic) │         │message_receipts │
 │───────────────│         │───────────────│         │─────────────────│
 │ user_key●     │         │ conv:{id}     │         │ message_id○     │
-│ status        │         │               │         │ user_key○       │
-│ last_seen     │         │               │         │ status          │
-│ socket_id     │         │               │         │ timestamp       │
+│ (9 digits)    │         │               │         │ user_key○       │
+│ status        │         │               │         │ status          │
+│ last_seen     │         │               │         │ timestamp       │
 └───────────────┘         └───────────────┘         └─────────────────┘
 
 
 Legend:
-  ● = Primary Key
+  ● = Primary Key (unique identifier)
   ○ = Foreign Key Reference
   ──► = References
   ◄── = Referenced By
+  
+ID Format Legend:
+  - account_key:    6 numeric digits (e.g., "123456")
+  - user_key:       9 numeric digits (e.g., "123456789")
+  - pond_id:        account_key-NNN (e.g., "123456-001")
+  - species_code:   XXXXX-NNNNN (e.g., "TILAP-00001")
+  - xxx:            9 alphanumeric chars (e.g., "aB3dE5fG7")
 ```
 
 ---
@@ -286,9 +292,9 @@ Pond infrastructure and metadata.
 
 ```javascript
 {
-  "_id": "ACC-123456-001",             // Same as pond_id
-  "pond_id": "ACC-123456-001",
-  "account_key": "ACC-123456",
+  "_id": "123456-001",                  // Same as pond_id
+  "pond_id": "123456-001",              // account_key-3 digits
+  "account_key": "123456",              // 6 numeric digits
   "name": "Pond A - Tilapia",
   "type": "earthen",                   // "earthen" | "concrete" | "tank"
   "area": 2000,                        // Square meters
@@ -301,19 +307,19 @@ Pond infrastructure and metadata.
   "metadata": {
     "total_fish": 2500,
     "fish_types": {
-      "TILAPIA_NILE": 1500,
-      "CATLA": 1000
+      "TILAP-00001": 1500,
+      "CATLA-00001": 1000
     },
     "last_activity": {
       "event_type": "add",
-      "fish_id": "TILAPIA_NILE",
+      "fish_id": "TILAP-00001",
       "count": 500,
       "timestamp": "2026-01-12T10:00:00Z"
     }
   },
   "current_stock": [
     {
-      "species": "TILAPIA_NILE",
+      "species": "TILAP-00001",
       "count": 1500,
       "avg_weight": 250,
       "added_date": ISODate
@@ -351,8 +357,8 @@ Fish species catalog and global stock.
 
 ```javascript
 {
-  "_id": "TILAPIA_NILE",               // Same as species_code
-  "species_code": "TILAPIA_NILE",
+  "_id": "TILAP-00001",                 // Same as species_code
+  "species_code": "TILAP-00001",        // 5 chars from name + 5 numeric digits
   "common_name": "Nile Tilapia",
   "scientific_name": "Oreochromis niloticus",
   "category": "freshwater",
@@ -374,7 +380,7 @@ Fish species catalog and global stock.
     "unit": "kg"
   },
   "image_url": "/images/tilapia.jpg",
-  "account_key": "ACC-123456",         // Optional: custom species
+  "account_key": "123456",             // 6 numeric digits - Optional: custom species
   "created_at": ISODate,
   "updated_at": ISODate
 }
@@ -398,12 +404,12 @@ Maps fish species to organizations.
 ```javascript
 {
   "_id": ObjectId,
-  "account_key": "ACC-123456",
+  "account_key": "123456",             // 6 numeric digits
   "fish_ids": [
-    "TILAPIA_NILE",
-    "CATLA",
-    "ROHU",
-    "PANGASIUS"
+    "TILAP-00001",
+    "CATLA-00001",
+    "ROHUX-00001",
+    "PANGA-00001"
   ],
   "created_at": ISODate,
   "updated_at": ISODate
@@ -428,28 +434,28 @@ All events that happen in a pond (buy, sell, sample, transfer, etc.)
 ```javascript
 {
   "_id": ObjectId,
-  "event_id": "EVT-20260112-ABC",
-  "pond_id": "ACC-123456-001",
-  "account_key": "ACC-123456",
-  "user_key": "USR-ABC123",            // Who performed
+  "event_id": "PEV-aB3dE5fG7",         // 12 alphanumeric - pond event ID
+  "pond_id": "123456-001",             // account_key-3 digits
+  "account_key": "123456",             // 6 numeric digits
+  "user_key": "123456789",             // 9 numeric digits - Who performed
   "event_type": "add",                 // See event types below
-  "fish_id": "TILAPIA_NILE",
+  "fish_id": "TILAP-00001",            // species_code reference
   "count": 500,
   "fish_age_in_month": 2,
   "details": {
     "supplier": "Fish Hatchery Ltd",
     "price_per_fish": 5,
     "total_amount": 2500,
-    "batch_number": "BTH-001"
+    "batch_number": "BAT-xY7zK9mN3"
   },
   "samples": [                         // For sample events
     { "weight": 250, "length": 15 },
     { "weight": 260, "length": 16 }
   ],
-  "sampling_id": "SAM-001",            // Link to sampling
-  "expense_id": "EXP-001",             // Link to expense
-  "transfer_id": "TXF-001",            // Link shift_out ↔ shift_in
-  "recorded_by": "USR-ABC123",
+  "sampling_id": "SMP-aB3dE5fG7",      // 12 alphanumeric - Link to sampling
+  "expense_id": "EXP-aB3dE5fG7",       // 12 alphanumeric - Link to expense
+  "transfer_id": "PEV-xY7zK9mN3",      // Links shift_out ↔ shift_in
+  "recorded_by": "123456789",          // 9 numeric digits
   "created_at": ISODate,
   "updated_at": ISODate,
   "deleted_at": null
@@ -489,11 +495,11 @@ Fish purchase and growth sampling records.
 ```javascript
 {
   "_id": ObjectId,
-  "sampling_id": "SAM-20260112-001",
-  "pond_id": "ACC-123456-001",
-  "account_key": "ACC-123456",
-  "user_key": "USR-ABC123",
-  "species": "TILAPIA_NILE",
+  "sampling_id": "SMP-aB3dE5fG7",      // 12 alphanumeric - sampling ID
+  "pond_id": "123456-001",             // account_key-3 digits
+  "account_key": "123456",             // 6 numeric digits
+  "user_key": "123456789",             // 9 numeric digits
+  "species": "TILAP-00001",            // species_code reference
   "type": "buy",                       // "buy" | "sampling" | "growth_check"
   "total_count": 500,
   "total_amount": 2500.00,
@@ -503,13 +509,13 @@ Fish purchase and growth sampling records.
   "survival_rate": 98.5,
   "feed_conversion_ratio": 1.5,
   "cost_per_unit": 5.00,
-  "stock_id": "STK-001",               // Link to fish_analytics batch
-  "event_id": "EVT-001",               // Link to pond_event
-  "expense_id": "EXP-001",             // Link to expense
+  "stock_id": "BAT-xY7zK9mN3",         // Link to fish_analytics batch
+  "event_id": "PEV-aB3dE5fG7",         // Link to pond_event
+  "expense_id": "EXP-aB3dE5fG7",       // Link to expense
   "notes": "Healthy batch from certified hatchery",
   "metadata": {
     "supplier": "Fish Hatchery Ltd",
-    "batch_number": "BTH-001",
+    "batch_number": "BAT-xY7zK9mN3",
     "certificate": "CERT-2026-001"
   },
   "created_at": ISODate,
@@ -538,10 +544,10 @@ Fish population batches and growth tracking.
 ```javascript
 {
   "_id": ObjectId,
-  "batch_id": "BTH-20260112-001",
-  "account_key": "ACC-123456",
-  "pond_id": "ACC-123456-001",
-  "species": "TILAPIA_NILE",
+  "batch_id": "BAT-aB3dE5fG7",         // 12 alphanumeric - batch ID
+  "account_key": "123456",             // 6 numeric digits
+  "pond_id": "123456-001",             // account_key-3 digits
+  "species": "TILAP-00001",            // species_code reference
   "count": 500,                        // Can be negative for removals
   "fish_age_in_month": 2,
   "event_type": "add",
@@ -557,9 +563,9 @@ Fish population batches and growth tracking.
     }
   ],
   "metadata": {
-    "batch_number": "BTH-001",
+    "batch_number": "BAT-aB3dE5fG7",
     "source": "sampling",
-    "sampling_id": "SAM-001"
+    "sampling_id": "SMP-xY7zK9mN3"
   },
   "created_at": ISODate,
   "updated_at": ISODate
@@ -586,14 +592,14 @@ Detailed activity logs for fish operations.
 ```javascript
 {
   "_id": ObjectId,
-  "activity_id": "ACT-001",
-  "account_key": "ACC-123456",
-  "pond_id": "ACC-123456-001",
-  "fish_id": "TILAPIA_NILE",
+  "activity_id": "FEV-aB3dE5fG7",      // 12 alphanumeric - fish event ID
+  "account_key": "123456",             // 6 numeric digits
+  "pond_id": "123456-001",             // account_key-3 digits
+  "fish_id": "TILAP-00001",            // species_code reference
   "event_type": "sample",
-  "event_id": "EVT-001",               // Link to pond_event
+  "event_id": "PEV-xY7zK9mN3",         // Link to pond_event
   "count": 20,
-  "user_key": "USR-ABC123",
+  "user_key": "123456789",             // 9 numeric digits
   "details": {
     "purpose": "growth_check",
     "method": "cast_net"
@@ -622,17 +628,17 @@ Fish feeding records.
 ```javascript
 {
   "_id": ObjectId,
-  "feed_id": "FEED-20260112-001",
-  "pond_id": "ACC-123456-001",
-  "account_key": "ACC-123456",
-  "user_key": "USR-ABC123",
+  "feed_id": "FED-aB3dE5fG7",          // 12 alphanumeric - feeding ID
+  "pond_id": "123456-001",             // account_key-3 digits
+  "account_key": "123456",             // 6 numeric digits
+  "user_key": "123456789",             // 9 numeric digits
   "feed_type": "pellet_32",
   "feed_brand": "Cargill Aqua",
   "quantity": 50,                      // kg
   "unit": "kg",
   "feeding_time": ISODate,
   "cost": 2500.00,                     // Optional
-  "expense_id": "EXP-001",             // Link to expense if cost provided
+  "expense_id": "EXP-aB3dE5fG7",       // Link to expense if cost provided
   "notes": "Morning feed",
   "weather": "sunny",
   "water_temp": 28,
@@ -662,9 +668,9 @@ All financial expenses and income.
 ```javascript
 {
   "_id": ObjectId,
-  "expense_id": "EXP-20260112-001",
-  "account_key": "ACC-123456",
-  "user_key": "USR-ABC123",
+  "expense_id": "EXP-aB3dE5fG7",       // 12 alphanumeric - expense ID
+  "account_key": "123456",             // 6 numeric digits
+  "user_key": "123456789",             // 9 numeric digits
   "amount": 2500.00,
   "currency": "INR",
   "category": "Hatchery & Stock",      // From expense catalog
@@ -677,13 +683,13 @@ All financial expenses and income.
   "payment_method": "bank_transfer",
   "notes": "Fish purchase for Pond A",
   "metadata": {
-    "pond_id": "ACC-123456-001",
-    "species": "TILAPIA_NILE",
+    "pond_id": "123456-001",
+    "species": "TILAP-00001",
     "count": 500,
-    "event_id": "EVT-001",
-    "sampling_id": "SAM-001"
+    "event_id": "PEV-aB3dE5fG7",
+    "sampling_id": "SMP-aB3dE5fG7"
   },
-  "transaction_ref": "TXN-001",        // Link to transaction
+  "transaction_ref": "TXN-xY7zK9mN3",  // 12 alphanumeric - Link to transaction
   "vendor": {
     "name": "Fish Hatchery Ltd",
     "contact": "+91-9876543210"
@@ -691,7 +697,7 @@ All financial expenses and income.
   "invoice_no": "INV-2026-001",
   "gst": 450.00,
   "tax": 0,
-  "approved_by": "USR-ADMIN",
+  "approved_by": "123456789",          // 9 numeric digits - admin user_key
   "approved_at": ISODate,
   "created_at": ISODate,
   "updated_at": ISODate,
@@ -722,9 +728,9 @@ Financial transaction ledger.
 ```javascript
 {
   "_id": ObjectId,
-  "tx_id": "TXN-20260112-001",
-  "account_key": "ACC-123456",
-  "user_key": "USR-ABC123",
+  "tx_id": "TXN-aB3dE5fG7",            // 12 alphanumeric - transaction ID
+  "account_key": "123456",             // 6 numeric digits
+  "user_key": "123456789",             // 9 numeric digits
   "amount": 2500.00,
   "currency": "INR",
   "type": "expense",                   // "expense" | "income" | "transfer"
@@ -732,7 +738,7 @@ Financial transaction ledger.
   "status": "completed",
   "direction": "out",                  // "in" | "out"
   "bank_account_id": "BANK-001",
-  "related_id": "EXP-001",             // Link to expense/sampling
+  "related_id": "EXP-aB3dE5fG7",       // Link to expense/sampling
   "entries": [
     {
       "account": "assets:fish_stock",
@@ -746,8 +752,8 @@ Financial transaction ledger.
     }
   ],
   "metadata": {
-    "expense_id": "EXP-001",
-    "pond_id": "ACC-123456-001"
+    "expense_id": "EXP-aB3dE5fG7",
+    "pond_id": "123456-001"
   },
   "created_at": ISODate,
   "updated_at": ISODate
@@ -771,17 +777,17 @@ Bank statement line items (passbook entries).
 {
   "_id": ObjectId,
   "bank_account_id": "BANK-001",
-  "account_key": "ACC-123456",
+  "account_key": "123456",             // 6 numeric digits
   "amount": 2500.00,
   "currency": "INR",
   "direction": "out",                  // "in" | "out"
   "running_balance": 497500.00,
   "reference": {
     "type": "expense",
-    "id": "EXP-001"
+    "id": "EXP-aB3dE5fG7"
   },
   "description": "Fish purchase",
-  "transaction_id": "TXN-001",
+  "transaction_id": "TXN-aB3dE5fG7",   // 12 alphanumeric
   "created_at": ISODate
 }
 ```
@@ -802,27 +808,27 @@ Chat conversations (direct, group, broadcast).
 
 ```javascript
 {
-  "_id": "CONV-ABC123",
-  "conversation_id": "CONV-ABC123",
+  "_id": "CNV-aB3dE5fG7",               // Same as conversation_id
+  "conversation_id": "CNV-aB3dE5fG7",   // 12 alphanumeric - conversation ID
   "conversation_type": "direct",       // "direct" | "group" | "broadcast"
-  "participants": ["USR-001", "USR-002"],
+  "participants": ["123456789", "987654321"],  // 9 numeric digit user_keys
   "name": null,                        // For groups
   "description": null,
   "avatar_url": null,
-  "created_by": "USR-001",
+  "created_by": "123456789",           // 9 numeric digits
   "admins": [],                        // For groups
   "last_message": {
-    "message_id": "MSG-XYZ",
-    "sender_key": "USR-001",
+    "message_id": "MSG-xY7zK9mN3",
+    "sender_key": "123456789",
     "content": "Hello!",
     "message_type": "text",
     "created_at": ISODate
   },
   "last_activity": ISODate,
   "muted_by": [],
-  "pinned_by": ["USR-001"],
+  "pinned_by": ["123456789"],
   "archived_by": [],
-  "account_key": "ACC-123456",
+  "account_key": "123456",             // 6 numeric digits
   "metadata": {},
   "created_at": ISODate
 }
@@ -843,10 +849,10 @@ Chat messages.
 
 ```javascript
 {
-  "_id": "MSG-XYZ123",
-  "message_id": "MSG-XYZ123",
-  "conversation_id": "CONV-ABC123",
-  "sender_key": "USR-001",
+  "_id": "MSG-aB3dE5fG7",               // Same as message_id
+  "message_id": "MSG-aB3dE5fG7",        // 12 alphanumeric - message ID
+  "conversation_id": "CNV-xY7zK9mN3",   // 12 alphanumeric - conversation ref
+  "sender_key": "123456789",            // 9 numeric digits
   "content": "Hello! How are you?",
   "message_type": "text",              // "text" | "image" | "file" | "audio" | "video"
   "reply_to": null,                    // Message ID if replying
@@ -855,7 +861,7 @@ Chat messages.
   "media_thumbnail": null,
   "mentions": [],
   "metadata": {},
-  "account_key": "ACC-123456",
+  "account_key": "123456",             // 6 numeric digits
   "created_at": ISODate,
   "edited_at": null,
   "deleted_at": null,                  // Soft delete for everyone
@@ -880,8 +886,8 @@ Message delivery and read receipts.
 ```javascript
 {
   "_id": ObjectId,
-  "message_id": "MSG-XYZ123",
-  "user_key": "USR-002",
+  "message_id": "MSG-aB3dE5fG7",        // 12 alphanumeric
+  "user_key": "123456789",             // 9 numeric digits
   "status": "read",                    // "sent" | "delivered" | "read"
   "timestamp": ISODate
 }
@@ -901,12 +907,12 @@ User online/offline status.
 
 ```javascript
 {
-  "_id": "USR-001",
-  "user_key": "USR-001",
+  "_id": "123456789",                   // Same as user_key
+  "user_key": "123456789",             // 9 numeric digits
   "status": "online",                  // "online" | "offline" | "away" | "typing"
   "last_seen": ISODate,
   "socket_id": "socket_abc123",
-  "typing_in": null,                   // Conversation ID if typing
+  "typing_in": null,                   // Conversation ID (CNV-xxx) if typing
   "device_info": {
     "user_agent": "Mozilla/5.0...",
     "ip": "192.168.1.1"
@@ -931,12 +937,12 @@ Task and schedule management.
 ```javascript
 {
   "_id": ObjectId,
-  "task_id": "TSK-001",
-  "account_key": "ACC-123456",
-  "user_key": "USR-001",               // Creator
-  "reporter": "USR-001",
-  "assignee": "USR-002",
-  "assigned_to": "USR-002",
+  "task_id": "TSK-aB3dE5fG7",          // 12 alphanumeric - task ID
+  "account_key": "123456",             // 6 numeric digits
+  "user_key": "123456789",             // 9 numeric digits - Creator
+  "reporter": "123456789",             // 9 numeric digits
+  "assignee": "987654321",             // 9 numeric digits
+  "assigned_to": "987654321",          // 9 numeric digits
   "title": "Check water quality Pond A",
   "description": "Daily pH and temperature check",
   "status": "pending",                 // "pending" | "inprogress" | "completed"
@@ -951,7 +957,7 @@ Task and schedule management.
   "history": [
     {
       "action": "created",
-      "by": "USR-001",
+      "by": "123456789",
       "at": ISODate
     }
   ],
@@ -978,12 +984,12 @@ Pending notifications for delivery.
 ```javascript
 {
   "_id": ObjectId,
-  "user_key": "USR-002",
-  "from_user_key": "USR-001",
+  "user_key": "987654321",             // 9 numeric digits - recipient
+  "from_user_key": "123456789",        // 9 numeric digits - sender
   "message": "You have a new task assigned",
   "type": "task",                      // "task" | "message" | "alert" | "system"
   "data": {
-    "task_id": "TSK-001"
+    "task_id": "TSK-aB3dE5fG7"
   },
   "status": "pending",                 // "pending" | "sent" | "failed"
   "sent_at": null,
@@ -1002,9 +1008,9 @@ System audit trail.
   "_id": ObjectId,
   "action": "create",                  // "create" | "update" | "delete" | "soft_delete"
   "collection": "pond_event",
-  "document_id": "EVT-001",
-  "user_key": "USR-001",
-  "account_key": "ACC-123456",
+  "document_id": "PEV-aB3dE5fG7",      // Reference to affected document
+  "user_key": "123456789",             // 9 numeric digits
+  "account_key": "123456",             // 6 numeric digits
   "timestamp": ISODate,
   "changes": {
     "added": {},
