@@ -1,0 +1,1100 @@
+{
+  "id": "use-cases",
+  "name": "Fish Farm Use Cases",
+  "description": "Complete guide to all use cases in a modern fish farm - from initial setup to harvest and sales. This document walks through the entire fish farming lifecycle with API examples.",
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "Phase 1: Farm Setup & Registration",
+      "description": "Initial setup of the fish farm management system",
+      "useCases": [
+        {
+          "id": "uc-1.1",
+          "name": "Register Farm/Company",
+          "description": "Register your fish farm as a company in the system. This creates the admin account and sets up the organization.",
+          "when": "First time setup - before any other operations",
+          "api": {
+            "method": "POST",
+            "path": "/auth/signup",
+            "body": {
+              "username": "farmadmin",
+              "email": "admin@myfishfarm.com",
+              "password": "SecurePass123!",
+              "phone": "+91-9876543210",
+              "company_name": "Green Valley Fish Farm",
+              "company_address": "123 Lake Road, Karnataka",
+              "master_password": "your-master-password"
+            }
+          },
+          "result": "Company created with admin user. You receive account_key and user_key for future operations."
+        },
+        {
+          "id": "uc-1.2",
+          "name": "Add Farm Employees/Workers",
+          "description": "Add additional users (workers, supervisors, managers) to your farm account.",
+          "when": "After company registration, when you need to add team members",
+          "api": {
+            "method": "POST",
+            "path": "/auth/account/{account_key}/signup",
+            "headers": {
+              "Authorization": "Bearer {admin_token}"
+            },
+            "body": {
+              "username": "supervisor_ravi",
+              "email": "ravi@myfishfarm.com",
+              "password": "WorkerPass123!",
+              "phone": "+91-9876543211",
+              "roles": ["supervisor"]
+            }
+          },
+          "result": "New user added to the farm account with specified roles."
+        },
+        {
+          "id": "uc-1.3",
+          "name": "Login to Farm System",
+          "description": "Authenticate and get access token for API operations.",
+          "when": "Every time you start working with the system",
+          "api": {
+            "method": "POST",
+            "path": "/auth/login",
+            "body": {
+              "email": "admin@myfishfarm.com",
+              "password": "SecurePass123!"
+            }
+          },
+          "result": "Receive JWT access_token and refresh_token for authenticated operations."
+        }
+      ]
+    },
+    {
+      "id": "phase-2",
+      "name": "Phase 2: Infrastructure Setup",
+      "description": "Create and configure ponds for fish farming",
+      "useCases": [
+        {
+          "id": "uc-2.1",
+          "name": "Create a New Pond",
+          "description": "Register a new pond in your farm. Each pond tracks fish stock, water quality, and events.",
+          "when": "When constructing or adding a new pond to your farm",
+          "api": {
+            "method": "POST",
+            "path": "/pond/create",
+            "body": {
+              "name": "Pond A - Nursery",
+              "type": "nursery",
+              "area": 500,
+              "area_unit": "sqm",
+              "depth": 1.5,
+              "depth_unit": "m",
+              "capacity": 5000,
+              "water_source": "borewell",
+              "location": {
+                "latitude": 12.9716,
+                "longitude": 77.5946
+              },
+              "metadata": {
+                "construction_date": "2025-06-15",
+                "liner_type": "HDPE",
+                "aeration": true
+              }
+            }
+          },
+          "result": "Pond created with auto-generated pond_id (e.g., ACC001-001). Ready for stocking."
+        },
+        {
+          "id": "uc-2.2",
+          "name": "Create Grow-out Pond",
+          "description": "Create a larger pond for growing fish to harvest size.",
+          "when": "Setting up production ponds for mature fish",
+          "api": {
+            "method": "POST",
+            "path": "/pond/create",
+            "body": {
+              "name": "Pond B - Grow Out 1",
+              "type": "grow-out",
+              "area": 2000,
+              "area_unit": "sqm",
+              "depth": 2.0,
+              "depth_unit": "m",
+              "capacity": 15000,
+              "water_source": "canal",
+              "metadata": {
+                "aeration": true,
+                "aerator_count": 4
+              }
+            }
+          },
+          "result": "Grow-out pond created and ready for fish transfer from nursery."
+        },
+        {
+          "id": "uc-2.3",
+          "name": "Update Pond Details",
+          "description": "Modify pond information like capacity, equipment, or metadata.",
+          "when": "When pond specifications change or need correction",
+          "api": {
+            "method": "PUT",
+            "path": "/pond/update/{pond_id}",
+            "body": {
+              "capacity": 6000,
+              "metadata": {
+                "aeration": true,
+                "aerator_count": 2,
+                "last_maintenance": "2026-01-10"
+              }
+            }
+          },
+          "result": "Pond details updated successfully."
+        },
+        {
+          "id": "uc-2.4",
+          "name": "List All Ponds",
+          "description": "Get overview of all ponds in your farm with their current status.",
+          "when": "Dashboard view, reporting, or selecting a pond for operations",
+          "api": {
+            "method": "GET",
+            "path": "/pond/"
+          },
+          "result": "List of all ponds with their details, fish counts, and last activity."
+        },
+        {
+          "id": "uc-2.5",
+          "name": "Get Pond Details",
+          "description": "View complete details of a specific pond including fish stock and events.",
+          "when": "Detailed pond monitoring or before performing operations",
+          "api": {
+            "method": "GET",
+            "path": "/pond/{pond_id}"
+          },
+          "result": "Complete pond information with metadata, fish types, and counts."
+        }
+      ]
+    },
+    {
+      "id": "phase-3",
+      "name": "Phase 3: Fish Species Setup",
+      "description": "Register fish species that you will be farming",
+      "useCases": [
+        {
+          "id": "uc-3.1",
+          "name": "Register Fish Species",
+          "description": "Add a new fish species to your farm's catalog. This is done once per species.",
+          "when": "When starting to farm a new type of fish",
+          "api": {
+            "method": "POST",
+            "path": "/fish/create",
+            "body": {
+              "common_name": "Nile Tilapia",
+              "scientific_name": "Oreochromis niloticus",
+              "species_code": "TILAPIA_NILE",
+              "description": "Fast-growing freshwater fish, ideal for warm climates",
+              "growth_rate": "fast",
+              "optimal_temp_min": 25,
+              "optimal_temp_max": 30,
+              "market_size_kg": 0.5
+            }
+          },
+          "result": "Fish species registered with unique species_code for tracking."
+        },
+        {
+          "id": "uc-3.2",
+          "name": "Register Another Species (Catfish)",
+          "description": "Add catfish species to diversify your farm.",
+          "when": "Expanding to multiple fish types",
+          "api": {
+            "method": "POST",
+            "path": "/fish/create",
+            "body": {
+              "common_name": "Pangasius Catfish",
+              "scientific_name": "Pangasianodon hypophthalmus",
+              "species_code": "CATFISH_PANGA",
+              "description": "Hardy bottom-feeder, good for mixed farming",
+              "growth_rate": "medium",
+              "optimal_temp_min": 22,
+              "optimal_temp_max": 28,
+              "market_size_kg": 1.0
+            }
+          },
+          "result": "Catfish species added to your farm catalog."
+        },
+        {
+          "id": "uc-3.3",
+          "name": "List All Fish Species",
+          "description": "View all fish species registered in your farm with their analytics.",
+          "when": "Reviewing fish catalog or selecting species for operations",
+          "api": {
+            "method": "GET",
+            "path": "/fish/"
+          },
+          "result": "List of all fish species with current analytics and pond locations."
+        }
+      ]
+    },
+    {
+      "id": "phase-4",
+      "name": "Phase 4: Fish Purchase & Stocking",
+      "description": "Buy fish fingerlings/fry and stock them in ponds",
+      "useCases": [
+        {
+          "id": "uc-4.1",
+          "name": "Purchase Fish Fingerlings (via Sampling)",
+          "description": "Record purchase of fish fingerlings from a hatchery. This creates stock records and expense entries.",
+          "when": "Buying new fish stock from suppliers",
+          "api": {
+            "method": "POST",
+            "path": "/sampling",
+            "body": {
+              "pondId": "ACC001-001",
+              "species": "TILAPIA_NILE",
+              "samplingDate": "2026-01-12T10:00:00+05:30",
+              "totalCount": 5000,
+              "sampleSize": 50,
+              "averageWeight": 10,
+              "averageLength": 5,
+              "totalAmount": 25000,
+              "notes": "Purchased from ABC Hatchery, Batch #TN-2026-001"
+            }
+          },
+          "result": "Purchase recorded with expense entry. Stock added to pond. Analytics updated."
+        },
+        {
+          "id": "uc-4.2",
+          "name": "Stock Fish in Pond (Add Event)",
+          "description": "Record stocking of fish into a pond. Use this for internal stock movements or when not tracking purchase cost.",
+          "when": "Adding fish to a pond (initial stocking or restocking)",
+          "api": {
+            "method": "POST",
+            "path": "/pond_event/{pond_id}/event/add",
+            "body": {
+              "fish_id": "TILAPIA_NILE",
+              "count": 5000,
+              "fish_age_in_month": 1,
+              "details": {
+                "source": "ABC Hatchery",
+                "batch_number": "TN-2026-001",
+                "notes": "Initial stocking - nursery pond"
+              }
+            }
+          },
+          "result": "Fish added to pond. Pond metadata updated with fish count. Analytics tracking started."
+        },
+        {
+          "id": "uc-4.3",
+          "name": "Record Fish Purchase Expense",
+          "description": "Record the financial expense for fish purchase separately.",
+          "when": "Tracking costs when purchase wasn't recorded via sampling",
+          "api": {
+            "method": "POST",
+            "path": "/expenses",
+            "body": {
+              "category": "asset",
+              "type": "fish",
+              "action": "buy",
+              "amount": 25000,
+              "currency": "INR",
+              "pond_id": "ACC001-001",
+              "description": "Tilapia fingerlings - 5000 nos",
+              "vendor": "ABC Hatchery",
+              "metadata": {
+                "species": "TILAPIA_NILE",
+                "quantity": 5000,
+                "price_per_unit": 5
+              }
+            }
+          },
+          "result": "Expense recorded for financial tracking and reporting."
+        }
+      ]
+    },
+    {
+      "id": "phase-5",
+      "name": "Phase 5: Daily Operations",
+      "description": "Day-to-day fish farm management activities",
+      "useCases": [
+        {
+          "id": "uc-5.1",
+          "name": "Record Daily Feeding",
+          "description": "Log feeding activity for a pond. Track feed consumption for FCR calculation.",
+          "when": "After each feeding session (typically 2-3 times daily)",
+          "api": {
+            "method": "POST",
+            "path": "/feeding/",
+            "body": {
+              "pondId": "ACC001-001",
+              "feedType": "floating pellet",
+              "feedBrand": "Growel Aqua",
+              "quantity": 25,
+              "unit": "kg",
+              "feedingTime": "2026-01-12T08:00:00+05:30",
+              "notes": "Morning feeding - fish active"
+            }
+          },
+          "result": "Feeding record created. Used for FCR calculation and feed cost tracking."
+        },
+        {
+          "id": "uc-5.2",
+          "name": "Record Evening Feeding",
+          "description": "Log second feeding of the day.",
+          "when": "Evening feeding session",
+          "api": {
+            "method": "POST",
+            "path": "/feeding/",
+            "body": {
+              "pondId": "ACC001-001",
+              "feedType": "floating pellet",
+              "feedBrand": "Growel Aqua",
+              "quantity": 20,
+              "unit": "kg",
+              "feedingTime": "2026-01-12T17:00:00+05:30",
+              "notes": "Evening feeding - reduced quantity due to cloudy weather"
+            }
+          },
+          "result": "Evening feeding logged for the pond."
+        },
+        {
+          "id": "uc-5.3",
+          "name": "Record Feed Purchase Expense",
+          "description": "Track feed purchase costs.",
+          "when": "Buying fish feed stock",
+          "api": {
+            "method": "POST",
+            "path": "/expenses",
+            "body": {
+              "category": "operational",
+              "type": "feed",
+              "action": "buy",
+              "amount": 45000,
+              "currency": "INR",
+              "description": "Fish feed - 50 bags (25kg each)",
+              "vendor": "Growel Feeds Pvt Ltd",
+              "metadata": {
+                "feed_type": "floating pellet",
+                "quantity_bags": 50,
+                "weight_per_bag_kg": 25,
+                "price_per_bag": 900
+              }
+            }
+          },
+          "result": "Feed expense recorded for cost analysis."
+        },
+        {
+          "id": "uc-5.4",
+          "name": "Create Daily Task",
+          "description": "Create tasks for farm workers.",
+          "when": "Assigning work to team members",
+          "api": {
+            "method": "POST",
+            "path": "/task/",
+            "body": {
+              "title": "Check aerators in Pond B",
+              "description": "Inspect all 4 aerators, clean filters, check oil levels",
+              "assigned_to": "worker_ravi_key",
+              "priority": "high",
+              "task_date": "2026-01-12",
+              "end_date": "2026-01-12 17:00",
+              "tags": ["maintenance", "pond-b"]
+            }
+          },
+          "result": "Task created and assigned. Worker gets notification."
+        },
+        {
+          "id": "uc-5.5",
+          "name": "Record Water Quality Check",
+          "description": "Log water quality parameters for a pond.",
+          "when": "During routine water quality monitoring (daily/weekly)",
+          "api": {
+            "method": "POST",
+            "path": "/water-quality/samples",
+            "body": {
+              "pond_id": "ACC001-001",
+              "temperature": 28.5,
+              "ph": 7.2,
+              "dissolved_oxygen": 6.5,
+              "ammonia": 0.02,
+              "nitrite": 0.01,
+              "turbidity": 25,
+              "sample_date": "2026-01-12T09:00:00+05:30"
+            }
+          },
+          "result": "Water quality data recorded for trend analysis and alerts."
+        }
+      ]
+    },
+    {
+      "id": "phase-6",
+      "name": "Phase 6: Growth Monitoring & Sampling",
+      "description": "Track fish growth through periodic sampling",
+      "useCases": [
+        {
+          "id": "uc-6.1",
+          "name": "Monthly Growth Sampling",
+          "description": "Sample fish to measure growth progress. Essential for estimating harvest timing.",
+          "when": "Monthly or bi-weekly growth checks",
+          "api": {
+            "method": "POST",
+            "path": "/pond_event/{pond_id}/event/sample",
+            "body": {
+              "fish_id": "TILAPIA_NILE",
+              "count": 30,
+              "fish_age_in_month": 3,
+              "details": {
+                "notes": "Monthly growth sampling",
+                "weather": "Sunny",
+                "water_temp": 28
+              },
+              "samples": [
+                {"weight": 150, "length": 15},
+                {"weight": 165, "length": 16},
+                {"weight": 145, "length": 14.5},
+                {"weight": 170, "length": 16.5},
+                {"weight": 155, "length": 15.2}
+              ]
+            }
+          },
+          "result": "Growth data recorded. Average weight/length calculated. Analytics updated."
+        },
+        {
+          "id": "uc-6.2",
+          "name": "Record Sampling via Sampling API",
+          "description": "Alternative method to record growth sampling with detailed metrics.",
+          "when": "Detailed growth tracking with survival rate and FCR",
+          "api": {
+            "method": "POST",
+            "path": "/sampling",
+            "body": {
+              "pondId": "ACC001-001",
+              "species": "TILAPIA_NILE",
+              "samplingDate": "2026-01-12T10:00:00+05:30",
+              "sampleSize": 30,
+              "averageWeight": 157,
+              "averageLength": 15.4,
+              "survivalRate": 92,
+              "feedConversionRatio": 1.6,
+              "notes": "Month 3 sampling - good growth rate"
+            }
+          },
+          "result": "Detailed growth metrics recorded for analysis and reporting."
+        },
+        {
+          "id": "uc-6.3",
+          "name": "Get Fish Analytics",
+          "description": "View growth analytics and population data for fish species.",
+          "when": "Reviewing growth progress, planning harvest",
+          "api": {
+            "method": "GET",
+            "path": "/fish/{species_id}/analytics",
+            "queryParams": {
+              "min_age": 2,
+              "max_age": 6
+            }
+          },
+          "result": "Analytics showing fish counts by age, average weights, and growth trends."
+        },
+        {
+          "id": "uc-6.4",
+          "name": "Get Sampling History",
+          "description": "View historical sampling data for trend analysis.",
+          "when": "Reviewing growth history, comparing batches",
+          "api": {
+            "method": "GET",
+            "path": "/sampling/history",
+            "queryParams": {
+              "pondId": "ACC001-001",
+              "species": "TILAPIA_NILE",
+              "startDate": "2025-10-01",
+              "endDate": "2026-01-12",
+              "limit": 20
+            }
+          },
+          "result": "List of all sampling records showing growth progression."
+        }
+      ]
+    },
+    {
+      "id": "phase-7",
+      "name": "Phase 7: Fish Mortality & Health Management",
+      "description": "Handle fish deaths, disease outbreaks, and health issues",
+      "useCases": [
+        {
+          "id": "uc-7.1",
+          "name": "Record Fish Mortality",
+          "description": "Log fish deaths due to disease, water quality issues, or other causes.",
+          "when": "When dead fish are found in the pond",
+          "api": {
+            "method": "POST",
+            "path": "/pond_event/{pond_id}/event/remove",
+            "body": {
+              "fish_id": "TILAPIA_NILE",
+              "count": 25,
+              "details": {
+                "reason": "Disease outbreak",
+                "disease_type": "Bacterial infection - Aeromonas",
+                "symptoms": "Red spots, fin rot, lethargy",
+                "notes": "Found during morning check. Isolated pond, started treatment.",
+                "action_taken": "Applied antibiotics, increased aeration"
+              }
+            }
+          },
+          "result": "Mortality recorded. Pond count decreased. Useful for mortality rate calculation."
+        },
+        {
+          "id": "uc-7.2",
+          "name": "Record Medicine/Treatment Expense",
+          "description": "Track costs for fish treatment and medicine.",
+          "when": "Purchasing medicine or treatment supplies",
+          "api": {
+            "method": "POST",
+            "path": "/expenses",
+            "body": {
+              "category": "operational",
+              "type": "medicine",
+              "action": "buy",
+              "amount": 5500,
+              "currency": "INR",
+              "pond_id": "ACC001-001",
+              "description": "Oxytetracycline treatment for bacterial infection",
+              "vendor": "Aqua Vet Supplies",
+              "metadata": {
+                "medicine_name": "Oxytetracycline 20%",
+                "quantity": 5,
+                "unit": "kg",
+                "treatment_duration_days": 7
+              }
+            }
+          },
+          "result": "Medicine expense recorded for cost tracking."
+        },
+        {
+          "id": "uc-7.3",
+          "name": "Create Health Check Task",
+          "description": "Schedule health monitoring tasks after disease outbreak.",
+          "when": "After disease detection, for follow-up monitoring",
+          "api": {
+            "method": "POST",
+            "path": "/task/",
+            "body": {
+              "title": "Daily health check - Pond A (Post-treatment)",
+              "description": "Monitor fish behavior, check for new deaths, measure water quality",
+              "priority": "high",
+              "recurring": "daily",
+              "task_date": "2026-01-13",
+              "end_date": "2026-01-20 09:00",
+              "tags": ["health", "pond-a", "treatment"]
+            }
+          },
+          "result": "Recurring task created for health monitoring."
+        }
+      ]
+    },
+    {
+      "id": "phase-8",
+      "name": "Phase 8: Fish Transfer Between Ponds",
+      "description": "Move fish between ponds (nursery to grow-out, size grading)",
+      "useCases": [
+        {
+          "id": "uc-8.1",
+          "name": "Transfer Fish OUT of Nursery Pond",
+          "description": "Move fish from nursery pond to grow-out pond. First, record the outgoing transfer.",
+          "when": "Fish are ready to move from nursery to grow-out (typically after 2-3 months)",
+          "api": {
+            "method": "POST",
+            "path": "/pond_event/{pond_id}/event/shift_out",
+            "pathExample": "/pond_event/ACC001-001/event/shift_out",
+            "body": {
+              "fish_id": "TILAPIA_NILE",
+              "count": 3000,
+              "fish_age_in_month": 3,
+              "details": {
+                "destination_pond": "ACC001-002",
+                "reason": "Size grading - moving to grow-out",
+                "notes": "Fish reached 150g average, ready for grow-out phase",
+                "average_weight_at_transfer": 150
+              }
+            }
+          },
+          "result": "Fish count decreased in nursery pond. Transfer recorded."
+        },
+        {
+          "id": "uc-8.2",
+          "name": "Transfer Fish INTO Grow-out Pond",
+          "description": "Complete the transfer by recording incoming fish in the destination pond.",
+          "when": "Immediately after shift_out - to maintain accurate counts",
+          "api": {
+            "method": "POST",
+            "path": "/pond_event/{pond_id}/event/shift_in",
+            "pathExample": "/pond_event/ACC001-002/event/shift_in",
+            "body": {
+              "fish_id": "TILAPIA_NILE",
+              "count": 3000,
+              "fish_age_in_month": 3,
+              "details": {
+                "source_pond": "ACC001-001",
+                "reason": "Received from nursery for grow-out",
+                "notes": "3000 fingerlings from nursery batch TN-2026-001",
+                "average_weight_at_transfer": 150
+              }
+            }
+          },
+          "result": "Fish count increased in grow-out pond. Transfer complete."
+        },
+        {
+          "id": "uc-8.3",
+          "name": "Size Grading - Separate Large Fish",
+          "description": "Move larger fish to separate pond for faster harvest.",
+          "when": "During grading when fish show size variation",
+          "api": {
+            "method": "POST",
+            "path": "/pond_event/ACC001-002/event/shift_out",
+            "body": {
+              "fish_id": "TILAPIA_NILE",
+              "count": 500,
+              "fish_age_in_month": 5,
+              "details": {
+                "destination_pond": "ACC001-003",
+                "reason": "Size grading - jumbo fish",
+                "notes": "Large fish (400g+) moved for early harvest",
+                "average_weight_at_transfer": 420
+              }
+            }
+          },
+          "result": "Large fish separated for faster harvest cycle."
+        }
+      ]
+    },
+    {
+      "id": "phase-9",
+      "name": "Phase 9: Harvest & Sales",
+      "description": "Harvest fish and record sales transactions",
+      "useCases": [
+        {
+          "id": "uc-9.1",
+          "name": "Partial Harvest for Local Market",
+          "description": "Harvest a portion of fish for immediate sale to local market.",
+          "when": "When fish reach market size and there's buyer demand",
+          "api": {
+            "method": "POST",
+            "path": "/pond_event/{pond_id}/event/sell",
+            "body": {
+              "fish_id": "TILAPIA_NILE",
+              "count": 500,
+              "details": {
+                "notes": "Partial harvest for Bangalore market",
+                "buyer": "Fresh Fish Traders",
+                "buyer_contact": "+91-9876543000",
+                "price_per_kg": 180,
+                "total_weight_kg": 250,
+                "total_amount": 45000,
+                "average_fish_weight_g": 500,
+                "harvest_method": "seine net"
+              }
+            }
+          },
+          "result": "Sale recorded. Pond fish count decreased. Ready for revenue tracking."
+        },
+        {
+          "id": "uc-9.2",
+          "name": "Record Sales Transaction",
+          "description": "Create a transaction record for the sale with payment details.",
+          "when": "After harvest, when recording the financial transaction",
+          "api": {
+            "method": "POST",
+            "path": "/transactions",
+            "body": {
+              "type": "sale",
+              "pond_id": "ACC001-002",
+              "species": "TILAPIA_NILE",
+              "quantity": 500,
+              "weight_kg": 250,
+              "amount": 45000,
+              "currency": "INR",
+              "payment_method": "bank_transfer",
+              "payment_status": "pending",
+              "buyer": {
+                "name": "Fresh Fish Traders",
+                "contact": "+91-9876543000"
+              },
+              "notes": "Invoice #INV-2026-0045"
+            }
+          },
+          "result": "Transaction recorded for accounts receivable tracking."
+        },
+        {
+          "id": "uc-9.3",
+          "name": "Full Pond Harvest",
+          "description": "Complete harvest of all fish from a pond.",
+          "when": "End of culture cycle, pond draining",
+          "api": {
+            "method": "POST",
+            "path": "/pond_event/{pond_id}/event/sell",
+            "body": {
+              "fish_id": "TILAPIA_NILE",
+              "count": 2500,
+              "details": {
+                "notes": "Full harvest - end of cycle",
+                "buyer": "Metro Wholesale Market",
+                "price_per_kg": 170,
+                "total_weight_kg": 1375,
+                "total_amount": 233750,
+                "average_fish_weight_g": 550,
+                "harvest_date": "2026-01-12",
+                "harvest_method": "complete drain"
+              }
+            }
+          },
+          "result": "Pond emptied. All fish sold. Ready for next cycle."
+        },
+        {
+          "id": "uc-9.4",
+          "name": "Record Bulk Sale Transaction",
+          "description": "Record large wholesale transaction.",
+          "when": "Selling to wholesaler or processor",
+          "api": {
+            "method": "POST",
+            "path": "/transactions",
+            "body": {
+              "type": "sale",
+              "pond_id": "ACC001-002",
+              "species": "TILAPIA_NILE",
+              "quantity": 2500,
+              "weight_kg": 1375,
+              "amount": 233750,
+              "currency": "INR",
+              "payment_method": "cheque",
+              "payment_status": "partial",
+              "advance_paid": 100000,
+              "balance_due": 133750,
+              "due_date": "2026-01-20",
+              "buyer": {
+                "name": "Metro Wholesale Market",
+                "gst_number": "29ABCDE1234F1Z5"
+              },
+              "notes": "Cheque dated 2026-01-20"
+            }
+          },
+          "result": "Wholesale transaction recorded with payment tracking."
+        },
+        {
+          "id": "uc-9.5",
+          "name": "Record Revenue/Income",
+          "description": "Record income from fish sales for accounting.",
+          "when": "When payment is received",
+          "api": {
+            "method": "POST",
+            "path": "/expenses",
+            "body": {
+              "category": "income",
+              "type": "fish_sale",
+              "action": "sell",
+              "amount": 233750,
+              "currency": "INR",
+              "pond_id": "ACC001-002",
+              "description": "Tilapia harvest - full pond sale",
+              "metadata": {
+                "species": "TILAPIA_NILE",
+                "quantity": 2500,
+                "weight_kg": 1375,
+                "buyer": "Metro Wholesale Market",
+                "invoice": "INV-2026-0046"
+              }
+            }
+          },
+          "result": "Income recorded for profit/loss calculation."
+        }
+      ]
+    },
+    {
+      "id": "phase-10",
+      "name": "Phase 10: Financial Management",
+      "description": "Track all expenses, income, and financial reports",
+      "useCases": [
+        {
+          "id": "uc-10.1",
+          "name": "Record Electricity Expense",
+          "description": "Track monthly electricity costs for aerators, pumps, etc.",
+          "when": "Monthly utility bill payment",
+          "api": {
+            "method": "POST",
+            "path": "/expenses",
+            "body": {
+              "category": "operational",
+              "type": "utilities",
+              "action": "pay",
+              "amount": 18500,
+              "currency": "INR",
+              "description": "Electricity bill - January 2026",
+              "vendor": "BESCOM",
+              "metadata": {
+                "bill_number": "EB-2026-01-12345",
+                "billing_period": "December 2025",
+                "units_consumed": 2850
+              }
+            }
+          },
+          "result": "Utility expense recorded."
+        },
+        {
+          "id": "uc-10.2",
+          "name": "Record Labor/Salary Expense",
+          "description": "Track worker salaries and labor costs.",
+          "when": "Monthly payroll processing",
+          "api": {
+            "method": "POST",
+            "path": "/expenses",
+            "body": {
+              "category": "operational",
+              "type": "labor",
+              "action": "pay",
+              "amount": 75000,
+              "currency": "INR",
+              "description": "Monthly salaries - January 2026",
+              "metadata": {
+                "workers_count": 5,
+                "period": "January 2026",
+                "breakdown": {
+                  "supervisor": 25000,
+                  "workers": 50000
+                }
+              }
+            }
+          },
+          "result": "Labor expense recorded for cost analysis."
+        },
+        {
+          "id": "uc-10.3",
+          "name": "Record Equipment Purchase",
+          "description": "Track capital expenses for equipment.",
+          "when": "Buying farm equipment",
+          "api": {
+            "method": "POST",
+            "path": "/expenses",
+            "body": {
+              "category": "asset",
+              "type": "equipment",
+              "action": "buy",
+              "amount": 85000,
+              "currency": "INR",
+              "description": "New aerator system - Pond B",
+              "vendor": "Aqua Tech Solutions",
+              "metadata": {
+                "equipment_type": "paddle wheel aerator",
+                "power": "2HP",
+                "quantity": 2,
+                "warranty_years": 2
+              }
+            }
+          },
+          "result": "Equipment expense recorded as capital asset."
+        },
+        {
+          "id": "uc-10.4",
+          "name": "View All Expenses",
+          "description": "Get list of all expenses with filters.",
+          "when": "Monthly review, accounting, tax filing",
+          "api": {
+            "method": "GET",
+            "path": "/expenses",
+            "queryParams": {
+              "start_date": "2026-01-01",
+              "end_date": "2026-01-31",
+              "category": "operational"
+            }
+          },
+          "result": "Filtered list of expenses for analysis."
+        },
+        {
+          "id": "uc-10.5",
+          "name": "View Transactions",
+          "description": "Get all financial transactions (sales, purchases).",
+          "when": "Financial reporting, reconciliation",
+          "api": {
+            "method": "GET",
+            "path": "/transactions",
+            "queryParams": {
+              "type": "sale",
+              "startDate": "2026-01-01",
+              "endDate": "2026-01-31"
+            }
+          },
+          "result": "List of sales transactions for the period."
+        }
+      ]
+    },
+    {
+      "id": "phase-11",
+      "name": "Phase 11: Reporting & Analytics",
+      "description": "Generate reports and analyze farm performance",
+      "useCases": [
+        {
+          "id": "uc-11.1",
+          "name": "Get Pond Events History",
+          "description": "View complete history of all events for a pond.",
+          "when": "Auditing, reviewing pond lifecycle",
+          "api": {
+            "method": "GET",
+            "path": "/pond_event/{pond_id}/events"
+          },
+          "result": "Complete event history showing adds, sales, mortalities, transfers."
+        },
+        {
+          "id": "uc-11.2",
+          "name": "Get All Fish Analytics",
+          "description": "View analytics for all fish species across the farm.",
+          "when": "Farm-wide performance review",
+          "api": {
+            "method": "GET",
+            "path": "/fish/analytics"
+          },
+          "result": "Aggregated analytics for all species with counts and growth data."
+        },
+        {
+          "id": "uc-11.3",
+          "name": "Get Feeding Records by Pond",
+          "description": "View feeding history for FCR calculation.",
+          "when": "Calculating feed conversion ratio",
+          "api": {
+            "method": "GET",
+            "path": "/feeding/pond/{pond_id}"
+          },
+          "result": "All feeding records for the pond."
+        },
+        {
+          "id": "uc-11.4",
+          "name": "Get Fish Statistics",
+          "description": "Get statistical data for a specific field.",
+          "when": "Data analysis, reporting",
+          "api": {
+            "method": "GET",
+            "path": "/fish/stats/weight"
+          },
+          "result": "Statistics (min, max, avg, count) for fish weights."
+        },
+        {
+          "id": "uc-11.5",
+          "name": "List Tasks by Status",
+          "description": "Review pending or completed tasks.",
+          "when": "Task management, productivity tracking",
+          "api": {
+            "method": "GET",
+            "path": "/task/",
+            "queryParams": {
+              "status": "pending",
+              "priority": "high"
+            }
+          },
+          "result": "List of high-priority pending tasks."
+        }
+      ]
+    },
+    {
+      "id": "phase-12",
+      "name": "Phase 12: End of Cycle & Pond Reset",
+      "description": "Complete a culture cycle and prepare for the next one",
+      "useCases": [
+        {
+          "id": "uc-12.1",
+          "name": "Record Pond Maintenance Expense",
+          "description": "Track costs for pond cleaning and preparation.",
+          "when": "After harvest, during pond preparation",
+          "api": {
+            "method": "POST",
+            "path": "/expenses",
+            "body": {
+              "category": "operational",
+              "type": "maintenance",
+              "action": "pay",
+              "amount": 15000,
+              "currency": "INR",
+              "pond_id": "ACC001-002",
+              "description": "Pond cleaning and lime treatment after harvest",
+              "metadata": {
+                "activities": ["draining", "drying", "lime application", "refilling"],
+                "lime_quantity_kg": 500,
+                "drying_days": 7
+              }
+            }
+          },
+          "result": "Maintenance expense recorded."
+        },
+        {
+          "id": "uc-12.2",
+          "name": "Update Pond Status",
+          "description": "Mark pond as under maintenance or ready for new cycle.",
+          "when": "After harvest, before restocking",
+          "api": {
+            "method": "PUT",
+            "path": "/pond/update/{pond_id}",
+            "body": {
+              "status": "maintenance",
+              "metadata": {
+                "last_harvest_date": "2026-01-12",
+                "next_stocking_date": "2026-01-25",
+                "maintenance_activities": ["lime treatment", "predator removal", "water filling"]
+              }
+            }
+          },
+          "result": "Pond status updated to maintenance mode."
+        },
+        {
+          "id": "uc-12.3",
+          "name": "Mark Pond Ready for Stocking",
+          "description": "Update pond status when ready for new fish.",
+          "when": "Pond preparation complete",
+          "api": {
+            "method": "PUT",
+            "path": "/pond/update/{pond_id}",
+            "body": {
+              "status": "ready",
+              "metadata": {
+                "preparation_complete": "2026-01-24",
+                "water_quality_checked": true,
+                "ready_for_stocking": true
+              }
+            }
+          },
+          "result": "Pond marked ready for next stocking cycle."
+        },
+        {
+          "id": "uc-12.4",
+          "name": "Delete Pond (if needed)",
+          "description": "Remove a pond from the system (e.g., pond decommissioned).",
+          "when": "Pond no longer in use",
+          "api": {
+            "method": "DELETE",
+            "path": "/pond/{pond_id}"
+          },
+          "result": "Pond and all related data archived/deleted."
+        }
+      ]
+    }
+  ],
+  "quickReference": {
+    "dailyTasks": [
+      "Record feeding (2-3 times)",
+      "Check water quality",
+      "Monitor fish behavior",
+      "Record any mortality",
+      "Complete assigned tasks"
+    ],
+    "weeklyTasks": [
+      "Detailed water quality test",
+      "Equipment inspection",
+      "Feed inventory check",
+      "Review pending tasks"
+    ],
+    "monthlyTasks": [
+      "Growth sampling",
+      "Pay bills and record expenses",
+      "Review fish analytics",
+      "Plan harvests",
+      "Salary payments"
+    ],
+    "eventEffects": {
+      "add": "+count (increases pond fish count)",
+      "remove": "-count (decreases count - mortality/loss)",
+      "sell": "-count (decreases count - harvest/sale)",
+      "sample": "-count (decreases count - sampling)",
+      "shift_in": "+count (receives fish from another pond)",
+      "shift_out": "-count (sends fish to another pond)"
+    }
+  }
+}
+

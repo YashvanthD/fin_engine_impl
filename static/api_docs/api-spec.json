@@ -7,6 +7,7 @@
     "lastUpdated": "2026-01-12"
   },
   "sections": [
+    {"id": "use-cases", "name": "Farm Use Cases Guide", "file": "sections/use-cases.json", "icon": "📖"},
     {"id": "auth", "name": "Authentication", "file": "sections/auth.json", "icon": "🔐"},
     {"id": "user", "name": "User Management", "file": "sections/user.json", "icon": "👤"},
     {"id": "company", "name": "Company", "file": "sections/company.json", "icon": "🏢"},
