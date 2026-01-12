@@ -25,6 +25,8 @@ The Fish Farm Management Engine is a comprehensive system for managing modern fi
 
 ## 🏗️ Architecture Overview
 
+> **📄 For complete database schema, collections, and relations, see [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md)**
+
 ### Technology Stack
 | Component | Technology |
 |-----------|------------|

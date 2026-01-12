@@ -13,7 +13,8 @@ This document covers all use cases for managing a modern fish farm - from initia
 | Document | Description |
 |----------|-------------|
 | [FISH_FARM_USE_CASES.md](./FISH_FARM_USE_CASES.md) | This document - Use cases & API guide |
-| [PROJECT_ANALYSIS.md](./PROJECT_ANALYSIS.md) | **NEW** - Complete project analysis, issues & fixes |
+| [PROJECT_ANALYSIS.md](./PROJECT_ANALYSIS.md) | Project analysis, issues & fixes |
+| [DATABASE_SCHEMA.md](./DATABASE_SCHEMA.md) | **NEW** - Complete database schema & relations |
 | [API Documentation](/docs) | Interactive API documentation |
 | [README.md](./README.md) | Project overview and setup |
 

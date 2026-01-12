@@ -11,10 +11,18 @@ from fin_server.utils.time_utils import get_time_date_dt, get_time_date as _get_
 user_repo = get_collection('users')
 
 
-def generate_key(length=6):
+def generate_key(length=6, include_alphabets=False, include_special=False, include_numbers=True):
     """Generate a short alphanumeric key of the requested length."""
-    alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-    return ''.join(random.choice(alphabet) for _ in range(int(length)))
+
+    includes = ''
+    if include_numbers:
+        includes += '0123456789'
+    if include_alphabets:
+        includes += 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+    elif include_special:
+        includes += '!@#$%^&*()-_=+'
+
+    return ''.join(random.choice(includes) for _ in range(int(length)))
 
 
 def epoch_to_datetime(epoch):
