@@ -14,11 +14,29 @@ from .expense_claims import ExpenseClaimsRepository
 from .approvals import ApprovalsRepository
 from .settlement_batches import SettlementBatchesRepository
 from .audit_logs import AuditLogsRepository
+from .expense_categories import (
+    ExpenseCategoryRepository,
+    load_expense_catalog,
+    flatten_categories,
+    get_top_level_categories,
+    get_subcategories,
+    validate_category_path,
+    search_categories,
+    get_category_suggestions,
+    get_expense_category_options,
+    normalize_expense_category
+)
 
 __all__ = [
     'FinancialAccountsRepository', 'BankAccountsRepository', 'PaymentMethodsRepository',
     'TransactionsRepository', 'PaymentsRepository', 'BankStatementsRepository', 'StatementLinesRepository',
     'ReconciliationsRepository', 'ExpenseClaimsRepository', 'ApprovalsRepository', 'SettlementBatchesRepository',
-    'AuditLogsRepository'
+    'AuditLogsRepository', 'ExpenseCategoryRepository',
+    # Category helpers
+    'load_expense_catalog', 'flatten_categories', 'get_top_level_categories',
+    'get_subcategories', 'validate_category_path', 'search_categories',
+    'get_category_suggestions', 'get_expense_category_options', 'normalize_expense_category'
 ]
+
+
 

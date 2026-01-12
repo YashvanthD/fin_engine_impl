@@ -378,3 +378,483 @@ def api_import_bank_statement(auth_payload):
 @require_auth
 def api_reconcile_by_external(auth_payload):
     return reconcile_by_external(auth_payload)
+
+
+# =============================================================================
+# Category Endpoints
+# =============================================================================
+
+from fin_server.repository.expenses import (
+    load_expense_catalog,
+    get_top_level_categories,
+    get_subcategories,
+    validate_category_path,
+    search_categories,
+    get_category_suggestions,
+    get_expense_category_options
+)
+
+
+@expenses_bp.route('/categories', methods=['GET'])
+@handle_errors
+def get_expense_categories():
+    """Get the full expense category catalog.
+
+    Query params:
+        flat: If 'true', returns flattened list instead of hierarchical
+        level: Filter by level (0=top, 1=sub, 2=detail)
+    """
+    args = request.args
+    flat = args.get('flat', '').lower() == 'true'
+    level = args.get('level')
+
+    catalog = load_expense_catalog()
+
+    if flat:
+        from fin_server.repository.expenses import flatten_categories
+        categories = flatten_categories(catalog)
+
+        if level is not None:
+            try:
+                level_int = int(level)
+                categories = [c for c in categories if c['level'] == level_int]
+            except ValueError:
+                pass
+
+        return respond_success({'categories': categories})
+
+    return respond_success({'categories': catalog})
+
+
+@expenses_bp.route('/categories/top', methods=['GET'])
+@handle_errors
+def get_top_categories():
+    """Get top-level expense categories."""
+    categories = get_top_level_categories()
+    return respond_success({'categories': categories})
+
+
+@expenses_bp.route('/categories/options', methods=['GET'])
+@handle_errors
+def get_category_options():
+    """Get category options for dropdown/form selection.
+
+    Returns a dict with top-level categories as keys and
+    their immediate children as values.
+    """
+    options = get_expense_category_options()
+    return respond_success({'options': options})
+
+
+@expenses_bp.route('/categories/subcategories', methods=['GET'])
+@handle_errors
+def get_subcategories_route():
+    """Get subcategories for a parent category.
+
+    Query params:
+        parent: Parent category path (e.g., "Operational" or "Operational/Utilities")
+    """
+    parent = request.args.get('parent', '')
+    subcategories = get_subcategories(parent)
+    return respond_success({
+        'parent': parent,
+        'subcategories': subcategories
+    })
+
+
+@expenses_bp.route('/categories/validate', methods=['POST'])
+@handle_errors
+def validate_category():
+    """Validate a category path.
+
+    Request body:
+        { "path": "Operational/Utilities/Electricity" }
+    """
+    data = request.get_json(force=True)
+    path = data.get('path', '')
+
+    is_valid, error = validate_category_path(path)
+
+    return respond_success({
+        'path': path,
+        'valid': is_valid,
+        'error': error
+    })
+
+
+@expenses_bp.route('/categories/search', methods=['GET'])
+@handle_errors
+def search_expense_categories():
+    """Search categories by name.
+
+    Query params:
+        q: Search query (partial match, case-insensitive)
+    """
+    query = request.args.get('q', '').strip()
+
+    if not query:
+        return respond_error('Search query is required', status=400)
+
+    results = search_categories(query)
+    return respond_success({'results': results})
+
+
+@expenses_bp.route('/categories/suggest', methods=['GET'])
+@handle_errors
+def suggest_categories():
+    """Get category path suggestions based on partial input.
+
+    Query params:
+        q: Partial input
+        limit: Max results (default 10)
+    """
+    partial = request.args.get('q', '').strip()
+    limit = int(request.args.get('limit', 10))
+
+    if not partial:
+        return respond_error('Query is required', status=400)
+
+    suggestions = get_category_suggestions(partial, limit)
+    return respond_success({'suggestions': suggestions})
+
+
+# =============================================================================
+# Enhanced Expense CRUD with DTO
+# =============================================================================
+
+from fin_server.dto.expense_dto import ExpenseDTO, ExpenseStatus
+
+
+@expenses_bp.route('/<expense_id>', methods=['GET'])
+@handle_errors
+@require_auth
+def get_expense(expense_id, auth_payload):
+    """Get a single expense by ID."""
+    try:
+        oid = ObjectId(expense_id)
+        query = {'_id': oid}
+    except Exception:
+        query = {'expense_id': expense_id}
+
+    expense = expense_repo.find_one(query)
+    if not expense:
+        return respond_error('Expense not found', status=404)
+
+    try:
+        dto = ExpenseDTO.from_doc(expense)
+        return respond_success({'expense': dto.to_dict()})
+    except Exception:
+        expense['_id'] = str(expense.get('_id'))
+        return respond_success({'expense': expense})
+
+
+@expenses_bp.route('/<expense_id>', methods=['PUT'])
+@handle_errors
+@require_auth
+def update_expense(expense_id, auth_payload):
+    """Update an expense."""
+    data = request.get_json(force=True)
+
+    try:
+        oid = ObjectId(expense_id)
+        query = {'_id': oid}
+    except Exception:
+        query = {'expense_id': expense_id}
+
+    existing = expense_repo.find_one(query)
+    if not existing:
+        return respond_error('Expense not found', status=404)
+
+    # Remove immutable fields
+    data.pop('_id', None)
+    data.pop('expense_id', None)
+    data.pop('created_at', None)
+
+    # Add updated timestamp
+    from fin_server.utils.time_utils import get_time_date_dt
+    data['updated_at'] = get_time_date_dt(include_time=True).isoformat()
+
+    result = expense_repo.update_one(query, {'$set': data})
+
+    if result.modified_count == 0:
+        return respond_error('No changes made', status=400)
+
+    updated = expense_repo.find_one(query)
+    try:
+        dto = ExpenseDTO.from_doc(updated)
+        return respond_success({'expense': dto.to_dict()})
+    except Exception:
+        updated['_id'] = str(updated.get('_id'))
+        return respond_success({'expense': updated})
+
+
+@expenses_bp.route('/<expense_id>', methods=['DELETE'])
+@handle_errors
+@require_auth
+def delete_expense(expense_id, auth_payload):
+    """Delete an expense."""
+    try:
+        oid = ObjectId(expense_id)
+        query = {'_id': oid}
+    except Exception:
+        query = {'expense_id': expense_id}
+
+    result = expense_repo.delete_one(query)
+
+    if result.deleted_count == 0:
+        return respond_error('Expense not found', status=404)
+
+    return respond_success({'deleted': True})
+
+
+@expenses_bp.route('/<expense_id>/approve', methods=['POST'])
+@handle_errors
+@require_auth
+def approve_expense(expense_id, auth_payload):
+    """Approve an expense."""
+    data = request.get_json(force=True) or {}
+
+    try:
+        oid = ObjectId(expense_id)
+        query = {'_id': oid}
+    except Exception:
+        query = {'expense_id': expense_id}
+
+    existing = expense_repo.find_one(query)
+    if not existing:
+        return respond_error('Expense not found', status=404)
+
+    dto = ExpenseDTO.from_doc(existing)
+    dto.approve(
+        approver_id=auth_payload.get('user_key'),
+        notes=data.get('notes')
+    )
+
+    expense_repo.update_one(query, {'$set': dto.to_db_doc()})
+
+    return respond_success({'expense': dto.to_dict()})
+
+
+@expenses_bp.route('/<expense_id>/reject', methods=['POST'])
+@handle_errors
+@require_auth
+def reject_expense(expense_id, auth_payload):
+    """Reject an expense."""
+    data = request.get_json(force=True)
+    reason = data.get('reason')
+
+    if not reason:
+        return respond_error('Rejection reason is required', status=400)
+
+    try:
+        oid = ObjectId(expense_id)
+        query = {'_id': oid}
+    except Exception:
+        query = {'expense_id': expense_id}
+
+    existing = expense_repo.find_one(query)
+    if not existing:
+        return respond_error('Expense not found', status=404)
+
+    dto = ExpenseDTO.from_doc(existing)
+    dto.reject(
+        rejector_id=auth_payload.get('user_key'),
+        reason=reason
+    )
+
+    expense_repo.update_one(query, {'$set': dto.to_db_doc()})
+
+    return respond_success({'expense': dto.to_dict()})
+
+
+@expenses_bp.route('/<expense_id>/cancel', methods=['POST'])
+@handle_errors
+@require_auth
+def cancel_expense(expense_id, auth_payload):
+    """Cancel an expense."""
+    data = request.get_json(force=True) or {}
+    reason = data.get('reason')
+
+    try:
+        oid = ObjectId(expense_id)
+        query = {'_id': oid}
+    except Exception:
+        query = {'expense_id': expense_id}
+
+    existing = expense_repo.find_one(query)
+    if not existing:
+        return respond_error('Expense not found', status=404)
+
+    dto = ExpenseDTO.from_doc(existing)
+    dto.cancel(reason=reason)
+
+    expense_repo.update_one(query, {'$set': dto.to_db_doc()})
+
+    return respond_success({'expense': dto.to_dict()})
+
+
+# =============================================================================
+# Expense Analytics/Summary
+# =============================================================================
+
+@expenses_bp.route('/summary', methods=['GET'])
+@handle_errors
+@require_auth
+def get_expense_summary(auth_payload):
+    """Get expense summary/analytics.
+
+    Query params:
+        account_key: Filter by account
+        start_date: Start date (ISO)
+        end_date: End date (ISO)
+        group_by: Group by field (category, subcategory, type, status, month)
+    """
+    args = request.args.to_dict()
+    account_key = args.get('account_key') or auth_payload.get('account_key')
+    group_by = args.get('group_by', 'category')
+
+    # Build match stage
+    match = {'account_key': account_key} if account_key else {}
+
+    start_date = _parse_date(args.get('start_date'))
+    end_date = _parse_date(args.get('end_date'))
+    if start_date or end_date:
+        date_filter = {}
+        if start_date:
+            date_filter['$gte'] = start_date.isoformat()
+        if end_date:
+            date_filter['$lte'] = end_date.isoformat()
+        match['created_at'] = date_filter
+
+    # Build group stage
+    if group_by == 'month':
+        group_id = {'$substr': ['$created_at', 0, 7]}  # YYYY-MM
+    else:
+        group_id = f'${group_by}'
+
+    pipeline = [
+        {'$match': match},
+        {'$group': {
+            '_id': group_id,
+            'total': {'$sum': '$amount'},
+            'count': {'$sum': 1},
+            'avg': {'$avg': '$amount'},
+            'min': {'$min': '$amount'},
+            'max': {'$max': '$amount'}
+        }},
+        {'$sort': {'total': -1}}
+    ]
+
+    try:
+        coll = expense_repo.collection if hasattr(expense_repo, 'collection') else expense_repo
+        results = list(coll.aggregate(pipeline))
+
+        # Format results
+        summary = []
+        for r in results:
+            summary.append({
+                group_by: r['_id'],
+                'total': r['total'],
+                'count': r['count'],
+                'average': round(r['avg'], 2) if r['avg'] else 0,
+                'min': r['min'],
+                'max': r['max']
+            })
+
+        # Calculate grand totals
+        grand_total = sum(r['total'] or 0 for r in results)
+        total_count = sum(r['count'] for r in results)
+
+        return respond_success({
+            'summary': summary,
+            'grandTotal': grand_total,
+            'totalCount': total_count,
+            'groupBy': group_by
+        })
+    except Exception as e:
+        logger.exception('Error generating expense summary')
+        return respond_error('Failed to generate summary', status=500)
+
+
+@expenses_bp.route('/by-pond/<pond_id>', methods=['GET'])
+@handle_errors
+@require_auth
+def get_expenses_by_pond(pond_id, auth_payload):
+    """Get all expenses for a specific pond."""
+    query = {
+        '$or': [
+            {'pond_id': pond_id},
+            {'metadata.pond_id': pond_id}
+        ]
+    }
+
+    try:
+        limit = int(request.args.get('limit', 100))
+    except ValueError:
+        limit = 100
+
+    expenses = list(expense_repo.find(query).sort('created_at', -1).limit(limit))
+
+    result = []
+    for e in expenses:
+        try:
+            dto = ExpenseDTO.from_doc(e)
+            result.append(dto.to_dict())
+        except Exception:
+            e['_id'] = str(e.get('_id'))
+            result.append(e)
+
+    return respond_success({'expenses': result, 'pondId': pond_id})
+
+
+# Add category routes to API blueprint
+@expenses_api_bp.route('/expenses/categories', methods=['GET'])
+@handle_errors
+def api_get_expense_categories():
+    return get_expense_categories()
+
+@expenses_api_bp.route('/expenses/categories/options', methods=['GET'])
+@handle_errors
+def api_get_category_options():
+    return get_category_options()
+
+@expenses_api_bp.route('/expenses/categories/search', methods=['GET'])
+@handle_errors
+def api_search_categories():
+    return search_expense_categories()
+
+@expenses_api_bp.route('/expenses/<expense_id>', methods=['GET'])
+@handle_errors
+@require_auth
+def api_get_expense(expense_id, auth_payload):
+    return get_expense(expense_id, auth_payload)
+
+@expenses_api_bp.route('/expenses/<expense_id>', methods=['PUT'])
+@handle_errors
+@require_auth
+def api_update_expense(expense_id, auth_payload):
+    return update_expense(expense_id, auth_payload)
+
+@expenses_api_bp.route('/expenses/<expense_id>', methods=['DELETE'])
+@handle_errors
+@require_auth
+def api_delete_expense(expense_id, auth_payload):
+    return delete_expense(expense_id, auth_payload)
+
+@expenses_api_bp.route('/expenses/<expense_id>/approve', methods=['POST'])
+@handle_errors
+@require_auth
+def api_approve_expense(expense_id, auth_payload):
+    return approve_expense(expense_id, auth_payload)
+
+@expenses_api_bp.route('/expenses/<expense_id>/reject', methods=['POST'])
+@handle_errors
+@require_auth
+def api_reject_expense(expense_id, auth_payload):
+    return reject_expense(expense_id, auth_payload)
+
+@expenses_api_bp.route('/expenses/summary', methods=['GET'])
+@handle_errors
+@require_auth
+def api_get_expense_summary(auth_payload):
+    return get_expense_summary(auth_payload)

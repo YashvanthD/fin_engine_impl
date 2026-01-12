@@ -10,6 +10,7 @@ from fin_server.repository.mongo_helper import get_collection
 from fin_server.utils.helpers import respond_error, respond_success, get_request_payload, normalize_doc
 from fin_server.utils.time_utils import get_time_date_dt
 from fin_server.utils.validation import validate_pond_event_payload
+from fin_server.services.expense_service import create_expense_with_repo
 
 pond_event_bp = Blueprint('pond_event', __name__, url_prefix='/pond_event')
 
@@ -20,7 +21,53 @@ fish_activity_repo = get_collection('fish_activity')
 pond_repository = get_collection('pond')
 pond_event_repository = get_collection('pond_event')
 fish_analytics_repository = get_collection('fish_analytics')
+expenses_repo = get_collection('expenses')
 
+
+def create_sell_expense(account_key, pond_id, fish_id, count, details, user_key, event_id=None):
+    """Create an income expense record when fish are sold."""
+    try:
+        total_amount = details.get('total_amount') or details.get('totalAmount')
+        if not total_amount:
+            # Try to calculate from price_per_kg and weight
+            price_per_kg = details.get('price_per_kg') or details.get('pricePerKg')
+            total_weight = details.get('total_weight_kg') or details.get('totalWeightKg')
+            if price_per_kg and total_weight:
+                total_amount = float(price_per_kg) * float(total_weight)
+
+        if not total_amount:
+            current_app.logger.warning(f'No amount provided for sell event, skipping expense creation')
+            return None
+
+        expense_doc = {
+            'account_key': account_key,
+            'amount': float(total_amount),
+            'currency': details.get('currency') or 'INR',
+            'category': 'income',
+            'type': 'fish_sale',
+            'action': 'sell',
+            'status': 'SUCCESS',
+            'payment_method': details.get('payment_method') or 'cash',
+            'recorded_by': user_key,
+            'notes': details.get('notes') or f'Fish sale: {count} {fish_id}',
+            'metadata': {
+                'pond_id': pond_id,
+                'species': fish_id,
+                'count': count,
+                'event_id': str(event_id) if event_id else None,
+                'buyer': details.get('buyer'),
+                'price_per_kg': details.get('price_per_kg'),
+                'total_weight_kg': details.get('total_weight_kg')
+            },
+            'created_at': get_time_date_dt(include_time=True)
+        }
+
+        expense_id = create_expense_with_repo(expense_doc, expenses_repo)
+        current_app.logger.info(f'Created sell expense {expense_id} for pond={pond_id}, amount={total_amount}')
+        return expense_id
+    except Exception:
+        current_app.logger.exception('Failed to create sell expense')
+        return None
 
 def update_pond_metadata(pond_id, fish_id, count, event_type):
     # Use repository atomic helper for clarity
@@ -161,7 +208,29 @@ def pond_event_action(pond_id, event_type):
                 fish_activity_repo.create(activity_doc)
         except Exception:
             current_app.logger.exception('Failed to record fish activity')
-        return respond_success({'event_id': str(event_inserted_id)}, status=201)
+
+        # Create expense/income record for sell events
+        expense_id = None
+        try:
+            if event_type == 'sell':
+                details = data.get('details', {})
+                expense_id = create_sell_expense(
+                    account_key=account_key,
+                    pond_id=pond_id,
+                    fish_id=fish_id,
+                    count=count,
+                    details=details,
+                    user_key=payload.get('user_key'),
+                    event_id=event_inserted_id
+                )
+        except Exception:
+            current_app.logger.exception('Failed to create expense for sell event')
+
+        response_data = {'event_id': str(event_inserted_id)}
+        if expense_id:
+            response_data['expense_id'] = str(expense_id)
+
+        return respond_success(response_data, status=201)
     except UnauthorizedError as e:
         return respond_error(str(e), status=401)
     except Exception as e:
@@ -192,13 +261,54 @@ def get_pond_events(pond_id):
 
 @pond_event_bp.route('/<pond_id>/events/<event_id>', methods=['DELETE'])
 def delete_pond_event(pond_id, event_id):
+    """Delete a pond event and reverse its effects on pond metadata and analytics."""
     current_app.logger.debug('DELETE /pond_event/%s/events/%s called', pond_id, event_id)
     try:
-        _ = get_request_payload(request)
-        result = pond_event_repository.delete(ObjectId(event_id))
+        payload = get_request_payload(request)
+        account_key = payload.get('account_key')
+
+        # Find the event first to get its details for reversal
+        try:
+            oid = ObjectId(event_id)
+        except Exception:
+            return respond_error('Invalid event_id', status=400)
+
+        old_event = pond_event_repository.find_one({'_id': oid})
+        if not old_event:
+            return respond_error('Event not found', status=404)
+
+        # Verify pond_id matches
+        if str(old_event.get('pond_id')) != str(pond_id):
+            return respond_error('Pond ID mismatch for event', status=400)
+
+        # Extract event details for reversal
+        old_type = old_event.get('event_type')
+        old_count = int(old_event.get('count', 0) or 0)
+        old_fish_id = old_event.get('fish_id')
+        old_age = old_event.get('fish_age_in_month')
+
+        # Reverse the event effects before deleting
+        if old_count and old_fish_id:
+            # Determine inverse event type to revert effects
+            # If original was add/shift_in (+count), we need to remove (-count)
+            # If original was remove/sell/sample/shift_out (-count), we need to add (+count)
+            inverse_type = 'remove' if old_type in ['add', 'shift_in'] else 'add'
+
+            try:
+                current_app.logger.info(f'Reversing event effects: type={old_type}, fish={old_fish_id}, count={old_count}, inverse={inverse_type}')
+                update_pond_metadata(pond_id, old_fish_id, old_count, inverse_type)
+                update_fish_analytics_and_mapping(account_key, old_fish_id, old_count, inverse_type, old_age, pond_id)
+            except Exception:
+                current_app.logger.exception('Failed to reverse event effects during delete')
+                # Continue with delete even if reversal fails - log the issue
+
+        # Now delete the event
+        result = pond_event_repository.delete(oid)
         if result.deleted_count == 0:
             return respond_error('Event not found', status=404)
-        return respond_success({'deleted': True})
+
+        current_app.logger.info(f'Deleted pond event {event_id} and reversed its effects')
+        return respond_success({'deleted': True, 'reversed': True})
     except UnauthorizedError as e:
         return respond_error(str(e), status=401)
     except Exception as e:
@@ -288,3 +398,151 @@ def update_pond_event(pond_id, event_id):
     except Exception as e:
         current_app.logger.exception(f'Exception in update_pond_event: {e}')
         return respond_error('Server error', status=500)
+
+
+# NEW: Atomic fish transfer between ponds
+@pond_event_bp.route('/transfer', methods=['POST'])
+def transfer_fish_between_ponds():
+    """
+    Atomic fish transfer between two ponds.
+    Creates both shift_out and shift_in events in a single transaction.
+
+    Request body:
+    {
+        "source_pond_id": "pond-001",
+        "destination_pond_id": "pond-002", 
+        "fish_id": "TILAPIA_NILE",
+        "count": 100,
+        "fish_age_in_month": 3,
+        "details": {
+            "reason": "Size grading",
+            "notes": "Moving larger fish to grow-out pond"
+        }
+    }
+    """
+    current_app.logger.debug('POST /pond_event/transfer called')
+    try:
+        payload = get_request_payload(request)
+        data = request.get_json(force=True)
+        account_key = payload.get('account_key')
+        user_key = payload.get('user_key')
+
+        # Validate required fields
+        source_pond_id = data.get('source_pond_id') or data.get('sourcePondId')
+        dest_pond_id = data.get('destination_pond_id') or data.get('destinationPondId')
+        fish_id = data.get('fish_id') or data.get('fishId')
+        count = data.get('count')
+        fish_age_in_month = data.get('fish_age_in_month') or data.get('fishAgeInMonth')
+        details = data.get('details', {})
+
+        if not source_pond_id:
+            return respond_error('source_pond_id is required', status=400)
+        if not dest_pond_id:
+            return respond_error('destination_pond_id is required', status=400)
+        if not fish_id:
+            return respond_error('fish_id is required', status=400)
+        if not count or int(count) <= 0:
+            return respond_error('count must be a positive integer', status=400)
+        if source_pond_id == dest_pond_id:
+            return respond_error('source and destination ponds must be different', status=400)
+
+        count = int(count)
+
+        # Generate a transfer_id to link the two events
+        transfer_id = f"TRF-{account_key}-{datetime.now(IST_TZ).strftime('%Y%m%d%H%M%S%f')}"
+
+        current_app.logger.info(f'Fish transfer: {source_pond_id} -> {dest_pond_id}, fish={fish_id}, count={count}, transfer_id={transfer_id}')
+
+        shift_out_id = None
+        shift_in_id = None
+
+        try:
+            # Step 1: Create shift_out event for source pond
+            shift_out_doc = {
+                'pond_id': source_pond_id,
+                'fish_id': fish_id,
+                'count': count,
+                'event_type': 'shift_out',
+                'details': {
+                    **details,
+                    'destination_pond': dest_pond_id,
+                    'transfer_id': transfer_id
+                },
+                'fish_age_in_month': fish_age_in_month,
+                'created_at': get_time_date_dt(include_time=True),
+                'user_key': user_key,
+                'account_key': account_key,
+                'transfer_id': transfer_id
+            }
+            res_out = pond_event_repository.create(shift_out_doc)
+            shift_out_id = getattr(res_out, 'inserted_id', res_out)
+
+            # Update source pond metadata (decrease count)
+            update_pond_metadata(source_pond_id, fish_id, count, 'shift_out')
+            update_fish_analytics_and_mapping(account_key, fish_id, count, 'shift_out', fish_age_in_month, source_pond_id)
+
+            current_app.logger.info(f'Created shift_out event {shift_out_id} for source pond {source_pond_id}')
+
+        except Exception as e:
+            current_app.logger.exception(f'Failed to create shift_out event: {e}')
+            return respond_error('Failed to create shift_out event', status=500)
+
+        try:
+            # Step 2: Create shift_in event for destination pond
+            shift_in_doc = {
+                'pond_id': dest_pond_id,
+                'fish_id': fish_id,
+                'count': count,
+                'event_type': 'shift_in',
+                'details': {
+                    **details,
+                    'source_pond': source_pond_id,
+                    'transfer_id': transfer_id
+                },
+                'fish_age_in_month': fish_age_in_month,
+                'created_at': get_time_date_dt(include_time=True),
+                'user_key': user_key,
+                'account_key': account_key,
+                'transfer_id': transfer_id
+            }
+            res_in = pond_event_repository.create(shift_in_doc)
+            shift_in_id = getattr(res_in, 'inserted_id', res_in)
+
+            # Update destination pond metadata (increase count)
+            update_pond_metadata(dest_pond_id, fish_id, count, 'shift_in')
+            update_fish_analytics_and_mapping(account_key, fish_id, count, 'shift_in', fish_age_in_month, dest_pond_id)
+
+            current_app.logger.info(f'Created shift_in event {shift_in_id} for destination pond {dest_pond_id}')
+
+        except Exception as e:
+            # Rollback: reverse the shift_out if shift_in fails
+            current_app.logger.exception(f'Failed to create shift_in event, rolling back shift_out: {e}')
+            try:
+                if shift_out_id:
+                    # Reverse the shift_out effects
+                    update_pond_metadata(source_pond_id, fish_id, count, 'shift_in')  # Reverse: add back
+                    update_fish_analytics_and_mapping(account_key, fish_id, count, 'shift_in', fish_age_in_month, source_pond_id)
+                    # Delete the shift_out event
+                    pond_event_repository.delete(shift_out_id)
+                    current_app.logger.info(f'Rolled back shift_out event {shift_out_id}')
+            except Exception as rollback_error:
+                current_app.logger.exception(f'Failed to rollback shift_out: {rollback_error}')
+
+            return respond_error('Failed to complete transfer - rolled back', status=500)
+
+        return respond_success({
+            'transfer_id': transfer_id,
+            'shift_out_event_id': str(shift_out_id),
+            'shift_in_event_id': str(shift_in_id),
+            'source_pond': source_pond_id,
+            'destination_pond': dest_pond_id,
+            'fish_id': fish_id,
+            'count': count
+        }, status=201)
+
+    except UnauthorizedError as e:
+        return respond_error(str(e), status=401)
+    except Exception as e:
+        current_app.logger.exception(f'Exception in transfer_fish_between_ponds: {e}')
+        return respond_error('Server error', status=500)
+

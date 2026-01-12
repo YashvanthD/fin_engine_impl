@@ -678,6 +678,936 @@ Legend: ✅ = Created/Updated, ✅✅ = Multiple records affected
 
 ---
 
+## 🐛 Bugs, Loopholes & Data Consistency Issues
+
+This section identifies data consistency problems, missing mappings, bugs, and potential loopholes found in the codebase.
+
+### CRITICAL ISSUES 🔴
+
+#### 1. DELETE Pond Event - No Reversal of Effects
+**File:** `fin_server/routes/pond_event.py` (line 193-203)
+
+**Problem:** When a pond event is deleted, the pond metadata and fish analytics are NOT reversed.
+
+```python
+@pond_event_bp.route('/<pond_id>/events/<event_id>', methods=['DELETE'])
+def delete_pond_event(pond_id, event_id):
+    # ...
+    result = pond_event_repository.delete(ObjectId(event_id))  # ❌ Just deletes, no reversal!
+    return respond_success({'deleted': True})
+```
+
+**Impact:**
+- If you delete an "add" event of 500 fish, the pond still shows +500 fish
+- Fish analytics batch remains (orphaned data)
+- Pond metadata.total_fish is incorrect
+
+**Fix Required:**
+```python
+# Before deleting, reverse the event effects:
+old_event = pond_event_repository.find_one({'_id': ObjectId(event_id)})
+if old_event:
+    inverse_type = 'remove' if old_event['event_type'] in ['add', 'shift_in'] else 'add'
+    update_pond_metadata(pond_id, old_event['fish_id'], old_event['count'], inverse_type)
+    update_fish_analytics_and_mapping(account_key, old_event['fish_id'], old_event['count'], inverse_type, ...)
+```
+
+---
+
+#### 2. Sell Event - No Expense/Transaction Created
+**File:** `fin_server/routes/pond_event.py`
+
+**Problem:** When fish are sold via pond event, NO expense/transaction record is created automatically.
+
+**Current Flow:**
+```
+POST /pond_event/{pond_id}/event/sell
+  ├── Creates pond_event ✅
+  ├── Updates pond metadata (-count) ✅
+  ├── Updates fish_analytics (-count) ✅
+  └── Creates expense/transaction ❌ MISSING!
+```
+
+**Impact:**
+- Revenue not tracked automatically
+- Bank balance not updated
+- Financial reports incomplete
+
+**Fix Required:** Add expense creation for sell events:
+```python
+if event_type == 'sell':
+    total_amount = data.get('details', {}).get('total_amount')
+    if total_amount:
+        create_expense_with_repo({
+            'category': 'income',
+            'type': 'fish_sale',
+            'action': 'sell',
+            'amount': total_amount,
+            'pond_id': pond_id,
+            'metadata': {'species': fish_id, 'count': count}
+        }, expenses_repo)
+```
+
+---
+
+#### 3. Fish Transfer - No Atomic Transaction
+**File:** `fin_server/routes/pond_event.py`
+
+**Problem:** Fish transfers require TWO separate API calls (shift_out + shift_in). If one fails, data becomes inconsistent.
+
+**Current Flow:**
+```
+1. POST /pond_event/pond_A/event/shift_out  → Pond A: -100 fish
+2. POST /pond_event/pond_B/event/shift_in   → Pond B: +100 fish (might fail!)
+```
+
+**Impact:**
+- If shift_in fails, 100 fish "disappear" from the system
+- No rollback mechanism
+- No correlation between the two events
+
+**Fix Required:** Either:
+1. Create atomic transfer endpoint: `POST /pond_event/transfer`
+2. Or link shift_out/shift_in events with a `transfer_id`
+
+---
+
+#### 4. Sampling DELETE - Incomplete Cleanup
+**File:** `fin_server/routes/sampling.py` + `fin_server/services/expense_service.py`
+
+**Problem:** `handle_sampling_deletion()` is defined but NOT called from the DELETE route!
+
+**Current DELETE route (missing from code):** The sampling DELETE endpoint needs to call `handle_sampling_deletion()`.
+
+**Impact:**
+- Expenses remain (not cancelled)
+- Pond counts not reversed
+- Fish analytics orphaned
+
+---
+
+### HIGH PRIORITY ISSUES 🟠
+
+#### 5. Stock Repository - Duplicate Insert Attempts
+**File:** `fin_server/repository/fish/stock_repository.py` (line 139-146)
+
+**Problem:** When creating a fish doc, both `create()` AND `insert_one()` are called:
+
+```python
+try:
+    self.fish.create(fish_doc)
+    self.fish.insert_one(fish_doc)  # ❌ This will fail with DuplicateKeyError!
+```
+
+**Fix:** Remove the duplicate call.
+
+---
+
+#### 6. Expense Creation - Commented Out!
+**File:** `fin_server/repository/fish/stock_repository.py` (line 200-201)
+
+**Problem:** Expense creation is commented out in `add_stock_to_pond`:
+
+```python
+try:
+    # r = self.expenses.insert_one(exp)  # ❌ COMMENTED OUT!
+    logger.debug('Inserted expense for pond=%s amount=%s', pond_id, exp.get('amount'))
+```
+
+**Impact:** Stock operations via StockRepository don't create expenses.
+
+---
+
+#### 7. No Account Scoping on GET Pond Events
+**File:** `fin_server/routes/pond_event.py` (line 169-188)
+
+**Problem:** `get_pond_events()` doesn't filter by `account_key`:
+
+```python
+def get_pond_events(pond_id):
+    events = pond_event_repository.get_events_by_pond(pond_id)  # ❌ No account filter!
+```
+
+**Impact:** Potential data leak - users might see events from other accounts if pond_ids collide.
+
+**Fix:** Add account filtering:
+```python
+events = pond_event_repository.find({'pond_id': pond_id, 'account_key': account_key})
+```
+
+---
+
+#### 8. Fish current_stock - Multiple Update Paths
+**Files:** Multiple locations update `fish.current_stock`
+
+**Problem:** Fish `current_stock` is updated in multiple places with different logic:
+- `sampling_service.py` - increments via update
+- `stock_repository.py` - increments via update
+- `pond_event.py` - NOT updated!
+- `expense_service.handle_sampling_deletion()` - decrements
+
+**Impact:** Fish current_stock can become out of sync with actual pond totals.
+
+**Fix:** Centralize fish stock updates in one service.
+
+---
+
+### MEDIUM PRIORITY ISSUES 🟡
+
+#### 9. Pond Event Update - Creates Duplicate Activity
+**File:** `fin_server/routes/pond_event.py` (line 272-283)
+
+**Problem:** When updating an event, a NEW activity record is always created (not updated):
+
+```python
+if new_type in ['sample', 'add']:
+    fish_activity_repo.create(activity_doc)  # ❌ Creates new, doesn't update existing
+```
+
+**Impact:** Multiple activity records for the same event.
+
+---
+
+#### 10. No Validation on Event Type Change
+**File:** `fin_server/routes/pond_event.py`
+
+**Problem:** Event type can be changed from "add" to "sell" without proper validation.
+
+**Impact:** 
+- Changing "add" → "sell" should perhaps create an expense
+- Logic mismatch between what happened and what's recorded
+
+---
+
+#### 11. Bank Balance - No Validation for Negative
+**File:** `fin_server/services/expense_service.py`
+
+**Problem:** Bank balance can go negative without warning:
+
+```python
+coll.update_one({'_id': org_acc.get('_id')}, {'$inc': {'balance': float(delta)}})
+```
+
+**Impact:** No overdraft protection or warnings.
+
+---
+
+#### 12. Missing `account_key` on Several Collections
+**Problem:** Some records don't have `account_key` stored:
+
+| Collection | Has account_key |
+|------------|-----------------|
+| `pond_event` | Sometimes ❌ |
+| `fish_activity` | Yes ✅ |
+| `fish_analytics` | Yes ✅ |
+| `feeding` | Missing ❌ |
+| `sampling` | Sometimes ❌ |
+
+**Impact:** Cannot properly scope queries by account.
+
+---
+
+#### 13. Pond Delete - Doesn't Update Fish current_stock
+**File:** `fin_server/services/pond_service.py`
+
+**Problem:** `delete_pond_and_related()` doesn't decrement `fish.current_stock`:
+
+```python
+def delete_pond_and_related(pond_id):
+    # Deletes sampling, events, activity, analytics, expenses
+    # ❌ Does NOT update fish.current_stock!
+```
+
+**Impact:** After deleting a pond with 1000 fish, the fish species still shows +1000 in current_stock.
+
+---
+
+### LOW PRIORITY / IMPROVEMENTS 🟢
+
+#### 14. No Audit Trail for Updates
+**Problem:** When events/sampling are updated, there's no history of what changed.
+
+**Suggestion:** Add `updated_at`, `updated_by`, and `change_history[]` fields.
+
+---
+
+#### 15. Inconsistent Field Naming
+**Problem:** Mix of camelCase and snake_case across collections:
+
+| Field | Variations Found |
+|-------|------------------|
+| Pond ID | `pond_id`, `pondId`, `pond` |
+| Fish ID | `fish_id`, `fishId`, `species`, `species_code` |
+| Count | `count`, `quantity`, `total_count`, `totalCount` |
+| Amount | `amount`, `total_amount`, `totalAmount`, `cost` |
+
+**Impact:** Complex query logic, potential bugs when field names mismatch.
+
+---
+
+#### 16. No Soft Delete Support
+**Problem:** All deletes are hard deletes. No way to recover data.
+
+**Suggestion:** Add `deleted_at`, `deleted_by` fields and filter queries.
+
+---
+
+#### 17. Feeding Records - Not Linked to Expenses
+**Problem:** Feeding records are created but no corresponding expense for feed usage.
+
+**Current Flow:**
+```
+POST /feeding/ 
+  └── Creates feeding record ✅
+  └── Creates expense ❌ (missing)
+```
+
+**Suggestion:** Auto-calculate feed cost and create expense.
+
+---
+
+### MISSING DATA CORRELATIONS
+
+#### 18. No Link Between shift_out and shift_in Events
+**Problem:** Transfer events aren't linked:
+
+```javascript
+// shift_out event
+{ pond_id: "A", event_type: "shift_out", count: 100 }
+
+// shift_in event (no reference to source!)
+{ pond_id: "B", event_type: "shift_in", count: 100 }
+```
+
+**Fix:** Add `related_event_id` or `transfer_id` field.
+
+---
+
+#### 19. No Link Between Sampling and Pond Event
+**Problem:** When sampling creates a "buy" flow, it creates a pond_event but doesn't link them:
+
+```javascript
+// sampling doc
+{ sampling_id: "SAM001", pond_id: "A", ... }
+
+// pond_event doc (no sampling reference!)
+{ pond_id: "A", event_type: "buy", ... }
+```
+
+**Fix:** Add `sampling_id` to pond_event.
+
+---
+
+#### 20. Expenses Not Linked to Specific Events
+**Problem:** Expenses for fish purchase aren't linked to the pond_event:
+
+```javascript
+// expense doc
+{ type: "fish", action: "buy", metadata: { pond_id: "A" } }
+// ❌ No event_id or sampling_id reference
+```
+
+**Fix:** Add `event_id` or `source_id` to expenses.
+
+---
+
+### RECOMMENDED DATA MODEL IMPROVEMENTS
+
+#### Proposed Link Structure:
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  sampling   │────►│ pond_event  │────►│  expense    │
+│             │     │             │     │             │
+│ sampling_id │     │ event_id    │     │ expense_id  │
+│ event_id ◄──┼─────┤ sampling_id │     │ event_id    │
+│ expense_id ◄┼─────┼─────────────┼─────┤ sampling_id │
+└─────────────┘     │ transfer_id │     │ tx_id       │
+                    └─────────────┘     └──────┬──────┘
+                                               │
+                    ┌─────────────┐            │
+                    │ transaction │◄───────────┘
+                    │             │
+                    │ tx_id       │
+                    │ expense_ids │
+                    │ entries[]   │
+                    └─────────────┘
+```
+
+---
+
+### SUMMARY TABLE
+
+| # | Issue | Severity | Type | Affected Collections |
+|---|-------|----------|------|---------------------|
+| 1 | DELETE event no reversal | 🔴 Critical | Bug | ponds, fish_analytics |
+| 2 | Sell event no expense | 🔴 Critical | Missing | expenses, bank_accounts |
+| 3 | Transfer not atomic | 🔴 Critical | Design | pond_event, ponds |
+| 4 | Sampling DELETE incomplete | 🔴 Critical | Bug | Multiple |
+| 5 | Duplicate insert attempts | 🟠 High | Bug | fish |
+| 6 | Expense creation commented | 🟠 High | Bug | expenses |
+| 7 | No account scoping on GET | 🟠 High | Security | pond_event |
+| 8 | Fish stock multiple paths | 🟠 High | Design | fish |
+| 9 | Duplicate activity on update | 🟡 Medium | Bug | fish_activity |
+| 10 | No event type change validation | 🟡 Medium | Validation | pond_event |
+| 11 | Negative bank balance allowed | 🟡 Medium | Validation | bank_accounts |
+| 12 | Missing account_key | 🟡 Medium | Data | Multiple |
+| 13 | Pond delete no fish update | 🟡 Medium | Bug | fish |
+| 14 | No audit trail | 🟢 Low | Feature | All |
+| 15 | Inconsistent field naming | 🟢 Low | Design | All |
+| 16 | No soft delete | 🟢 Low | Feature | All |
+| 17 | Feeding no expense | 🟢 Low | Feature | expenses |
+| 18 | Transfers not linked | 🟢 Low | Design | pond_event |
+| 19 | Sampling-event not linked | 🟢 Low | Design | sampling, pond_event |
+| 20 | Expense-event not linked | 🟢 Low | Design | expenses |
+
+---
+
+### PRIORITY FIX ORDER
+
+1. **Immediate (Before Production):**
+   - Fix #1: DELETE event reversal ✅ FIXED
+   - Fix #4: Sampling DELETE cleanup ✅ FIXED
+   - Fix #7: Account scoping security
+
+2. **Short Term (Next Sprint):**
+   - Fix #2: Sell event expenses ✅ FIXED
+   - Fix #3: Atomic transfers ✅ FIXED
+   - Fix #6: Uncomment expense creation
+   - Fix #13: Pond delete fish update
+
+3. **Medium Term:**
+   - Fix #8: Centralize fish stock updates
+   - Fix #12: Add account_key everywhere
+   - Add correlation IDs (#18, #19, #20)
+
+4. **Long Term:**
+   - Implement soft deletes
+   - Add audit trail
+   - Standardize field naming
+
+---
+
+## 💰 Expense Management System
+
+### Expense Category Catalog
+
+The system uses a comprehensive hierarchical expense category catalog from `/data/expesnses.json`.
+
+#### Top-Level Categories:
+| Category | Description |
+|----------|-------------|
+| **Infrastructure** | Land, Buildings, Culture Systems, Water Supply, Power |
+| **Human Resources** | Salaries, Benefits, Training, PPE |
+| **Operational** | Utilities, Maintenance, Feeding, Medical, Harvest |
+| **Hatchery & Stock** | Fingerlings, Broodstock, Hatchery Inputs |
+| **Compliance & Regulatory** | Permits, Certifications, Audits |
+| **Insurance** | Property, Liability, Stock Mortality |
+| **Finance & Treasury** | Interest, Bank Charges, Loans |
+| **Taxes & Government** | Income Tax, GST/VAT, Property Tax |
+| **IT & Software** | Farm Management, Sensors, ERP |
+| **Sales & Marketing** | Branding, Advertising, Trade Shows |
+| **Professional Services** | Accounting, Legal, Consulting |
+| **R&D & Product Development** | Trials, Testing, Patents |
+| **Admin & Office** | Rent, Supplies, Memberships |
+| **Contingency & Reserves** | Emergency Funds |
+| **Non-Cash Expenses** | Depreciation, Amortization |
+
+---
+
+### Expense API Endpoints
+
+#### Category APIs (No Auth Required)
+
+##### Get Full Category Catalog
+```http
+GET /expenses/categories
+GET /expenses/categories?flat=true
+GET /expenses/categories?flat=true&level=0
+```
+
+**Response (flat=false):**
+```json
+{
+  "success": true,
+  "data": {
+    "categories": {
+      "Infrastructure": {
+        "Land": { "Purchase or Lease": {}, "Property Taxes": {} },
+        "Buildings": { "Hatchery": {}, "Feed Storage": {} }
+      },
+      "Operational": {
+        "Utilities": { "Electricity": {}, "Water": {}, "Fuel": {} },
+        "Feeding": { "Starter Feed": {}, "Grower Feed": {} }
+      }
+    }
+  }
+}
+```
+
+**Response (flat=true):**
+```json
+{
+  "success": true,
+  "data": {
+    "categories": [
+      { "name": "Infrastructure", "path": "Infrastructure", "level": 0, "has_children": true },
+      { "name": "Land", "path": "Infrastructure/Land", "level": 1, "has_children": true },
+      { "name": "Purchase or Lease", "path": "Infrastructure/Land/Purchase or Lease", "level": 2, "has_children": false }
+    ]
+  }
+}
+```
+
+---
+
+##### Get Top-Level Categories
+```http
+GET /expenses/categories/top
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "categories": [
+      "Infrastructure",
+      "Human Resources",
+      "Operational",
+      "Hatchery & Stock",
+      "Compliance & Regulatory",
+      "Insurance",
+      "Finance & Treasury",
+      "Taxes & Government Charges",
+      "IT & Software",
+      "Sales & Marketing",
+      "Professional Services",
+      "R&D & Product Development",
+      "Admin & Office",
+      "Contingency & Reserves",
+      "Non-Cash Expenses"
+    ]
+  }
+}
+```
+
+---
+
+##### Get Category Options (for Dropdowns)
+```http
+GET /expenses/categories/options
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "options": {
+      "Infrastructure": ["Land", "Buildings", "Culture System", "Water Supply & Treatment"],
+      "Operational": ["Utilities", "Maintenance", "Feeding", "Medical Care", "Harvest"],
+      "Human Resources": ["Salaries", "Wages & Overtime", "Benefits", "Training"]
+    }
+  }
+}
+```
+
+---
+
+##### Get Subcategories
+```http
+GET /expenses/categories/subcategories?parent=Operational
+GET /expenses/categories/subcategories?parent=Operational/Utilities
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "parent": "Operational/Utilities",
+    "subcategories": [
+      { "name": "Electricity", "path": "Operational/Utilities/Electricity", "has_children": false },
+      { "name": "Water", "path": "Operational/Utilities/Water", "has_children": false },
+      { "name": "Fuel", "path": "Operational/Utilities/Fuel", "has_children": false }
+    ]
+  }
+}
+```
+
+---
+
+##### Validate Category Path
+```http
+POST /expenses/categories/validate
+Content-Type: application/json
+
+{
+  "path": "Operational/Utilities/Electricity"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "path": "Operational/Utilities/Electricity",
+    "valid": true,
+    "error": null
+  }
+}
+```
+
+---
+
+##### Search Categories
+```http
+GET /expenses/categories/search?q=feed
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "results": [
+      { "name": "Feed Storage", "path": "Infrastructure/Buildings/Feed Storage", "level": 2 },
+      { "name": "Feeding", "path": "Operational/Feeding", "level": 1 },
+      { "name": "Starter Feed", "path": "Operational/Feeding/Starter Feed", "level": 2 }
+    ]
+  }
+}
+```
+
+---
+
+##### Get Category Suggestions
+```http
+GET /expenses/categories/suggest?q=elec&limit=5
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "suggestions": [
+      "Operational/Utilities/Electricity",
+      "Infrastructure/Power & Backup/Electrical Connection"
+    ]
+  }
+}
+```
+
+---
+
+### Expense CRUD APIs (Auth Required)
+
+##### Create Expense
+```http
+POST /expenses
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "category": "Operational",
+  "subcategory": "Utilities",
+  "detail": "Electricity",
+  "amount": 15000,
+  "currency": "INR",
+  "vendor": "BESCOM",
+  "invoice_number": "EB-2026-01-12345",
+  "payment_method": "bank_transfer",
+  "notes": "January electricity bill for main farm",
+  "pond_id": "ACC001-001",
+  "metadata": {
+    "meter_reading": "45678",
+    "units_consumed": 1200
+  }
+}
+```
+
+---
+
+##### Get Single Expense
+```http
+GET /expenses/{expense_id}
+Authorization: Bearer {token}
+```
+
+---
+
+##### Update Expense
+```http
+PUT /expenses/{expense_id}
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "amount": 15500,
+  "notes": "Updated after receiving revised bill"
+}
+```
+
+---
+
+##### Delete Expense
+```http
+DELETE /expenses/{expense_id}
+Authorization: Bearer {token}
+```
+
+---
+
+##### List Expenses with Filters
+```http
+GET /expenses?category=Operational&status=paid&start_date=2026-01-01&end_date=2026-01-31&limit=50
+Authorization: Bearer {token}
+```
+
+---
+
+### Expense Workflow APIs
+
+##### Approve Expense
+```http
+POST /expenses/{expense_id}/approve
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "notes": "Approved for payment"
+}
+```
+
+---
+
+##### Reject Expense
+```http
+POST /expenses/{expense_id}/reject
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "reason": "Missing invoice attachment"
+}
+```
+
+---
+
+##### Cancel Expense
+```http
+POST /expenses/{expense_id}/cancel
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "reason": "Duplicate entry"
+}
+```
+
+---
+
+##### Mark Expense as Paid
+```http
+POST /expenses/{expense_id}/pay
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+  "payment": {
+    "amount": 15000,
+    "method": "bank_transfer",
+    "reference": "NEFT123456"
+  }
+}
+```
+
+---
+
+### Expense Analytics APIs
+
+##### Get Expense Summary
+```http
+GET /expenses/summary?group_by=category&start_date=2026-01-01&end_date=2026-12-31
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "summary": [
+      { "category": "Operational", "total": 450000, "count": 45, "average": 10000, "min": 500, "max": 50000 },
+      { "category": "Infrastructure", "total": 200000, "count": 5, "average": 40000, "min": 10000, "max": 100000 }
+    ],
+    "grandTotal": 650000,
+    "totalCount": 50,
+    "groupBy": "category"
+  }
+}
+```
+
+---
+
+##### Get Expenses by Pond
+```http
+GET /expenses/by-pond/{pond_id}
+Authorization: Bearer {token}
+```
+
+---
+
+### Expense Document Structure
+
+```javascript
+{
+  "_id": ObjectId("..."),
+  "expense_id": "EXP-2026-001",
+  "account_key": "ACC001",
+  
+  // Hierarchical Category
+  "category": "Operational",
+  "subcategory": "Utilities",
+  "detail": "Electricity",
+  "category_path": "Operational/Utilities/Electricity",
+  
+  // Financial
+  "amount": 15000.00,
+  "currency": "INR",
+  "tax_amount": 2700.00,
+  "gst": 2700.00,
+  "total_amount": 17700.00,
+  
+  // Type
+  "action": "pay",
+  "type": "utility",
+  
+  // Payment
+  "payment_method": "bank_transfer",
+  "payment_status": "completed",
+  "payment_date": "2026-01-15T10:30:00+05:30",
+  "payment_reference": "NEFT123456",
+  
+  // Vendor
+  "vendor": "BESCOM",
+  "vendor_id": "V001",
+  "invoice_number": "EB-2026-01-12345",
+  "invoice_date": "2026-01-10",
+  "due_date": "2026-01-25",
+  
+  // Links
+  "pond_id": "ACC001-001",
+  "transaction_id": "TX-001",
+  
+  // Workflow
+  "status": "paid",
+  "submitted_by": "user_001",
+  "approved_by": "admin_001",
+  "approved_at": "2026-01-14T09:00:00+05:30",
+  
+  // Audit
+  "recorded_by": "user_001",
+  "created_at": "2026-01-10T08:00:00+05:30",
+  "updated_at": "2026-01-15T10:30:00+05:30",
+  
+  // Additional
+  "notes": "January electricity bill",
+  "tags": ["monthly", "utility"],
+  "metadata": {
+    "meter_reading": "45678",
+    "units_consumed": 1200
+  }
+}
+```
+
+---
+
+### Common Expense Use Cases
+
+#### UC-EXP.1: Record Monthly Electricity Bill
+```http
+POST /expenses
+{
+  "category": "Operational",
+  "subcategory": "Utilities",
+  "detail": "Electricity",
+  "amount": 15000,
+  "vendor": "BESCOM",
+  "invoice_number": "EB-2026-01-12345",
+  "due_date": "2026-01-25",
+  "payment_method": "bank_transfer"
+}
+```
+
+#### UC-EXP.2: Record Fish Feed Purchase
+```http
+POST /expenses
+{
+  "category": "Operational",
+  "subcategory": "Feeding",
+  "detail": "Grower Feed",
+  "amount": 50000,
+  "vendor": "Growel Feeds",
+  "pond_id": "ACC001-001",
+  "metadata": {
+    "feed_type": "floating",
+    "quantity_kg": 500,
+    "protein_percentage": 32
+  }
+}
+```
+
+#### UC-EXP.3: Record Equipment Maintenance
+```http
+POST /expenses
+{
+  "category": "Operational",
+  "subcategory": "Maintenance",
+  "detail": "Equipment Repair",
+  "amount": 5000,
+  "vendor": "Local Mechanic",
+  "notes": "Aerator motor repair",
+  "pond_id": "ACC001-002"
+}
+```
+
+#### UC-EXP.4: Record Staff Salary
+```http
+POST /expenses
+{
+  "category": "Human Resources",
+  "subcategory": "Salaries",
+  "amount": 25000,
+  "recipient": "Ravi Kumar",
+  "payment_method": "bank_transfer",
+  "is_recurring": true,
+  "recurring_frequency": "monthly"
+}
+```
+
+#### UC-EXP.5: Record Fish Mortality Insurance Claim
+```http
+POST /expenses
+{
+  "category": "Insurance",
+  "subcategory": "Stock Mortality",
+  "action": "receive",
+  "amount": 100000,
+  "notes": "Insurance claim for disease outbreak",
+  "metadata": {
+    "claim_number": "INS-2026-001",
+    "fish_lost": 500,
+    "species": "TILAPIA_NILE"
+  }
+}
+```
+
+---
+
 The Fin Engine API provides complete management for fish farming operations including:
 
 - **Farm & User Management** - Company registration, employee management

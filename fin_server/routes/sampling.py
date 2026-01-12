@@ -386,6 +386,7 @@ def update_sampling_route(sampling_id):
 # DELETE /sampling/<sampling_id> - remove a sampling record
 @sampling_bp.route('/<sampling_id>', methods=['DELETE'])
 def delete_sampling_route(sampling_id):
+    """Delete a sampling record and cascade cleanup related data."""
     try:
         payload = get_auth_payload(request)
         account_key = payload.get('account_key')
@@ -408,17 +409,36 @@ def delete_sampling_route(sampling_id):
         if account_key and existing.get('account_key') and existing.get('account_key') != account_key:
             return respond_error('Not authorized to delete this sampling (account mismatch)', status=403)
 
+        # Get the actual sampling_id for cleanup
+        actual_sampling_id = existing.get('sampling_id') or str(existing.get('_id'))
+
         # perform business cleanup: cancel expenses, delete linked transactions, decrement counts, remove analytics/activity
-        summary = handle_sampling_deletion(sampling_id)
+        current_app.logger.info(f'Deleting sampling {actual_sampling_id} with cascade cleanup')
+        summary = handle_sampling_deletion(actual_sampling_id)
 
         # finally remove the sampling document itself
-        # attempt by sampling_id first then by _id
-        del_res = sampling_repo.delete({'sampling_id': sampling_id})
-        if not del_res or not del_res:
-            # try by _id
-            if existing.get('_id') is not None:
-                del_res = sampling_repo.delete({'_id': existing.get('_id')})
+        deleted = False
+        try:
+            # Try by sampling_id first
+            del_res = sampling_repo.delete({'sampling_id': actual_sampling_id})
+            if del_res and getattr(del_res, 'deleted_count', 0) > 0:
+                deleted = True
+        except Exception:
+            pass
 
+        if not deleted and existing.get('_id'):
+            # Fallback: try by _id
+            try:
+                del_res = sampling_repo.delete({'_id': existing.get('_id')})
+                if del_res and getattr(del_res, 'deleted_count', 0) > 0:
+                    deleted = True
+            except Exception:
+                current_app.logger.exception('Failed to delete sampling document')
+
+        if not deleted:
+            return respond_error('Failed to delete sampling record', status=500)
+
+        current_app.logger.info(f'Deleted sampling {actual_sampling_id}, cleanup summary: {summary}')
         return respond_success({'deleted': True, 'cleanup_summary': summary})
     except UnauthorizedError as ue:
         return respond_error(str(ue), status=401)
@@ -441,3 +461,8 @@ def api_list_sampling_for_pond(pond_id):
 @sampling_api_bp.route('/sampling/<sampling_id>', methods=['PUT'])
 def api_update_sampling(sampling_id):
     return update_sampling_route(sampling_id)
+
+@sampling_api_bp.route('/sampling/<sampling_id>', methods=['DELETE'])
+def api_delete_sampling(sampling_id):
+    return delete_sampling_route(sampling_id)
+
