@@ -44,6 +44,15 @@ notification:
   scheduler_interval_seconds: 60
   worker_enabled: true
 
+# MCP (Model Context Protocol) Server Configuration
+mcp:
+  enabled: false  # Disabled by default - enable in environment-specific config
+  host: "127.0.0.1"
+  port: 8085
+  transport: "stdio"  # Options: "stdio", "sse", "websocket"
+  tools_enabled: true
+  max_connections: 10
+
 rate_limit:
   enabled: false
   requests_per_minute: 60

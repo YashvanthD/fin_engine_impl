@@ -74,3 +74,94 @@ def now_std(include_time: bool = True) -> datetime:
     to use get_time_date / get_time_date_dt with a settings map.
     """
     return get_time_date_dt(zone='IST', include_time=include_time, settings=None)
+
+
+def normalize_date(value) -> Optional[datetime]:
+    """Normalize various date formats to a datetime object.
+
+    Handles:
+    - datetime objects (returned as-is)
+    - ISO format strings (e.g., "2026-01-13T10:30:00")
+    - Date strings (e.g., "2026-01-13")
+    - Epoch timestamps (int or float)
+    - None (returns None)
+
+    Returns:
+        datetime object or None if parsing fails
+    """
+    if value is None:
+        return None
+
+    if isinstance(value, datetime):
+        return value
+
+    # Handle epoch timestamps
+    if isinstance(value, (int, float)):
+        try:
+            # Assume milliseconds if value is very large
+            if value > 1e12:
+                value = value / 1000
+            return datetime.fromtimestamp(value)
+        except Exception:
+            return None
+
+    # Handle string formats
+    if isinstance(value, str):
+        value = value.strip()
+        if not value:
+            return None
+
+        # Try various formats
+        formats = [
+            '%Y-%m-%dT%H:%M:%S.%fZ',  # ISO with microseconds and Z
+            '%Y-%m-%dT%H:%M:%SZ',      # ISO with Z
+            '%Y-%m-%dT%H:%M:%S.%f',    # ISO with microseconds
+            '%Y-%m-%dT%H:%M:%S',       # ISO
+            '%Y-%m-%d %H:%M:%S',       # Standard datetime
+            '%Y-%m-%d %H:%M',          # Without seconds
+            '%Y-%m-%d',                # Date only
+            '%d-%m-%Y',                # Day first
+            '%m/%d/%Y',                # US format
+        ]
+
+        for fmt in formats:
+            try:
+                return datetime.strptime(value, fmt)
+            except ValueError:
+                continue
+
+        return None
+
+    return None
+
+
+def to_iso_string(value) -> Optional[str]:
+    """Convert a date value to ISO format string.
+
+    Args:
+        value: datetime, epoch, or date string
+
+    Returns:
+        ISO format string (YYYY-MM-DDTHH:MM:SS) or None
+    """
+    dt = normalize_date(value)
+    if dt:
+        return dt.isoformat()
+    return None
+
+
+def to_epoch(value) -> Optional[int]:
+    """Convert a date value to epoch timestamp (seconds).
+
+    Args:
+        value: datetime, ISO string, or epoch
+
+    Returns:
+        Epoch timestamp in seconds or None
+    """
+    dt = normalize_date(value)
+    if dt:
+        return int(dt.timestamp())
+    return None
+
+

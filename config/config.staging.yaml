@@ -43,3 +43,12 @@ features:
   enable_debug_endpoints: false
   enable_mock_data: false
 
+# MCP Server - Disabled in staging by default
+mcp:
+  enabled: false
+  host: "127.0.0.1"
+  port: 8085
+  transport: "stdio"
+  tools_enabled: true
+  max_connections: 10
+

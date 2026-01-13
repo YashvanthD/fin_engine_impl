@@ -5,7 +5,9 @@ from fin_server.utils.helpers import _to_iso_if_epoch, normalize_doc
 class FishDTO:
     def __init__(self, id: Optional[str], species_code: str, common_name: Optional[str] = None,
                  scientific_name: Optional[str] = None, createdAt: Optional[str] = None,
-                 metadata: Optional[Dict[str, Any]] = None, extra: Dict[str, Any] = None):
+                 metadata: Optional[Dict[str, Any]] = None, extra: Dict[str, Any] = None,
+                 scope: Optional[str] = None, account_key: Optional[str] = None,
+                 deleted_at: Optional[str] = None):
         self.id = id
         self.species_code = species_code
         self.common_name = common_name
@@ -13,6 +15,9 @@ class FishDTO:
         self.createdAt = _to_iso_if_epoch(createdAt) if createdAt is not None else None
         self.metadata = metadata or {}
         self.extra = extra or {}
+        self.scope = scope or 'global'  # 'global' or 'account'
+        self.account_key = account_key  # null for global, set for account-specific
+        self.deleted_at = _to_iso_if_epoch(deleted_at) if deleted_at is not None else None
 
     @classmethod
     def from_doc(cls, doc: Dict[str, Any]):
@@ -25,7 +30,10 @@ class FishDTO:
             scientific_name=d.get('scientific_name') or d.get('scientificName'),
             createdAt=d.get('created_at') or d.get('createdAt'),
             metadata=d.get('metadata') or {},
-            extra={k: v for k, v in d.items()}
+            extra={k: v for k, v in d.items()},
+            scope=d.get('scope') or 'global',
+            account_key=d.get('account_key'),
+            deleted_at=d.get('deleted_at')
         )
 
     @classmethod
@@ -37,7 +45,10 @@ class FishDTO:
             scientific_name=payload.get('scientific_name') or payload.get('scientificName'),
             createdAt=payload.get('createdAt') or payload.get('created_at'),
             metadata=payload.get('metadata') or {},
-            extra={k: v for k, v in payload.items()}
+            extra={k: v for k, v in payload.items()},
+            scope=payload.get('scope') or 'global',
+            account_key=payload.get('account_key') or payload.get('accountKey'),
+            deleted_at=payload.get('deleted_at') or payload.get('deletedAt')
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -48,6 +59,9 @@ class FishDTO:
             'scientific_name': self.scientific_name,
             'created_at': self.createdAt,
             'metadata': self.metadata,
+            'scope': self.scope,
+            'account_key': self.account_key,
+            'deleted_at': self.deleted_at,
             **self.extra
         }
 
@@ -60,6 +74,9 @@ class FishDTO:
             'scientificName': self.scientific_name,
             'createdAt': self.createdAt,
             'metadata': self.metadata,
+            'scope': self.scope,
+            'accountKey': self.account_key,
+            'deletedAt': self.deleted_at,
             **self.extra
         }
 
@@ -72,7 +89,10 @@ class FishDTO:
             'common_name': doc.get('common_name'),
             'scientific_name': doc.get('scientific_name'),
             'created_at': doc.get('created_at'),
-            'metadata': doc.get('metadata')
+            'metadata': doc.get('metadata'),
+            'scope': doc.get('scope'),
+            'account_key': doc.get('account_key'),
+            'deleted_at': doc.get('deleted_at')
         }
         for k, v in (self.extra or {}).items():
             if k not in db:

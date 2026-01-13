@@ -128,6 +128,23 @@ class MessagingService:
     # Message Operations
     # =========================================================================
 
+    def _get_sender_info(self, sender_key: str) -> Optional[Dict[str, Any]]:
+        """Get denormalized sender info from users collection."""
+        try:
+            from fin_server.repository.mongo_helper import get_collection
+            users_repo = get_collection('users')
+            if users_repo:
+                user = users_repo.find_one({'user_key': sender_key})
+                if user:
+                    return {
+                        'user_key': sender_key,
+                        'username': user.get('username'),
+                        'avatar_url': user.get('avatar_url') or user.get('profile_image')
+                    }
+        except Exception:
+            pass
+        return {'user_key': sender_key, 'username': None, 'avatar_url': None}
+
     def send_message(
         self,
         sender_key: str,
@@ -145,6 +162,9 @@ class MessagingService:
         if not conv:
             raise ValueError("Conversation not found or access denied")
 
+        # Get denormalized sender info
+        sender_info = self._get_sender_info(sender_key)
+
         message = Message(
             message_id=generate_message_id(),
             conversation_id=conversation_id,
@@ -154,17 +174,43 @@ class MessagingService:
             reply_to=reply_to,
             media_url=media_url,
             mentions=mentions or [],
-            account_key=account_key
+            account_key=account_key,
+            sender_info=sender_info
         )
 
         message_id = self.repo.send_message(message)
         message.message_id = message_id
+
+        # Update unread counts for other participants
+        self._increment_unread_counts(conversation_id, sender_key, conv.get('participants', []))
 
         return {
             'message_id': message_id,
             'message': message.to_dict(),
             'conversation': conv
         }
+
+    def _increment_unread_counts(self, conversation_id: str, sender_key: str, participants: List[str]):
+        """Increment unread count for all participants except sender."""
+        try:
+            inc_updates = {f'unread_counts.{p}': 1 for p in participants if p != sender_key}
+            if inc_updates:
+                self.repo.conversations.update_one(
+                    {'conversation_id': conversation_id},
+                    {'$inc': inc_updates}
+                )
+        except Exception:
+            logger.exception('Failed to increment unread counts')
+
+    def reset_unread_count(self, conversation_id: str, user_key: str):
+        """Reset unread count for a user in a conversation (when they read messages)."""
+        try:
+            self.repo.conversations.update_one(
+                {'conversation_id': conversation_id},
+                {'$set': {f'unread_counts.{user_key}': 0}}
+            )
+        except Exception:
+            logger.exception('Failed to reset unread count')
 
     def get_messages_paginated(
         self,

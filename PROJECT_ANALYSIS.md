@@ -327,10 +327,13 @@ The Fish Farm Engine is **production-ready** with:
 
 ### System Status: ✅ PRODUCTION READY
 
-### Remaining Schema Tasks (See SCHEMA_ANALYSIS.md)
-- Remove duplicate `assignee`/`assigned_to` fields
-- Add TTL indexes for ephemeral data
-- Remove `companies.users[]` embedded array
+### Migration Scripts to Run (See SCHEMA_ANALYSIS.md)
+```bash
+python scripts/add_version_field.py
+python scripts/add_indexes.py
+python scripts/remove_embedded_users.py
+python scripts/fix_schema_issues.py
+```
 
 ---
 

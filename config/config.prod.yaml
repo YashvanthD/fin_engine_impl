@@ -53,3 +53,13 @@ features:
   enable_debug_endpoints: false
   enable_mock_data: false
 
+# MCP Server - DISABLED in production for security
+# Only enable if you have a specific use case and proper security measures
+mcp:
+  enabled: false
+  host: "127.0.0.1"
+  port: 8085
+  transport: "stdio"
+  tools_enabled: false  # Tools disabled in production
+  max_connections: 5
+

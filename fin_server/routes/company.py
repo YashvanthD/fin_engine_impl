@@ -33,7 +33,11 @@ companies_repo = get_collection('companies')
 # =============================================================================
 
 def _build_company_users_list(account_key):
-    """Build list of company users with their status from user repository."""
+    """Build list of company users with their status from user repository.
+
+    Users are stored in the users collection with account_key reference,
+    not embedded in the company document.
+    """
     users = user_repo.find_many({'account_key': account_key})
     return [
         {
@@ -52,15 +56,23 @@ def _get_active_employee_count(users_list):
     return sum(1 for u in users_list if u.get('active'))
 
 
-def _sync_company_users(account_key):
-    """Sync company users list with user repository and update company."""
-    users_list = _build_company_users_list(account_key)
-    employee_count = _get_active_employee_count(users_list)
+def _sync_company_employee_count(account_key):
+    """Update the company's employee count based on users in users collection.
 
-    # Use repository method to update
-    companies_repo.update_users_list(account_key, users_list, employee_count)
+    Returns:
+        tuple: (users_list, employee_count)
+    """
+    users_list = _build_company_users_list(account_key)
+    employee_count = len(users_list)
+
+    # Update only the employee_count field
+    companies_repo.update_employee_count(account_key, absolute_count=employee_count)
 
     return users_list, employee_count
+
+
+# Backward compatibility alias
+_sync_company_users = _sync_company_employee_count
 
 
 
@@ -150,17 +162,11 @@ def register_company():
     created_ts = get_current_timestamp()
 
     # Create company document using repository
+    # Note: Users are tracked via account_key in users collection, not embedded here
     company_doc = {
         'account_key': account_key,
         'company_name': company_name,
         'admin_user_key': admin_user_key,
-        'users': [{
-            'user_key': admin_user_key,
-            'username': admin_data.get('username'),
-            'roles': admin_data.get('roles', []),
-            'joined_date': admin_data.get('joined_date'),
-            'active': True
-        }],
         'created_date': created_ts,
         'pincode': data.get('pincode'),
         'description': data.get('description'),

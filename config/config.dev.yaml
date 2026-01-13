@@ -45,3 +45,12 @@ features:
   enable_debug_endpoints: true
   enable_mock_data: false
 
+# MCP Server - Enable for development/testing
+mcp:
+  enabled: false  # Set to true to test MCP locally
+  host: "127.0.0.1"
+  port: 8085
+  transport: "stdio"
+  tools_enabled: true
+  max_connections: 5
+

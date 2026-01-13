@@ -61,7 +61,8 @@ class Message:
         created_at: Optional[datetime] = None,
         edited_at: Optional[datetime] = None,
         deleted_at: Optional[datetime] = None,
-        account_key: Optional[str] = None
+        account_key: Optional[str] = None,
+        sender_info: Optional[Dict[str, Any]] = None  # Denormalized sender info
     ):
         self.message_id = message_id
         self.conversation_id = conversation_id
@@ -78,12 +79,15 @@ class Message:
         self.edited_at = edited_at
         self.deleted_at = deleted_at
         self.account_key = account_key
+        # Denormalized sender info for faster reads
+        self.sender_info = sender_info  # {user_key, username, avatar_url}
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             'messageId': self.message_id,
             'conversationId': self.conversation_id,
             'senderKey': self.sender_key,
+            'senderInfo': self.sender_info,  # Include denormalized sender info
             'content': self.content if not self.deleted_at else None,
             'messageType': self.message_type,
             'replyTo': self.reply_to,
@@ -104,6 +108,7 @@ class Message:
             'message_id': self.message_id,
             'conversation_id': self.conversation_id,
             'sender_key': self.sender_key,
+            'sender_info': self.sender_info,  # Store denormalized sender info
             'content': self.content,
             'message_type': self.message_type,
             'reply_to': self.reply_to,
@@ -135,7 +140,8 @@ class Message:
             created_at=doc.get('created_at'),
             edited_at=doc.get('edited_at'),
             deleted_at=doc.get('deleted_at'),
-            account_key=doc.get('account_key')
+            account_key=doc.get('account_key'),
+            sender_info=doc.get('sender_info')
         )
 
 
@@ -159,7 +165,8 @@ class Conversation:
         archived_by: Optional[List[str]] = None,
         metadata: Optional[Dict[str, Any]] = None,
         created_at: Optional[datetime] = None,
-        account_key: Optional[str] = None
+        account_key: Optional[str] = None,
+        unread_counts: Optional[Dict[str, int]] = None  # {user_key: count}
     ):
         self.conversation_id = conversation_id
         self.conversation_type = conversation_type
@@ -177,6 +184,8 @@ class Conversation:
         self.metadata = metadata or {}
         self.created_at = created_at or datetime.utcnow()
         self.account_key = account_key
+        # Denormalized unread counts per user {user_key: count}
+        self.unread_counts = unread_counts or {}
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -192,7 +201,8 @@ class Conversation:
             'lastActivity': self.last_activity.isoformat() if self.last_activity else None,
             'metadata': self.metadata,
             'createdAt': self.created_at.isoformat() if self.created_at else None,
-            'accountKey': self.account_key
+            'accountKey': self.account_key,
+            'unreadCounts': self.unread_counts
         }
 
     def to_db_doc(self) -> Dict[str, Any]:
@@ -213,7 +223,8 @@ class Conversation:
             'archived_by': self.archived_by,
             'metadata': self.metadata,
             'created_at': self.created_at,
-            'account_key': self.account_key
+            'account_key': self.account_key,
+            'unread_counts': self.unread_counts
         }
 
     @classmethod
@@ -234,7 +245,8 @@ class Conversation:
             archived_by=doc.get('archived_by', []),
             metadata=doc.get('metadata', {}),
             created_at=doc.get('created_at'),
-            account_key=doc.get('account_key')
+            account_key=doc.get('account_key'),
+            unread_counts=doc.get('unread_counts', {})
         )
 
 

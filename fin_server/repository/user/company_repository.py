@@ -85,33 +85,83 @@ class CompanyRepository(BaseRepository):
         """Get company by admin user key."""
         return self.find_one({'admin_user_key': admin_user_key})
 
-    def update_users_list(self, account_key, users_list, employee_count=None):
-        """Update the users list and employee count for a company."""
-        update_doc = {'$set': {'users': users_list}}
-        if employee_count is not None:
-            update_doc['$set']['employee_count'] = employee_count
-        return self.update_one({'account_key': account_key}, update_doc)
+    def update_employee_count(self, account_key, count_delta: int = 0, absolute_count: int = None):
+        """Update the employee count for a company.
 
-    def add_user_to_company(self, account_key, user_info):
-        """Add a user to the company's users list."""
-        return self.collection.update_one(
-            {'account_key': account_key},
-            {'$push': {'users': user_info}, '$inc': {'employee_count': 1}}
-        )
+        Args:
+            account_key: The company's account key
+            count_delta: Increment/decrement count by this value (if absolute_count is None)
+            absolute_count: Set count to this value (overrides count_delta)
+        """
+        if absolute_count is not None:
+            return self.update_one({'account_key': account_key}, {'$set': {'employee_count': absolute_count}})
+        return self.update_one({'account_key': account_key}, {'$inc': {'employee_count': count_delta}})
 
-    def remove_user_from_company(self, account_key, user_key):
-        """Remove a user from the company's users list."""
-        return self.collection.update_one(
-            {'account_key': account_key},
-            {'$pull': {'users': {'user_key': user_key}}, '$inc': {'employee_count': -1}}
-        )
+    def increment_employee_count(self, account_key):
+        """Increment employee count by 1."""
+        return self.update_employee_count(account_key, count_delta=1)
+
+    def decrement_employee_count(self, account_key):
+        """Decrement employee count by 1."""
+        return self.update_employee_count(account_key, count_delta=-1)
 
     def get_company_users(self, account_key):
-        """Get users list for a company."""
-        company = self.find_one({'account_key': account_key})
-        return company.get('users', []) if company else []
+        """Get users list for a company from users collection.
+
+        Note: Users are stored in the users collection with account_key reference,
+        not embedded in the company document.
+        """
+        from fin_server.repository.mongo_helper import get_collection
+        users_coll = get_collection('users')
+        users = list(users_coll.find({'account_key': account_key}))
+        return [
+            {
+                'user_key': u.get('user_key'),
+                'username': u.get('username'),
+                'roles': u.get('roles', []),
+                'joined_date': u.get('joined_date'),
+                'active': bool(u.get('refresh_tokens'))
+            }
+            for u in users
+        ]
 
     def update_company_name(self, account_key, company_name):
         """Update company name."""
         return self.update({'account_key': account_key}, {'company_name': company_name})
+
+    # Deprecated methods - kept for backward compatibility but log warning
+    def update_users_list(self, account_key, users_list, employee_count=None):
+        """DEPRECATED: Users are now stored in users collection, not embedded.
+
+        This method now only updates employee_count if provided.
+        """
+        import logging
+        logging.getLogger(__name__).warning(
+            'update_users_list is deprecated. Users are stored in users collection.'
+        )
+        if employee_count is not None:
+            return self.update_employee_count(account_key, absolute_count=employee_count)
+        return None
+
+    def add_user_to_company(self, account_key, user_info):
+        """DEPRECATED: Users are now stored in users collection.
+
+        This method now only increments employee_count.
+        """
+        import logging
+        logging.getLogger(__name__).warning(
+            'add_user_to_company is deprecated. Users are stored in users collection.'
+        )
+        return self.increment_employee_count(account_key)
+
+    def remove_user_from_company(self, account_key, user_key):
+        """DEPRECATED: Users are now stored in users collection.
+
+        This method now only decrements employee_count.
+        """
+        import logging
+        logging.getLogger(__name__).warning(
+            'remove_user_from_company is deprecated. Users are stored in users collection.'
+        )
+        return self.decrement_employee_count(account_key)
 

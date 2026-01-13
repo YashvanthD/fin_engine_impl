@@ -32,3 +32,12 @@ cors:
 logging:
   level: "DEBUG"
 
+# MCP Server - Enable for local AI/tool testing
+# mcp:
+#   enabled: true
+#   host: "127.0.0.1"
+#   port: 8085
+#   transport: "stdio"  # Options: "stdio", "sse", "websocket"
+#   tools_enabled: true
+#   max_connections: 5
+

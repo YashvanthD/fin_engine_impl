@@ -426,6 +426,52 @@ class Config:
         return self._get_yaml_value('upload', 'allowed_extensions', default=['jpg', 'jpeg', 'png', 'pdf'])
 
     # ==========================================================================
+    # MCP (Model Context Protocol) Settings
+    # ==========================================================================
+
+    @property
+    def MCP_ENABLED(self) -> bool:
+        """Whether MCP server is enabled."""
+        env_val = os.getenv('MCP_ENABLED', '').lower()
+        if env_val:
+            return env_val in ('1', 'true', 'yes')
+        return self._get_yaml_value('mcp', 'enabled', default=False)
+
+    @property
+    def MCP_HOST(self) -> str:
+        """MCP server host."""
+        return os.getenv('MCP_HOST') or self._get_yaml_value('mcp', 'host', default='127.0.0.1')
+
+    @property
+    def MCP_PORT(self) -> int:
+        """MCP server port."""
+        env_val = os.getenv('MCP_PORT')
+        if env_val:
+            return int(env_val)
+        return self._get_yaml_value('mcp', 'port', default=8085)
+
+    @property
+    def MCP_TRANSPORT(self) -> str:
+        """MCP transport type (stdio, sse, websocket)."""
+        return os.getenv('MCP_TRANSPORT') or self._get_yaml_value('mcp', 'transport', default='stdio')
+
+    @property
+    def MCP_TOOLS_ENABLED(self) -> bool:
+        """Whether MCP tools are enabled."""
+        env_val = os.getenv('MCP_TOOLS_ENABLED', '').lower()
+        if env_val:
+            return env_val in ('1', 'true', 'yes')
+        return self._get_yaml_value('mcp', 'tools_enabled', default=True)
+
+    @property
+    def MCP_MAX_CONNECTIONS(self) -> int:
+        """Maximum MCP connections."""
+        env_val = os.getenv('MCP_MAX_CONNECTIONS')
+        if env_val:
+            return int(env_val)
+        return self._get_yaml_value('mcp', 'max_connections', default=10)
+
+    # ==========================================================================
     # Validation Methods
     # ==========================================================================
 
@@ -509,6 +555,14 @@ class Config:
             'features': {
                 'swagger': self.ENABLE_SWAGGER,
                 'debug_endpoints': self.ENABLE_DEBUG_ENDPOINTS,
+            },
+            'mcp': {
+                'enabled': self.MCP_ENABLED,
+                'host': self.MCP_HOST,
+                'port': self.MCP_PORT,
+                'transport': self.MCP_TRANSPORT,
+                'tools_enabled': self.MCP_TOOLS_ENABLED,
+                'max_connections': self.MCP_MAX_CONNECTIONS,
             },
         }
 
