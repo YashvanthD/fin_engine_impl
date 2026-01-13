@@ -1,9 +1,10 @@
-"""Migration script: Add TTL indexes and other missing indexes.
+"""Migration script: Add missing indexes for common queries.
 
-This script creates:
-1. TTL index on user_presence (24 hour expiry)
-2. TTL index on notification_queue (7 day expiry for sent notifications)
-3. Missing indexes for common queries
+This script creates indexes for:
+1. Query performance optimization
+2. Common query patterns
+
+Note: TTL indexes are NOT added - all data is retained for 5+ years for analytics.
 
 Usage:
     python scripts/add_indexes.py
@@ -48,35 +49,6 @@ def create_index_safe(coll, index_spec, **kwargs):
             logger.error(f'  Error creating index {index_spec}: {e}')
             return False
 
-
-def add_ttl_indexes():
-    """Add TTL indexes for ephemeral data."""
-    logger.info('Adding TTL indexes...')
-
-    # TTL index on user_presence (24 hour expiry)
-    # Note: user_presence may be in notification or a separate collection
-    logger.info('user_presence: Adding TTL index (24 hour expiry)')
-    coll = get_underlying_collection('notification')
-    if coll and hasattr(coll, 'database'):
-        user_presence_coll = coll.database['user_presence']
-        create_index_safe(
-            user_presence_coll,
-            [('last_seen', 1)],
-            expireAfterSeconds=86400,
-            background=True
-        )
-
-    # TTL index on notification_queue (7 day expiry for sent notifications)
-    logger.info('notification_queue: Adding TTL index (7 day expiry for sent)')
-    coll = get_underlying_collection('notification_queue')
-    if coll:
-        create_index_safe(
-            coll,
-            [('sent_at', 1)],
-            expireAfterSeconds=604800,
-            partialFilterExpression={'status': 'sent'},
-            background=True
-        )
 
 
 def add_query_indexes():
@@ -192,9 +164,7 @@ def add_deleted_at_field():
 def main():
     logger.info('Starting index migration...')
     logger.info('=' * 50)
-
-    # Add TTL indexes
-    add_ttl_indexes()
+    logger.info('Note: No TTL indexes - all data retained for 5+ years analytics')
     logger.info('')
 
     # Add query indexes
@@ -207,9 +177,6 @@ def main():
     logger.info('=' * 50)
     logger.info('Index migration complete.')
 
-
-if __name__ == '__main__':
-    main()
 
 
 if __name__ == '__main__':

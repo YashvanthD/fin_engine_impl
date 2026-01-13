@@ -119,17 +119,15 @@
 
 ---
 
-### 3. Missing TTL Indexes for Ephemeral Data
+### 3. ~~Missing TTL Indexes for Ephemeral Data~~
 
-**Status:** ✅ MIGRATION SCRIPT READY - Run to apply
+**Status:** ❌ REMOVED - Data retention policy requires 5+ years
 
-**Collections needing TTL:**
-- `user_presence` - stale records accumulate
-- `notification_queue` - old notifications pile up
+**Decision:** TTL indexes are NOT used. All data including:
+- `user_presence` - Retained for activity analytics
+- `notification_queue` - Retained for audit trail
 
-**Migration Script:** `scripts/add_indexes.py`
-
-**Run:** `python scripts/add_indexes.py`
+**Reason:** Business requirement to retain all data for 5+ years for analytics and compliance.
 
 ---
 
@@ -301,7 +299,7 @@ python scripts/fix_schema_issues.py
 ## 📈 Index Optimization Summary
 
 ### Current Index Count: ~35
-### Recommended Index Count: ~42
+### Recommended Index Count: ~40
 
 ### Missing Critical Indexes
 
@@ -311,7 +309,9 @@ python scripts/fix_schema_issues.py
 | `messages` | `{ conversation_id: 1, created_at: -1 }` | Message listing | HIGH |
 | `expenses` | `{ account_key: 1, created_at: 1 }` | Reports | MEDIUM |
 | `fish_analytics` | `{ expected_harvest_date: 1 }` | Harvest planning | MEDIUM |
-| `user_presence` | `{ last_seen: 1 }` (TTL) | Auto-cleanup | HIGH |
+| `user_presence` | `{ user_key: 1 }` | Presence lookup | MEDIUM |
+
+**Note:** No TTL indexes - all data retained for 5+ years for analytics.
 
 ---
 
@@ -325,28 +325,18 @@ db.ponds.updateMany({ _v: { $exists: false } }, { $set: { "_v": 1 } })
 db.bank_accounts.updateMany({ _v: { $exists: false } }, { $set: { "_v": 1 } })
 db.fish.updateMany({ _v: { $exists: false } }, { $set: { "_v": 1 } })
 
-// 2. Add TTL index on user_presence (24 hour expiry)
-db.user_presence.createIndex(
-  { "last_seen": 1 }, 
-  { expireAfterSeconds: 86400, background: true }
-)
-
-// 3. Add TTL index on notification_queue (7 day expiry for sent)
-db.notification_queue.createIndex(
-  { "sent_at": 1 }, 
-  { expireAfterSeconds: 604800, 
-    partialFilterExpression: { status: "sent" },
-    background: true 
-  }
-)
-
-// 4. Add missing indexes
+// 2. Add query performance indexes
 db.tasks.createIndex({ "reminder_time": 1, "status": 1 }, { background: true })
+db.tasks.createIndex({ "assignee": 1, "account_key": 1 }, { background: true })
 db.messages.createIndex({ "conversation_id": 1, "created_at": -1 }, { background: true })
 db.expenses.createIndex({ "account_key": 1, "created_at": 1, "category": 1 }, { background: true })
 db.fish_analytics.createIndex({ "expected_harvest_date": 1, "account_key": 1 }, { background: true })
+db.ponds.createIndex({ "account_key": 1, "deleted_at": 1 }, { background: true })
+db.sampling.createIndex({ "pond_id": 1, "created_at": -1 }, { background: true })
+db.pond_event.createIndex({ "account_key": 1, "fish_id": 1 }, { background: true })
+db.user_presence.createIndex({ "user_key": 1 }, { background: true })
 
-// 5. Add deleted_at to collections missing it
+// 3. Add deleted_at to collections missing it
 db.fish.updateMany({ deleted_at: { $exists: false } }, { $set: { deleted_at: null } })
 db.feeding.updateMany({ deleted_at: { $exists: false } }, { $set: { deleted_at: null } })
 db.fish_analytics.updateMany({ deleted_at: { $exists: false } }, { $set: { deleted_at: null } })
