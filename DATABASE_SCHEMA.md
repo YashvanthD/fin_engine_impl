@@ -1,7 +1,7 @@
 # 🗄️ Fish Farm Engine - Database Schema & Relations
 
-**Version:** 1.0  
-**Last Updated:** January 12, 2026
+**Version:** 1.1  
+**Last Updated:** January 13, 2026
 
 ---
 
@@ -52,6 +52,9 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
 > - `user_key`: 12 random numeric digits, unique across system  
 > - `account_number`: IFSC prefix (6 digits) + sequential suffix (6 digits)
 > - **All other IDs**: Pure 24-character UUID hex strings (e.g., `"69653c8af4c2d41e5a1bcdbd"`)
+>
+> **Note:** Some JSON examples below may show legacy prefixed formats (MSG-, TXN-, EXP-, etc.)
+> These are for illustration only. All new records use pure 24-char UUID hex IDs.
 
 ---
 
@@ -66,9 +69,9 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
                                     │   companies   │
                                     │───────────────│
                                     │ account_key●──┼──────────────────────────────────────┐
-                                    │ (6 digits)    │                                      │
+                                    │ (12 digits)   │                                      │
                                     │ admin_user_key│──┐                                   │
-                                    │ (9 digits)    │  │                                   │
+                                    │ (12 digits)   │  │                                   │
                                     └───────────────┘  │                                   │
                                            │           │                                   │
                     ┌──────────────────────┘           │                                   │
@@ -77,9 +80,9 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
             │     users     │◄─────────────────│ bank_accounts │                           │
             │───────────────│                  │───────────────│                           │
             │ user_key●     │                  │ account_id●   │                           │
-            │ (9 digits)    │                  │ account_key○  │                           │
+            │ (12 digits)   │                  │ account_key○  │                           │
             │ account_key○──┼──────────────────│ account_number│                           │
-            │ (6 digits)    │                  │ (12 digits)   │                           │
+            │ (12 digits)   │                  │ (12 digits)   │                           │
             └───────────────┘                  └───────────────┘                           │
                     │                                  │                                   │
     ┌───────────────┼───────────────┬─────────────────┼────────────────────────────────────┤
@@ -89,7 +92,7 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
 │  tasks  │   │ feeding │   │   ponds   │    │   expenses   │                              │
 │─────────│   │─────────│   │───────────│    │──────────────│                              │
 │ task_id●│   │feed_id● │   │ pond_id●  │    │ expense_id●  │                              │
-│TSK-xxx  │   │FED-xxx  │   │ NNNNNN-NNN│    │ EXP-xxx      │                              │
+│ 24 hex  │   │ 24 hex  │   │ 24 hex    │    │ 24 hex       │                              │
 │user_key○│   │pond_id○ │   │account_key○────│ account_key○─┼──────────────────────────────┘
 │assignee │   │user_key○│   │ metadata  │    │ amount       │
 └─────────┘   └─────────┘   │ fish_types│    │ category     │
@@ -102,7 +105,7 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
             │ pond_event  │ │   sampling    │       │
             │─────────────│ │───────────────│       │
             │ event_id●   │ │ sampling_id●  │       │
-            │ PEV-xxx     │ │ SMP-xxx       │       │
+            │ 24 hex      │ │ 24 hex        │       │
             │ pond_id○    │ │ pond_id○      │       │
             │ fish_id○    │ │ species○      │       │
             │ event_type  │ │ event_id○     │───────┘
@@ -117,7 +120,7 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
             │ fish_analytics  │
             │─────────────────│
             │ batch_id●       │
-            │ BAT-xxx         │
+            │ 24 hex          │
             │ pond_id○        │
             │ species○        │
             │ account_key○    │
@@ -128,8 +131,9 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
             │     fish      │◄─────│ fish_mapping  │
             │───────────────│      │───────────────│
             │ species_code● │      │ account_key●  │
-            │ XXXXX-NNNNN   │      │ fish_ids[]○   │
-            └───────────────┘      └───────────────┘
+            │ 24 hex        │      │ fish_ids[]○   │
+            │ scope         │      └───────────────┘
+            └───────────────┘      
 
 
 ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -140,9 +144,10 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
 │    users      │◄────────│ conversations │────────►│    messages     │
 │───────────────│         │───────────────│         │─────────────────│
 │ user_key●     │         │ conv_id●      │         │ message_id●     │
-│ (9 digits)    │         │ CNV-xxx       │         │ MSG-xxx         │
+│ (12 digits)   │         │ 24 hex        │         │ 24 hex          │
 └───────────────┘         │ participants[]│         │ conversation_id○│
         │                 │ account_key○  │         │ sender_key○     │
+        │                 │ unread_counts │         │ sender_info     │
         │                 └───────────────┘         │ reply_to○       │
         │                         │                 └─────────────────┘
         │                         │                         │
