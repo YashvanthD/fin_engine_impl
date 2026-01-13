@@ -1,7 +1,7 @@
 # Fish Farm Engine - Project Analysis & Roadmap
 
-**Analysis Date:** January 12, 2026  
-**Version:** 3.0  
+**Analysis Date:** January 13, 2026  
+**Version:** 3.1  
 **Status:** ✅ Production Ready
 
 ---
@@ -9,6 +9,12 @@
 ## 📋 Executive Summary
 
 The Fish Farm Management Engine is a comprehensive system for managing modern fish farming operations. All critical issues have been resolved and the system is production-ready.
+
+### Recent Updates (Jan 13, 2026)
+- ✅ Updated all ID generators to use 24-char UUID hex format
+- ✅ `account_key` and `user_key` now use 12-digit numeric format
+- ✅ Removed predictable prefixes (MSG-, TXN-, etc.) for security
+- ✅ Updated DATABASE_SCHEMA.md with new formats
 
 ### Overall Assessment
 
@@ -129,26 +135,26 @@ fin_server/
 #### `conversations`
 ```javascript
 {
-  "_id": "CONV-xxxx",
-  "conversation_id": "CONV-xxxx",
+  "_id": "69653c8af4c2d41e5a1bcdbd",
+  "conversation_id": "69653c8af4c2d41e5a1bcdbd",
   "conversation_type": "direct" | "group" | "broadcast",
-  "participants": ["user1", "user2"],
+  "participants": ["123456789012", "987654321098"],
   "name": "Group Name",           // For groups
   "description": "...",
   "avatar_url": "...",
-  "created_by": "user1",
-  "admins": ["user1"],            // For groups
+  "created_by": "123456789012",
+  "admins": ["123456789012"],     // For groups
   "last_message": {
-    "message_id": "...",
+    "message_id": "a1b2c3d4e5f6a7b8c9d0e1f2",
     "content": "Hello...",
-    "sender_key": "user1",
+    "sender_key": "123456789012",
     "created_at": "..."
   },
   "last_activity": ISODate,
-  "muted_by": ["user2"],
-  "pinned_by": ["user1"],
+  "muted_by": ["987654321098"],
+  "pinned_by": ["123456789012"],
   "archived_by": [],
-  "account_key": "ACC001",
+  "account_key": "123456789012",
   "created_at": ISODate
 }
 ```
@@ -156,29 +162,29 @@ fin_server/
 #### `messages`
 ```javascript
 {
-  "_id": "MSG-xxxx",
-  "message_id": "MSG-xxxx",
-  "conversation_id": "CONV-xxxx",
-  "sender_key": "user1",
+  "_id": "a1b2c3d4e5f6a7b8c9d0e1f2",
+  "message_id": "a1b2c3d4e5f6a7b8c9d0e1f2",
+  "conversation_id": "69653c8af4c2d41e5a1bcdbd",
+  "sender_key": "123456789012",
   "content": "Hello!",
   "message_type": "text" | "image" | "file" | "audio" | "video",
-  "reply_to": "MSG-yyyy",         // If replying
-  "forwarded_from": "MSG-zzzz",   // If forwarded
+  "reply_to": "b2c3d4e5f6a7b8c9d0e1f2a3",    // If replying
+  "forwarded_from": "c3d4e5f6a7b8c9d0e1f2a3b4",  // If forwarded
   "media_url": "...",
-  "mentions": ["user2"],
+  "mentions": ["987654321098"],
   "created_at": ISODate,
   "edited_at": ISODate,
   "deleted_at": ISODate,          // Soft delete
-  "deleted_for": ["user3"],       // Delete for specific users
-  "account_key": "ACC001"
+  "deleted_for": ["111222333444"],  // Delete for specific users
+  "account_key": "123456789012"
 }
 ```
 
 #### `message_receipts`
 ```javascript
 {
-  "message_id": "MSG-xxxx",
-  "user_key": "user2",
+  "message_id": "a1b2c3d4e5f6a7b8c9d0e1f2",
+  "user_key": "987654321098",
   "status": "sent" | "delivered" | "read",
   "timestamp": ISODate
 }
@@ -187,12 +193,12 @@ fin_server/
 #### `user_presence`
 ```javascript
 {
-  "_id": "user1",
-  "user_key": "user1",
+  "_id": "123456789012",
+  "user_key": "123456789012",
   "status": "online" | "offline" | "away" | "typing",
   "last_seen": ISODate,
   "socket_id": "...",
-  "typing_in": "CONV-xxxx",       // Current conversation
+  "typing_in": "69653c8af4c2d41e5a1bcdbd",  // Current conversation
   "device_info": {...}
 }
 ```
@@ -316,11 +322,18 @@ The Fish Farm Engine is **production-ready** with:
 - ✅ **Account isolation** for multi-tenancy
 - ✅ **Field normalization** via DTOs
 - ✅ **WhatsApp-like messaging** with real-time features
+- ✅ **UUID-based IDs** (24-char hex, non-predictable)
+- ✅ **12-digit numeric keys** for account_key and user_key
 
 ### System Status: ✅ PRODUCTION READY
 
+### Remaining Schema Tasks (See SCHEMA_ANALYSIS.md)
+- Remove duplicate `assignee`/`assigned_to` fields
+- Add TTL indexes for ephemeral data
+- Remove `companies.users[]` embedded array
+
 ---
 
-*Document generated: January 12, 2026*  
+*Document updated: January 13, 2026*  
 *Next review scheduled: February 2026*
 

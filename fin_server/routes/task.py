@@ -29,20 +29,21 @@ def create_task():
         roles = payload.get('roles', [])
         data = request.get_json(force=True)
         remind_before = data.get('remind_before', 30)
-        assigned_to_input = data.get('assigned_to')
-        # If assigned_to not provided, default to self-assignment
-        if not assigned_to_input:
-            assigned_to_input = user_key
-        # Resolve assigned_to to user object
-        if assigned_to_input == user_key:
+        # Accept both 'assignee' and 'assigned_to' for backward compatibility
+        assignee_input = data.get('assignee') or data.get('assigned_to')
+        # If assignee not provided, default to self-assignment
+        if not assignee_input:
+            assignee_input = user_key
+        # Resolve assignee to user object
+        if assignee_input == user_key:
             assigned_user = user_repo.find_one({'user_key': user_key, 'account_key': account_key})
         else:
-            assigned_user = resolve_user(assigned_to_input, account_key)
+            assigned_user = resolve_user(assignee_input, account_key)
         if not assigned_user:
             return respond_error('Assigned user does not exist', status=404)
-        assigned_to = assigned_user['user_key']
+        assignee = assigned_user['user_key']
         # Allow self-assignment for any user
-        if assigned_to != user_key and 'admin' not in roles:
+        if assignee != user_key and 'admin' not in roles:
             return respond_error('Only admin can assign tasks to other users', status=403)
         # Set default task_date as current date if not provided (IST by default)
         task_date = data.get('task_date')
@@ -84,8 +85,7 @@ def create_task():
         task_data = {
             'user_key': user_key,
             'reporter': user_key,
-            'assignee': assigned_to,
-            'assigned_to': assigned_to,
+            'assignee': assignee,
             'title': data.get('title'),
             'description': data.get('description', ''),
             'status': data.get('status', 'pending'),
@@ -266,9 +266,9 @@ def update_task(task_id):
             # id/taskId -> task_id (query still uses URL param task_id)
             if 'taskId' in data and 'task_id' not in data:
                 data['task_id'] = data.get('taskId')
-            # assignedTo -> assigned_to/assignee
-            if 'assignedTo' in data and 'assigned_to' not in data and 'assignee' not in data:
-                data['assigned_to'] = data.get('assignedTo')
+            # assignedTo -> assignee
+            if 'assignedTo' in data and 'assignee' not in data:
+                data['assignee'] = data.get('assignedTo')
             # scheduledDate -> task_date
             if 'scheduledDate' in data and 'task_date' not in data:
                 data['task_date'] = data.get('scheduledDate')
@@ -295,8 +295,8 @@ def update_task(task_id):
             current_app.logger.warning('PUT /task/%s: task not found', task_id)
             return respond_error('Task not found', status=404)
         current_app.logger.debug('PUT /task/%s existing task doc: %s', task_id, task)
-        new_assignee_input = update_fields.get('assignee') or update_fields.get('assigned_to')
-        if new_assignee_input and new_assignee_input != task.get('assignee', task.get('assigned_to')):
+        new_assignee_input = update_fields.get('assignee')
+        if new_assignee_input and new_assignee_input != task.get('assignee'):
             assigned_user = resolve_user(new_assignee_input, account_key)
             if not assigned_user:
                 return respond_error('Assigned user does not exist', status=404)
@@ -305,18 +305,17 @@ def update_task(task_id):
             if new_assignee != user_key:
                 if 'admin' not in roles:
                     admin_user = user_repo.find_one({'roles': {'$in': ['admin']}, 'account_key': account_key})
-                    if not admin_user or new_assignee != admin_user['user_key'] or task.get('assignee', task.get('assigned_to')) != user_key:
+                    if not admin_user or new_assignee != admin_user['user_key'] or task.get('assignee') != user_key:
                         return respond_error('Only admin can assign to other users, or user can reassign their own task to admin', status=403)
             history = task.get('history', [])
             history.append({
-                'from': task.get('assignee', task.get('assigned_to')),
+                'from': task.get('assignee'),
                 'to': new_assignee,
                 'by': user_key,
                 'timestamp': int(time.time())
             })
             update_fields['history'] = history
             update_fields['assignee'] = new_assignee
-            update_fields['assigned_to'] = new_assignee
         current_app.logger.debug('PUT /task/%s final update_fields: %s', task_id, update_fields)
         # Update by task_id and, as a fallback, by _id
         updated = task_repo.update({'task_id': task.get('task_id') or task_id}, update_fields)
@@ -378,18 +377,17 @@ def move_task(task_id):
         if not assigned_user:
             return respond_error('New assignee does not exist', status=404)
         new_assignee = assigned_user['user_key']
-        if 'admin' not in roles and user_key != task.get('assignee', task.get('assigned_to')):
+        if 'admin' not in roles and user_key != task.get('assignee'):
             return respond_error('Permission denied', status=403)
         history = task.get('history', [])
         history.append({
-            'from': task.get('assignee', task.get('assigned_to')),
+            'from': task.get('assignee'),
             'to': new_assignee,
             'by': user_key,
             'timestamp': int(time.time())
         })
         update_fields = {
             'assignee': new_assignee,
-            'assigned_to': new_assignee,
             'history': history
         }
         updated = task_repo.update({'task_id': task.get('task_id') or task_id}, update_fields)
@@ -420,9 +418,10 @@ def api_list_schedules():
         pondId = request.args.get('pondId') or request.args.get('pond_id')
         if pondId:
             query['pond_id'] = pondId
-        assignedTo = request.args.get('assignedTo') or request.args.get('assigned_to')
-        if assignedTo:
-            query['assigned_to'] = assignedTo
+        # Accept both assignedTo and assigned_to query params for backward compatibility
+        assignee_filter = request.args.get('assignee') or request.args.get('assignedTo') or request.args.get('assigned_to')
+        if assignee_filter:
+            query['assignee'] = assignee_filter
         status = request.args.get('status')
         if status:
             query['status'] = status

@@ -119,7 +119,7 @@ def normalize_task_fields(data: Dict[str, Any]) -> Dict[str, Any]:
 
     mappings = {
         'taskId': 'task_id',
-        'assignedTo': 'assigned_to',
+        'assignedTo': 'assignee',
         'scheduledDate': 'task_date',
         'endDate': 'end_date',
         'remindBefore': 'remind_before',
@@ -272,7 +272,6 @@ def build_task_data(
         'user_key': user_key,
         'reporter': user_key,
         'assignee': assigned_to,
-        'assigned_to': assigned_to,
         'title': data.get('title'),
         'description': data.get('description', ''),
         'status': data.get('status', 'pending'),

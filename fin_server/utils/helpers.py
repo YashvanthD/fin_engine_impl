@@ -307,7 +307,7 @@ def _post_normalize(obj):
     if 'completedDate' in obj:
         obj['completedDate'] = _to_iso_if_epoch(obj['completedDate'])
 
-    # Task field name compatibility: task_date -> scheduledDate, end_date -> endTime, assigned_to/assignee -> assignedTo, reporter -> reporter/user
+    # Task field name compatibility: task_date -> scheduledDate, end_date -> endTime, assignee -> assignedTo, reporter -> reporter/user
     if 'task_date' in obj and 'scheduledDate' not in obj:
         obj['scheduledDate'] = _to_iso_if_epoch(obj.pop('task_date'))
     if 'taskDate' in obj and 'scheduledDate' not in obj:
@@ -321,11 +321,9 @@ def _post_normalize(obj):
         obj['startTime'] = _to_iso_if_epoch(obj.pop('start_time'))
     if 'startTime' in obj:
         obj['startTime'] = _to_iso_if_epoch(obj['startTime'])
-    # assignedTo mapping
-    if 'assigned_to' in obj and 'assignedTo' not in obj:
-        obj['assignedTo'] = obj.pop('assigned_to')
+    # assignee -> assignedTo for UI (assignee is the canonical DB field)
     if 'assignee' in obj and 'assignedTo' not in obj:
-        obj['assignedTo'] = obj.pop('assignee')
+        obj['assignedTo'] = obj.get('assignee')
     # Map task type names
     if 'taskType' in obj and isinstance(obj['taskType'], str):
         # keep as-is; frontend accepts 'Feeding'|'Sampling' etc.
