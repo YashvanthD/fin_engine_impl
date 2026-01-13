@@ -16,7 +16,7 @@ from fin_server.dto.fish_dto import FishDTO
 from fin_server.repository.mongo_helper import get_collection
 from fin_server.utils import validation
 from fin_server.utils.decorators import handle_errors, require_auth
-from fin_server.utils.generator import generate_key
+from fin_server.utils.generator import generate_key, generate_fish_event_id
 from fin_server.utils.helpers import respond_error, respond_success
 from fin_server.utils.time_utils import get_time_date_dt
 
@@ -40,7 +40,7 @@ pond_event_repo = get_collection('pond_event')
 # =============================================================================
 
 def _generate_species_code(scientific_name, common_name):
-    """Generate a species code from names."""
+    """Generate a species code from names using UUID format."""
     base = ''
     if scientific_name:
         base = ''.join([c[0].upper() for c in scientific_name.split() if c])[:5]
@@ -48,7 +48,7 @@ def _generate_species_code(scientific_name, common_name):
         base = ''.join([c[0].upper() for c in common_name.split() if c])[:5]
     else:
         base = 'FSH'
-    return f"{base}{generate_key(3)}"
+    return f"{base}-{generate_key(8)}"
 
 
 def _check_duplicate_fish(fish_repo, scientific_name, common_name, species_code):
@@ -234,7 +234,7 @@ def add_fish_batch(auth_payload):
         logger.exception('Failed to add fish to mapping')
 
     # Add analytics event
-    event_id = f"{account_key}-{species_code}-{generate_key(9)}"
+    event_id = generate_fish_event_id()
     fish_weight = data.get('fish_weight')
     base_dt = get_time_date_dt(include_time=True)
 
@@ -387,7 +387,7 @@ def update_fish(species_id, auth_payload):
             upsert=True
         )
 
-        event_id = f"{account_key}-{species_id}-{generate_key(9)}"
+        event_id = generate_fish_event_id()
         base_dt = get_time_date_dt(include_time=True)
 
         fish_analytics_repo.add_batch(

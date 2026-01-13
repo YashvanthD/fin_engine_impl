@@ -12,7 +12,7 @@ from fin_server.messaging.models import (
     ConversationType, PresenceStatus
 )
 from fin_server.messaging.repository import get_messaging_repository
-from fin_server.utils.generator import generate_key
+from fin_server.utils.generator import generate_conversation_id, generate_message_id
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class MessagingService:
 
         # Create new
         conversation = Conversation(
-            conversation_id=f"CONV-{generate_key(10)}",
+            conversation_id=generate_conversation_id(),
             conversation_type=ConversationType.DIRECT,
             participants=[user_key, other_user_key],
             created_by=user_key,
@@ -75,7 +75,7 @@ class MessagingService:
             participants.append(creator_key)
 
         conversation = Conversation(
-            conversation_id=f"GRP-{generate_key(10)}",
+            conversation_id=generate_conversation_id(),
             conversation_type=ConversationType.GROUP,
             participants=participants,
             name=name,
@@ -146,7 +146,7 @@ class MessagingService:
             raise ValueError("Conversation not found or access denied")
 
         message = Message(
-            message_id=f"MSG-{generate_key(12)}",
+            message_id=generate_message_id(),
             conversation_id=conversation_id,
             sender_key=sender_key,
             content=content,
@@ -226,7 +226,7 @@ class MessagingService:
 
         # Create forwarded message
         message = Message(
-            message_id=f"MSG-{generate_key(12)}",
+            message_id=generate_message_id(),
             conversation_id=to_conversation_id,
             sender_key=from_user_key,
             content=original.get('content'),

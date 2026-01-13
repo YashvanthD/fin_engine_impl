@@ -26,7 +26,7 @@ from fin_server.messaging.models import (
     ConversationType, PresenceStatus
 )
 from fin_server.messaging.repository import get_messaging_repository
-from fin_server.utils.generator import generate_key
+from fin_server.utils.generator import generate_message_id, generate_conversation_id
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +208,7 @@ def handle_send_message(data):
 
     # Create message
     message = Message(
-        message_id=f"MSG-{generate_key(12)}",
+        message_id=generate_message_id(),
         conversation_id=conversation_id,
         sender_key=user_key,
         content=content,
@@ -429,7 +429,7 @@ def handle_create_conversation(data):
         conv_type = ConversationType.GROUP
 
     conversation = Conversation(
-        conversation_id=f"CONV-{generate_key(10)}",
+        conversation_id=generate_conversation_id(),
         conversation_type=conv_type,
         participants=participants,
         name=data.get('name'),

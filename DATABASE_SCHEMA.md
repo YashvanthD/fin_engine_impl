@@ -31,29 +31,27 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
 
 | Field | Format | Length | Example |
 |-------|--------|--------|---------|
-| `account_key` | 6 numeric digits | 6 | `"123456"` |
-| `user_key` | 9 numeric digits | 9 | `"123456789"` |
-| `pond_id` | account_key-3 digits | 10 | `"123456-001"` |
-| `message_id` | MSG-9 alphanumeric | 13 | `"MSG-aB3dE5fG7"` |
-| `transaction_id` | TXN-9 alphanumeric | 13 | `"TXN-aB3dE5fG7"` |
-| `expense_id` | EXP-9 alphanumeric | 13 | `"EXP-aB3dE5fG7"` |
-| `pond_event_id` | PEV-9 alphanumeric | 13 | `"PEV-aB3dE5fG7"` |
-| `fish_event_id` | FEV-9 alphanumeric | 13 | `"FEV-aB3dE5fG7"` |
-| `batch_id` | BAT-9 alphanumeric | 13 | `"BAT-aB3dE5fG7"` |
-| `sampling_id` | SMP-9 alphanumeric | 13 | `"SMP-aB3dE5fG7"` |
-| `species_code` | 5 chars-5 digits | 11 | `"TILAP-00001"` |
+| `account_key` | 12 numeric digits | 12 | `"123456789012"` |
+| `user_key` | 12 numeric digits | 12 | `"987654321098"` |
+| `pond_id` | 24 hex chars | 24 | `"69653c8af4c2d41e5a1bcdbd"` |
+| `message_id` | 24 hex chars | 24 | `"a1b2c3d4e5f6a7b8c9d0e1f2"` |
+| `transaction_id` | 24 hex chars | 24 | `"f1e2d3c4b5a6f7e8d9c0b1a2"` |
+| `expense_id` | 24 hex chars | 24 | `"1a2b3c4d5e6f7a8b9c0d1e2f"` |
+| `pond_event_id` | 24 hex chars | 24 | `"2b3c4d5e6f7a8b9c0d1e2f3a"` |
+| `fish_event_id` | 24 hex chars | 24 | `"3c4d5e6f7a8b9c0d1e2f3a4b"` |
+| `batch_id` | 24 hex chars | 24 | `"4d5e6f7a8b9c0d1e2f3a4b5c"` |
+| `sampling_id` | 24 hex chars | 24 | `"5e6f7a8b9c0d1e2f3a4b5c6d"` |
+| `species_code` | 24 hex chars | 24 | `"6f7a8b9c0d1e2f3a4b5c6d7e"` |
 | `account_number` | 12 numeric digits | 12 | `"572137000001"` |
-| `task_id` | TSK-9 alphanumeric | 13 | `"TSK-aB3dE5fG7"` |
-| `conversation_id` | CNV-9 alphanumeric | 13 | `"CNV-aB3dE5fG7"` |
-| `feed_id` | FED-9 alphanumeric | 13 | `"FED-aB3dE5fG7"` |
+| `task_id` | 24 hex chars | 24 | `"7a8b9c0d1e2f3a4b5c6d7e8f"` |
+| `conversation_id` | 24 hex chars | 24 | `"8b9c0d1e2f3a4b5c6d7e8f9a"` |
+| `feed_id` | 24 hex chars | 24 | `"9c0d1e2f3a4b5c6d7e8f9a0b"` |
 
-> **ID Generation Rules:**
-> - `account_key`: 6 random numeric digits, unique per organization
-> - `user_key`: 9 random numeric digits, unique across system
-> - `pond_id`: Sequential within account (account_key-001, account_key-002...)
-> - `species_code`: First 5 chars from name + sequential 5-digit number
+> **ID Generation Rules (Updated: January 13, 2026):**
+> - `account_key`: 12 random numeric digits, unique per organization
+> - `user_key`: 12 random numeric digits, unique across system  
 > - `account_number`: IFSC prefix (6 digits) + sequential suffix (6 digits)
-> - All alphanumeric IDs: Prefix + 9 random alphanumeric characters
+> - **All other IDs**: Pure 24-character UUID hex strings (e.g., `"69653c8af4c2d41e5a1bcdbd"`)
 
 ---
 

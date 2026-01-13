@@ -2,6 +2,7 @@ import base64
 import random
 import re
 import time
+import uuid
 
 from fin_server.repository.mongo_helper import get_collection
 from fin_server.requests.subscription import default_subscription
@@ -12,29 +13,48 @@ user_repo = get_collection('users')
 
 
 def generate_key(
-    length=6,
+    length=24,
     include_alphabets=False,
     include_special=False,
     include_numbers=True,
     uppercase_only=False,
-    lowercase_only=False
+    lowercase_only=False,
+    uuid_format=True
 ):
     """Generate a random key of the requested length.
 
+    By default, generates a 24-character UUID-like hex string (e.g., '69653c8af4c2d41e5a1bcdbd').
+
     Args:
-        length: Length of the generated key
+        length: Length of the generated key (default: 24)
         include_alphabets: Include letters (A-Z, a-z)
         include_special: Include special characters (!@#$%^&*()-_=+)
         include_numbers: Include digits (0-9)
         uppercase_only: Only uppercase letters (when include_alphabets=True)
         lowercase_only: Only lowercase letters (when include_alphabets=True)
+        uuid_format: If True, generates a UUID-based hex string (default: True)
 
     Returns:
         Random string of specified length
 
     Raises:
-        ValueError: If no character set is selected
+        ValueError: If no character set is selected (when uuid_format=False)
     """
+    # Default: Generate UUID-like hex string
+    if uuid_format:
+        # Generate a UUID and convert to hex string (no dashes)
+        # uuid4 gives 32 hex chars, we can truncate or extend as needed
+        hex_str = uuid.uuid4().hex
+        if length <= 32:
+            return hex_str[:length]
+        else:
+            # For longer lengths, concatenate multiple UUIDs
+            result = hex_str
+            while len(result) < length:
+                result += uuid.uuid4().hex
+            return result[:length]
+
+    # Legacy behavior: custom character set
     includes = ''
 
     if include_numbers:
@@ -60,247 +80,215 @@ def generate_key(
 # ============================================================================
 # CONSISTENT ID GENERATORS
 # ============================================================================
-# ID Format Standards:
-#   - account_key:      6 numeric digits (e.g., "123456")
-#   - user_key:         9 numeric digits (e.g., "123456789")
-#   - message_id:       12 alphanumeric chars (e.g., "aB3dE5fG7hJ9")
-#   - transaction_id:   12 alphanumeric chars (e.g., "TXN-aB3dE5fG7h")
-#   - expense_id:       12 alphanumeric chars (e.g., "EXP-aB3dE5fG7h")
-#   - pond_id:          account_key + 3 digits (e.g., "123456-001")
-#   - pond_event_id:    12 alphanumeric chars (e.g., "EVT-aB3dE5fG7h")
-#   - fish_event_id:    12 alphanumeric chars (e.g., "FEV-aB3dE5fG7h")
-#   - batch_id:         12 alphanumeric chars (e.g., "BAT-aB3dE5fG7h")
-#   - sampling_id:      12 alphanumeric chars (e.g., "SMP-aB3dE5fG7h")
-#   - species_code:     5 chars from name + 5 numeric digits (e.g., "TILAP-00001")
+# ID Format Standards (Updated: January 13, 2026):
+#   - account_key:      12 numeric digits (e.g., "123456789012")
+#   - user_key:         12 numeric digits (e.g., "987654321098")
+#   - message_id:       24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
+#   - transaction_id:   24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
+#   - expense_id:       24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
+#   - pond_id:          24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
+#   - pond_event_id:    24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
+#   - fish_event_id:    24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
+#   - batch_id:         24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
+#   - sampling_id:      24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
+#   - species_code:     24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
 #   - account_number:   12 numeric digits (e.g., "572137000001")
+#   - task_id:          24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
+#   - conversation_id:  24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
+#   - feed_id:          24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
+#   - stock_id:         24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
 # ============================================================================
 
 
-def generate_account_key() -> str:
-    """Generate a 6-digit numeric account key.
+def generate_uuid_hex(length: int = 24) -> str:
+    """Generate a UUID-based hex string.
 
-    Format: 6 numeric digits (e.g., "123456")
+    Args:
+        length: Length of hex string (default: 24)
+
+    Returns:
+        Lowercase hex string (e.g., '69653c8af4c2d41e5a1bcdbd')
+    """
+    return generate_key(length=length, uuid_format=True)
+
+
+def generate_account_key() -> str:
+    """Generate a 12-digit numeric account key.
+
+    Format: 12 numeric digits (e.g., "123456789012")
     Used to identify an organization/company.
     """
-    return generate_key(length=6, include_numbers=True, include_alphabets=False)
+    return generate_key(length=12, uuid_format=False, include_numbers=True, include_alphabets=False)
 
 
 def generate_user_key() -> str:
-    """Generate a 9-digit numeric user key.
+    """Generate a 12-digit numeric user key.
 
-    Format: 9 numeric digits (e.g., "123456789")
+    Format: 12 numeric digits (e.g., "987654321098")
     Used to identify individual users within the system.
     """
-    return generate_key(length=9, include_numbers=True, include_alphabets=False)
+    return generate_key(length=12, uuid_format=False, include_numbers=True, include_alphabets=False)
 
 
-def generate_alphanumeric_id(length=12) -> str:
-    """Generate an alphanumeric ID of specified length.
+def generate_alphanumeric_id(length=24) -> str:
+    """Generate a UUID-based hex ID of specified length.
 
-    Format: Alphanumeric characters (A-Z, a-z, 0-9)
+    Format: Lowercase hex characters (0-9, a-f)
     Base generator for various ID types.
+
+    Args:
+        length: Length of hex string (default: 24)
+
+    Returns:
+        UUID hex string (e.g., '69653c8af4c2d41e5a1bcdbd')
     """
-    return generate_key(length=length, include_numbers=True, include_alphabets=True)
+    return generate_uuid_hex(length=length)
 
 
 def generate_message_id() -> str:
-    """Generate a 12-character alphanumeric message ID.
+    """Generate a UUID-based message ID.
 
-    Format: MSG-<9 alphanumeric chars> (e.g., "MSG-aB3dE5fG7")
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
     Used for chat/messaging system.
     """
-    return f"MSG-{generate_alphanumeric_id(9)}"
+    return generate_uuid_hex(24)
 
 
 def generate_transaction_id() -> str:
-    """Generate a 12-character alphanumeric transaction ID.
+    """Generate a UUID-based transaction ID.
 
-    Format: TXN-<9 alphanumeric chars> (e.g., "TXN-aB3dE5fG7")
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
     Used for financial transactions.
     """
-    return f"TXN-{generate_alphanumeric_id(9)}"
+    return generate_uuid_hex(24)
 
 
 def generate_expense_id() -> str:
-    """Generate a 12-character alphanumeric expense ID.
+    """Generate a UUID-based expense ID.
 
-    Format: EXP-<9 alphanumeric chars> (e.g., "EXP-aB3dE5fG7")
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
     Used for expense records.
     """
-    return f"EXP-{generate_alphanumeric_id(9)}"
+    return generate_uuid_hex(24)
 
 
-def generate_pond_id(account_key: str) -> str:
-    """Generate a pond ID based on account_key.
+def generate_pond_id(account_key: str = None) -> str:
+    """Generate a UUID-based pond ID.
 
-    Format: <account_key>-<3 digits> (e.g., "123456-001")
-    Sequential within the account.
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
+    Used to identify ponds.
 
     Args:
-        account_key: The 6-digit account key
+        account_key: Optional (kept for backward compatibility, not used)
 
     Returns:
-        Pond ID in format "XXXXXX-NNN"
+        Pond ID as 24 hex chars
     """
-    try:
-        ponds_coll = get_collection('ponds')
-        coll = getattr(ponds_coll, 'collection', ponds_coll)
-        # Find highest pond number for this account
-        cursor = coll.find(
-            {'account_key': account_key},
-            {'pond_id': 1}
-        ).sort('pond_id', -1).limit(1)
-
-        max_num = 0
-        for doc in cursor:
-            pond_id = doc.get('pond_id', '')
-            if '-' in pond_id:
-                try:
-                    num = int(pond_id.split('-')[-1])
-                    if num > max_num:
-                        max_num = num
-                except (ValueError, IndexError):
-                    pass
-
-        next_num = max_num + 1
-    except Exception:
-        # Fallback to random if DB access fails
-        next_num = random.randint(1, 999)
-
-    return f"{account_key}-{next_num:03d}"
+    return generate_uuid_hex(24)
 
 
 def generate_pond_event_id() -> str:
-    """Generate a 12-character alphanumeric pond event ID.
+    """Generate a UUID-based pond event ID.
 
-    Format: PEV-<9 alphanumeric chars> (e.g., "PEV-aB3dE5fG7")
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
     Used for pond-related events (stocking, transfer, harvest, etc.)
     """
-    return f"PEV-{generate_alphanumeric_id(9)}"
+    return generate_uuid_hex(24)
 
 
 def generate_fish_event_id() -> str:
-    """Generate a 12-character alphanumeric fish event ID.
+    """Generate a UUID-based fish event ID.
 
-    Format: FEV-<9 alphanumeric chars> (e.g., "FEV-aB3dE5fG7")
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
     Used for fish-related events (mortality, growth, feeding, etc.)
     """
-    return f"FEV-{generate_alphanumeric_id(9)}"
+    return generate_uuid_hex(24)
 
 
 def generate_batch_id() -> str:
-    """Generate a 12-character alphanumeric batch ID.
+    """Generate a UUID-based batch ID.
 
-    Format: BAT-<9 alphanumeric chars> (e.g., "BAT-aB3dE5fG7")
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
     Used for fish batch tracking.
     """
-    return f"BAT-{generate_alphanumeric_id(9)}"
+    return generate_uuid_hex(24)
 
 
 def generate_new_sampling_id() -> str:
-    """Generate a 12-character alphanumeric sampling ID.
+    """Generate a UUID-based sampling ID.
 
-    Format: SMP-<9 alphanumeric chars> (e.g., "SMP-aB3dE5fG7")
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
     Used for sampling/growth records.
     """
-    return f"SMP-{generate_alphanumeric_id(9)}"
+    return generate_uuid_hex(24)
 
 
-def generate_species_code(name: str) -> str:
-    """Generate a species code from scientific/common name.
+def generate_species_code(name: str = None) -> str:
+    """Generate a UUID-based species code.
 
-    Format: <5 chars from name>-<5 numeric digits> (e.g., "TILAP-00001")
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
 
     Args:
-        name: Scientific name, common name, or any available name
+        name: Optional (kept for backward compatibility, not used)
 
     Returns:
-        Species code in format "XXXXX-NNNNN"
+        Species code as 24 hex chars
     """
-    # Clean and extract first 5 meaningful characters
-    clean_name = re.sub(r'[^a-zA-Z]', '', name).upper()
-    prefix = clean_name[:5].ljust(5, 'X')  # Pad with X if less than 5 chars
-
-    try:
-        fish_coll = get_collection('fish')
-        coll = getattr(fish_coll, 'collection', fish_coll)
-        # Find highest number for this prefix
-        cursor = coll.find(
-            {'species_code': {'$regex': f'^{prefix}-'}},
-            {'species_code': 1}
-        ).sort('species_code', -1).limit(1)
-
-        max_num = 0
-        for doc in cursor:
-            code = doc.get('species_code', '')
-            if '-' in code:
-                try:
-                    num = int(code.split('-')[-1])
-                    if num > max_num:
-                        max_num = num
-                except (ValueError, IndexError):
-                    pass
-
-        next_num = max_num + 1
-    except Exception:
-        # Fallback to random if DB access fails
-        next_num = random.randint(1, 99999)
-
-    return f"{prefix}-{next_num:05d}"
+    return generate_uuid_hex(24)
 
 
 def generate_task_id() -> str:
-    """Generate a 12-character alphanumeric task ID.
+    """Generate a UUID-based task ID.
 
-    Format: TSK-<9 alphanumeric chars> (e.g., "TSK-aB3dE5fG7")
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
     Used for task management.
     """
-    return f"TSK-{generate_alphanumeric_id(9)}"
+    return generate_uuid_hex(24)
 
 
 def generate_alert_id() -> str:
-    """Generate a 12-character alphanumeric alert ID.
+    """Generate a UUID-based alert ID.
 
-    Format: ALT-<9 alphanumeric chars> (e.g., "ALT-aB3dE5fG7")
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
     Used for system alerts/notifications.
     """
-    return f"ALT-{generate_alphanumeric_id(9)}"
+    return generate_uuid_hex(24)
 
 
 def generate_conversation_id() -> str:
-    """Generate a 12-character alphanumeric conversation ID.
+    """Generate a UUID-based conversation ID.
 
-    Format: CNV-<9 alphanumeric chars> (e.g., "CNV-aB3dE5fG7")
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
     Used for chat conversations.
     """
-    return f"CNV-{generate_alphanumeric_id(9)}"
+    return generate_uuid_hex(24)
 
 
 def generate_report_id() -> str:
-    """Generate a 12-character alphanumeric report ID.
+    """Generate a UUID-based report ID.
 
-    Format: RPT-<9 alphanumeric chars> (e.g., "RPT-aB3dE5fG7")
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
     Used for generated reports.
     """
-    return f"RPT-{generate_alphanumeric_id(9)}"
+    return generate_uuid_hex(24)
 
 
 def generate_water_quality_id() -> str:
-    """Generate a 12-character alphanumeric water quality record ID.
+    """Generate a UUID-based water quality record ID.
 
-    Format: WQR-<9 alphanumeric chars> (e.g., "WQR-aB3dE5fG7")
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
     Used for water quality measurements.
     """
-    return f"WQR-{generate_alphanumeric_id(9)}"
+    return generate_uuid_hex(24)
 
 
 def generate_feeding_id() -> str:
-    """Generate a 12-character alphanumeric feeding record ID.
+    """Generate a UUID-based feeding record ID.
 
-    Format: FED-<9 alphanumeric chars> (e.g., "FED-aB3dE5fG7")
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
     Used for feeding records.
     """
-    return f"FED-{generate_alphanumeric_id(9)}"
+    return generate_uuid_hex(24)
 
 
 # Unique key validation helpers
@@ -342,24 +330,28 @@ def get_current_timestamp():
 
 
 def generate_sampling_id():
-    """Generate a sampling id of the form SAMP-<YYYYmmddHHMMSS>-<rand4>."""
-    ts = get_time_date_dt(include_time=True).strftime('%Y%m%d%H%M%S')
-    return f"SAMP-{ts}-{random.randint(1000,9999)}"
+    """Generate a UUID-based sampling id.
+
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
+    Used for sampling/growth records.
+    """
+    return generate_uuid_hex(24)
 
 
 def generate_stock_id(sampling_id: str = None) -> str:
-    """Generate a stable stock id.
+    """Generate a stable stock id using UUID format.
 
-    - If a sampling_id is provided, prefer the form `stock-<sampling_id>` so callers can
-      easily link stock entries to samplings.
-    - Otherwise generate a timestamped id with microseconds for uniqueness.
+    Format: 24 hex chars (e.g., "69653c8af4c2d41e5a1bcdbd")
+
+    Args:
+        sampling_id: Optional - if provided, returns it as-is for linking purposes
+
+    Returns:
+        Stock ID as 24 hex chars
     """
     if sampling_id:
-        # sanitize sampling_id to a short form if needed
-        s = str(sampling_id)
-        return f"stock-{s}"
-    ts = get_time_date_dt(include_time=True).strftime('%Y%m%d%H%M%S%f')
-    return f"stock-{ts}-{random.randint(100,999)}"
+        return str(sampling_id)
+    return generate_uuid_hex(24)
 
 
 def derive_stock_id_from_dto(dto: dict) -> str:
