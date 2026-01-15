@@ -378,7 +378,7 @@ def derive_stock_id_from_dto(dto: dict) -> str:
     return generate_stock_id()
 
 
-def get_subscription_for_account(account_key: str):
+def get_user_subscription_from_admin(account_key: str):
     """Fetch subscription details for the given account key from an admin user."""
     try:
         admin_doc = user_repo.find_one({
@@ -386,24 +386,26 @@ def get_subscription_for_account(account_key: str):
             'role': 'admin'
         })
         if admin_doc and 'subscription' in admin_doc:
-            return admin_doc['subscription']
+            return {
+                'subscription_type': admin_doc.get('subscription', {'subscription_type':"free"}).get('subscription_type'),
+                'expiry': admin_doc.get('subscription',{"expiry":""}).get('expiry')}
     except Exception:
         pass
-    return default_subscription()
+
 
 
 
 def build_user(data, account_key=None):
     user_data = data.copy()
+    is_owner = True if account_key else False
     user_data['account_key'] = account_key if account_key else ensure_unique_account_key()
     # If account_key is provided, try to fetch admin's subscription
     # Use the new unique user key generator
     user_data['user_key'] = ensure_unique_user_key()
 
-    subscription = get_subscription_for_account(account_key)
 
     # Role is a single string value
-    role = user_data.get('role', 'user')
+    role = user_data.get('role', 'admin' if is_owner else 'user')
     user_data['role'] = role
 
     # Authorities are special permissions granted beyond the role
@@ -427,7 +429,7 @@ def build_user(data, account_key=None):
 
     user_data['joined_date'] = get_current_timestamp()
     # Use admin's subscription if available, else default
-    user_data['subscription'] = subscription if subscription else default_subscription()
+    user_data['subscription'] = get_user_subscription_from_admin(account_key) if not is_owner else default_subscription()
     if 'password' in user_data:
         user_data['password'] = base64.b64encode(user_data['password'].encode('utf-8')).decode('utf-8')
     refresh_payload = {

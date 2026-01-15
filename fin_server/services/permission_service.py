@@ -444,8 +444,12 @@ class PermissionService:
 
     def get_permission_by_user_key_and_account_key(self, user_key: str, account_key: str, permission: str, role: str = None) -> bool:
         """Check if a specific permission exists for a user in an account."""
-        permissions = self.get_user_permissions(user_key, account_key, role="user")
-        return permissions.get(permission, {}).get('enabled', False)
+
+        if  self.is_admin(role):
+            return True
+        else:
+            permissions = self.get_user_permissions(user_key, account_key, role="user")
+            return permissions.get(permission, {}).get('enabled', False)
 
     def is_dynamic_valid_permission(self, user_key: str, account_key: str, permission: str, role: str = None) -> bool:
         """Dynamically validate if a user has a specific permission."""
@@ -459,9 +463,19 @@ class PermissionService:
     def is_admin(self, role):
         """Check if the service is running with admin privileges."""
         # Placeholder for actual admin check logic
-        if role != 'admin' and role != 'owner':
+        if role is None:
             return False
-        return True
+        if type(role) is str:
+            if role.lower() in ['admin', 'owner', 'manager']:
+                return True
+            else:
+                return False
+        if type(role) is list:
+            if role and any(r.lower() in ['admin', 'owner', 'manager'] for r in role):
+                return True
+            else:
+                return False
+        return False
 
 
 # Singleton
