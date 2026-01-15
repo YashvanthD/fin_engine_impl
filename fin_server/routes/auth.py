@@ -64,13 +64,6 @@ def signup():
         logger.warning("Signup validation failed: %s", errors)
         return respond_error(errors, status=400)
 
-    # Ensure admin role and free subscription
-    data['roles'] = ['admin']
-    subscription = data.get('subscription') or {}
-    if 'subscription_type' not in subscription and 'type' not in subscription:
-        subscription['subscription_type'] = 'free'
-    data['subscription'] = subscription
-
     # Build and create user
     admin_data = build_user(data)
 

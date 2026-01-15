@@ -393,43 +393,31 @@ def get_user_subscription_from_admin(account_key: str):
         pass
 
 
+def create_admin(user_data):
+    user_data['account_key'] = ensure_unique_account_key()
+    user_data['user_key'] = ensure_unique_user_key()
+    user_data['role'] = 'admin'
+    user_data['authorities'] = []
+    user_data['permission'] = {}
+    user_data['joined_date'] = get_current_timestamp()
+    user_data['subscription'] = default_subscription()
+    user_data['refresh_tokens'] = []
+    return user_data
 
+def create_user(user_data, account_key):
+    user_data['account_key'] = account_key
+    user_data['user_key'] = ensure_unique_user_key()
+    user_data['role'] = user_data.get('role', 'user')
+    user_data['authorities'] = []
+    user_data['permission'] = {}
+    user_data['joined_date'] = get_current_timestamp()
+    user_data['subscription'] = get_user_subscription_from_admin(account_key)
+    user_data['refresh_tokens'] = []
+    return user_data
 
 def build_user(data, account_key=None):
-    user_data = data.copy()
-    is_owner = True if account_key else False
-    user_data['account_key'] = account_key if account_key else ensure_unique_account_key()
-    # If account_key is provided, try to fetch admin's subscription
-    # Use the new unique user key generator
-    user_data['user_key'] = ensure_unique_user_key()
+    user_data = create_admin(data.copy()) if not account_key else create_user(data.copy(), account_key)
 
-
-    # Role is a single string value
-    role = user_data.get('role', 'admin' if is_owner else 'user')
-    user_data['role'] = role
-
-    # Authorities are special permissions granted beyond the role
-    authorities = user_data.get('authorities', [])
-    if not isinstance(authorities, list):
-        authorities = []
-    user_data['authorities'] = authorities
-
-    # Set permission level based on role
-    if role in ['admin', 'owner']:
-        if role == 'admin':
-            company_name = user_data.get('company_name')
-            if not company_name:
-                raise ValueError('company_name is required for admin signup')
-            user_data['company_name'] = company_name
-        user_data['permission'] = {'level': 'admin', 'granted': True}
-    elif role == 'manager':
-        user_data['permission'] = {'level': 'manager', 'granted': True}
-    else:
-        user_data['permission'] = {'level': 'user', 'granted': True}
-
-    user_data['joined_date'] = get_current_timestamp()
-    # Use admin's subscription if available, else default
-    user_data['subscription'] = get_user_subscription_from_admin(account_key) if not is_owner else default_subscription()
     if 'password' in user_data:
         user_data['password'] = base64.b64encode(user_data['password'].encode('utf-8')).decode('utf-8')
     refresh_payload = {

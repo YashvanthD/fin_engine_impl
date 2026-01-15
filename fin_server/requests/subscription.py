@@ -6,6 +6,5 @@ def default_subscription():
         'max_number_of_users': '',
         'active_number_of_users': '',
         'expiry': '',
-        # Add more fields as needed
     }
 
