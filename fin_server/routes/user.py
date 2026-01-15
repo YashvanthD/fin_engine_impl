@@ -423,10 +423,12 @@ def api_patch_user(user_id, auth_payload):
 @user_api_bp.route('/users/<user_id>', methods=['DELETE'])
 @handle_errors
 @require_auth
+@require_admin
 def api_delete_user(user_id, auth_payload):
     """API endpoint to delete a user."""
     account_key = auth_payload.get('account_key')
     user_key = auth_payload.get('user_key')
+
     logger.info(f"Deleting user with ID: {user_id} | account_key: {account_key}, user_key: {user_key}")
 
     user_repo.delete({

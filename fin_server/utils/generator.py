@@ -417,9 +417,9 @@ def create_user(user_data, account_key):
 
 def build_user(data, account_key=None):
     user_data = create_admin(data.copy()) if not account_key else create_user(data.copy(), account_key)
+    password = user_data['password'] if 'password' in user_data else '123'
+    user_data['password'] = base64.b64encode(password.encode('utf-8')).decode('utf-8')
 
-    if 'password' in user_data:
-        user_data['password'] = base64.b64encode(user_data['password'].encode('utf-8')).decode('utf-8')
     refresh_payload = {
         'user_key': user_data['user_key'],
         'account_key': user_data['account_key'],
