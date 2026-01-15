@@ -1,6 +1,6 @@
 # 🗄️ Fish Farm Engine - Database Schema & Relations
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Last Updated:** January 13, 2026
 
 ---
@@ -13,9 +13,10 @@
 4. [Fish Management Collections](#fish-management-collections)
 5. [Financial Collections](#financial-collections)
 6. [Messaging Collections](#messaging-collections)
-7. [Supporting Collections](#supporting-collections)
-8. [Data Flow Diagrams](#data-flow-diagrams)
-9. [Index Recommendations](#index-recommendations)
+7. [Role & Permission Collections](#role--permission-collections)
+8. [Supporting Collections](#supporting-collections)
+9. [Data Flow Diagrams](#data-flow-diagrams)
+10. [Index Recommendations](#index-recommendations)
 
 ---
 
@@ -26,6 +27,7 @@ The Fish Farm Engine uses **MongoDB** as its primary database. The schema is des
 - **Audit Trail**: All records track `user_key`, `created_at`, `updated_at`
 - **Soft Delete**: Records use `deleted_at` instead of hard delete
 - **Referential Integrity**: Collections are linked via ID references
+- **Flexible RBAC**: Database-backed roles and permissions with user overrides
 
 ### Key Identifiers
 

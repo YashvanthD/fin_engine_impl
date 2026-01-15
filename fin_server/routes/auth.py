@@ -205,6 +205,36 @@ def generate_token():
 
 
 # =============================================================================
+# Logout Endpoint
+# =============================================================================
+
+@auth_bp.route('/logout', methods=['POST'])
+@handle_errors
+@require_auth
+def auth_logout(auth_payload):
+    """Logout user by clearing refresh tokens."""
+    logger.info("/auth/logout called")
+
+    user_key = auth_payload.get('user_key')
+    account_key = auth_payload.get('account_key')
+
+    user_dto = UserDTO.find_by_user_key(user_key, account_key)
+    if not user_dto:
+        return respond_error('User not found', status=404)
+
+    # Check if user has active tokens
+    if not user_dto.refresh_tokens:
+        return respond_success({'message': 'Already logged out', 'success': True})
+
+    # Clear all refresh tokens
+    user_dto._refresh_tokens = []
+    user_dto._refresh_token_cache = set()
+    user_dto.save()
+
+    return respond_success({'message': 'Logged out successfully', 'success': True})
+
+
+# =============================================================================
 # User Data Endpoints
 # =============================================================================
 
@@ -317,8 +347,26 @@ def user_settings(auth_payload):
 @handle_errors
 @require_auth
 def get_user_permissions(auth_payload):
-    """Get user permissions (TODO)."""
-    return respond_success({'message': 'Get user permissions endpoint'})
+    """Get user permissions based on roles."""
+    logger.info("/auth/permissions called")
+
+    user_key = auth_payload.get('user_key')
+    account_key = auth_payload.get('account_key')
+    roles = auth_payload.get('roles', [])
+
+    user_dto = UserDTO.find_by_user_key(user_key, account_key)
+    if not user_dto:
+        return respond_error('User not found', status=404)
+
+    # Get permissions from user document or derive from roles
+    permissions = user_dto.to_dict().get('permissions') or user_dto.to_dict().get('actions') or []
+
+    # Build permission response
+    return respond_success({
+        'user_key': user_key,
+        'roles': roles,
+        'permissions': permissions,
+    })
 
 
 @auth_bp.route('/subscriptions', methods=['GET', 'PUT'])

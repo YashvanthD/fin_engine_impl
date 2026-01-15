@@ -11,6 +11,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..
 
 STATUS_CHOICES = {'DRAFT', 'INITIATED', 'FAILED', 'SUCCESS', 'PENDING', 'INPROGRESS', 'FINALIZED', 'CANCELLED'}
 
+tx_repo = get_collection('transactions')
 
 @lru_cache(maxsize=1)
 def _load_expense_catalog() -> Dict[str, Any]:
@@ -316,7 +317,6 @@ def init_transaction(tx_doc: Dict[str, Any]) -> Any:
     which validates debits==credits.
     Returns the inserted transaction id.
     """
-    tx_repo = get_collection('transactions')
     # ensure createdAt
     tx = dict(tx_doc)
     tx.setdefault('createdAt', get_time_date_dt(include_time=True))
@@ -329,14 +329,12 @@ def update_transaction(tx_id: Any, sets: Dict[str, Any]) -> Any:
     If tx_id is a mapping, it is used directly as a query; otherwise it's treated as _id.
     Returns the raw update result from the collection.
     """
-    tx_repo = get_collection('transactions')
     query = tx_id if isinstance(tx_id, dict) else {'_id': tx_id}
     return tx_repo.collection.update_one(query, {'$set': sets})
 
 
 def delete_transaction(tx_id: Any) -> Any:
     """Delete a transaction by _id (or by query if a dict provided). Returns delete result."""
-    tx_repo = get_collection('transactions')
     query = tx_id if isinstance(tx_id, dict) else {'_id': tx_id}
     return tx_repo.collection.delete_one(query)
 
@@ -444,7 +442,6 @@ def create_draft_transaction_for_pond(pond_id: str, account_key: str, amount: Op
     and marks it as a draft so the UI/ops can review and add balanced entries later.
     Returns the inserted transaction id.
     """
-    tx_repo = get_collection('transactions')
     tx_coll = tx_repo.collection if hasattr(tx_repo, 'collection') else tx_repo
     tx_doc: Dict[str, Any] = {
         'pond_id': pond_id,
@@ -623,8 +620,6 @@ def handle_sampling_deletion(sampling_id: str):
     fish_repo = get_collection('fish')
     fish_analytics_repo = get_collection('fish_analytics')
     fish_activity_repo = get_collection('fish_activity')
-    expenses_repo = get_collection('expenses')
-    tx_repo = get_collection('transactions')
 
     # Load sampling doc
     samp = sampling_repo.find_one({'sampling_id': sampling_id}) or sampling_repo.find_one({'_id': sampling_id})
@@ -720,7 +715,6 @@ def post_transaction_effects(tx_or_id: Any) -> Any:
     statement_lines doc and update the bank_accounts balance as a best-effort fallback.
     Returns a list of inserted statement line ids.
     """
-    tx_repo = get_collection('transactions')
     # resolve tx doc
     if isinstance(tx_or_id, dict):
         tx = tx_or_id

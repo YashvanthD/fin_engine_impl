@@ -1,0 +1,171 @@
+{
+  "id": "sampling",
+  "name": "Sampling & Growth",
+  "description": "Fish sampling, growth tracking, and buy operations.",
+  "endpoints": [
+    {
+      "id": "sampling-list",
+      "method": "GET",
+      "path": "/sampling",
+      "summary": "List sampling records",
+      "description": "Get sampling records with optional filters.",
+      "auth": true,
+      "tags": ["sampling"],
+      "query": {
+        "pond_id": {"type": "string", "description": "Filter by pond"},
+        "species": {"type": "string", "description": "Filter by species"},
+        "type": {"type": "string", "description": "Filter by type (sample, buy, transfer)"},
+        "from": {"type": "string", "description": "Start date (ISO format)"},
+        "to": {"type": "string", "description": "End date (ISO format)"},
+        "limit": {"type": "number", "description": "Max records to return"}
+      },
+      "responses": {
+        "200": {
+          "description": "Sampling records retrieved",
+          "example": {
+            "success": true,
+            "data": [
+              {
+                "id": "smp_123",
+                "pond_id": "pond_abc",
+                "species": "tilapia",
+                "sample_weight": 250,
+                "sample_count": 10,
+                "avg_weight": 25,
+                "created_at": "2026-01-15T10:00:00Z"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "sampling-create",
+      "method": "POST",
+      "path": "/sampling",
+      "summary": "Create a sampling record",
+      "description": "Record a new fish sampling.",
+      "auth": true,
+      "tags": ["sampling"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "pond_id": {"type": "string", "required": true, "description": "Pond ID"},
+          "species": {"type": "string", "required": true, "description": "Fish species"},
+          "sample_weight": {"type": "number", "required": true, "description": "Total weight of sample (g)"},
+          "sample_count": {"type": "number", "required": true, "description": "Number of fish in sample"},
+          "notes": {"type": "string", "required": false, "description": "Additional notes"}
+        },
+        "example": {
+          "pond_id": "pond_abc",
+          "species": "tilapia",
+          "sample_weight": 250,
+          "sample_count": 10,
+          "notes": "Morning sample"
+        }
+      },
+      "responses": {
+        "201": {"description": "Sampling record created"},
+        "400": {"description": "Validation error"}
+      }
+    },
+    {
+      "id": "sampling-get",
+      "method": "GET",
+      "path": "/sampling/{id}",
+      "summary": "Get a sampling record",
+      "description": "Get details of a specific sampling record.",
+      "auth": true,
+      "tags": ["sampling"],
+      "params": {
+        "id": {"type": "string", "description": "Sampling record ID"}
+      },
+      "responses": {
+        "200": {"description": "Sampling record retrieved"},
+        "404": {"description": "Record not found"}
+      }
+    },
+    {
+      "id": "sampling-buy",
+      "method": "POST",
+      "path": "/sampling/buy",
+      "summary": "Record a fish purchase (buy)",
+      "description": "Record buying fish and adding to a pond. Creates sampling record and expense.",
+      "auth": true,
+      "tags": ["sampling", "buy"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "pond_id": {"type": "string", "required": true, "description": "Target pond ID"},
+          "species": {"type": "string", "required": true, "description": "Fish species"},
+          "quantity": {"type": "number", "required": true, "description": "Number of fish"},
+          "total_weight": {"type": "number", "required": false, "description": "Total weight (g)"},
+          "unit_price": {"type": "number", "required": true, "description": "Price per unit"},
+          "total_amount": {"type": "number", "required": false, "description": "Total amount paid"},
+          "vendor": {"type": "string", "required": false, "description": "Vendor/supplier name"},
+          "batch_id": {"type": "string", "required": false, "description": "Batch identifier"}
+        },
+        "example": {
+          "pond_id": "pond_abc",
+          "species": "tilapia",
+          "quantity": 1000,
+          "total_weight": 5000,
+          "unit_price": 5,
+          "total_amount": 5000,
+          "vendor": "Local Hatchery"
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Buy recorded successfully",
+          "example": {
+            "success": true,
+            "data": {
+              "sampling_id": "smp_123",
+              "expense_id": "exp_456",
+              "pond_id": "pond_abc",
+              "quantity": 1000
+            }
+          }
+        },
+        "400": {"description": "Validation error"}
+      }
+    },
+    {
+      "id": "sampling-growth",
+      "method": "GET",
+      "path": "/sampling/growth/{pond_id}",
+      "summary": "Get growth data for a pond",
+      "description": "Get growth analytics and trends for a specific pond.",
+      "auth": true,
+      "tags": ["growth"],
+      "params": {
+        "pond_id": {"type": "string", "description": "Pond ID"}
+      },
+      "query": {
+        "from": {"type": "string", "description": "Start date"},
+        "to": {"type": "string", "description": "End date"}
+      },
+      "responses": {
+        "200": {
+          "description": "Growth data retrieved",
+          "example": {
+            "success": true,
+            "data": {
+              "pond_id": "pond_abc",
+              "species": "tilapia",
+              "samples": [
+                {"date": "2026-01-01", "avg_weight": 20},
+                {"date": "2026-01-08", "avg_weight": 28},
+                {"date": "2026-01-15", "avg_weight": 38}
+              ],
+              "growth_rate": 2.5,
+              "projected_harvest_date": "2026-03-15"
+            }
+          }
+        }
+      }
+    }
+  ]
+}
+

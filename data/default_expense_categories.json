@@ -1,0 +1,63 @@
+[
+  {
+    "code": "feed",
+    "name": "Feed",
+    "type": "expense",
+    "subcategories": ["pellets", "organic", "supplements"]
+  },
+  {
+    "code": "labor",
+    "name": "Labor",
+    "type": "expense",
+    "subcategories": ["wages", "overtime", "benefits"]
+  },
+  {
+    "code": "equipment",
+    "name": "Equipment",
+    "type": "expense",
+    "subcategories": ["purchase", "rental", "maintenance"]
+  },
+  {
+    "code": "utilities",
+    "name": "Utilities",
+    "type": "expense",
+    "subcategories": ["electricity", "water", "fuel"]
+  },
+  {
+    "code": "maintenance",
+    "name": "Maintenance",
+    "type": "expense",
+    "subcategories": ["pond", "equipment", "facility"]
+  },
+  {
+    "code": "transport",
+    "name": "Transport",
+    "type": "expense",
+    "subcategories": ["fuel", "vehicle", "delivery"]
+  },
+  {
+    "code": "medical",
+    "name": "Medical/Treatment",
+    "type": "expense",
+    "subcategories": ["medicine", "vaccination", "treatment"]
+  },
+  {
+    "code": "fish_purchase",
+    "name": "Fish Purchase",
+    "type": "expense",
+    "subcategories": ["fingerlings", "broodstock", "fry"]
+  },
+  {
+    "code": "fish_sale",
+    "name": "Fish Sales",
+    "type": "income",
+    "subcategories": ["wholesale", "retail", "export"]
+  },
+  {
+    "code": "other_income",
+    "name": "Other Income",
+    "type": "income",
+    "subcategories": ["consulting", "tours", "misc"]
+  }
+]
+

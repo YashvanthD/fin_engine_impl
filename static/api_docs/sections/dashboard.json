@@ -1,0 +1,133 @@
+{
+  "id": "dashboard",
+  "name": "Dashboard & Alerts",
+  "description": "Dashboard statistics and alert management endpoints.",
+  "endpoints": [
+    {
+      "id": "dashboard-get",
+      "method": "GET",
+      "path": "/dashboard",
+      "summary": "Get dashboard summary",
+      "description": "Get aggregated dashboard data including stats cards and recent alerts.",
+      "auth": true,
+      "tags": ["dashboard"],
+      "responses": {
+        "200": {
+          "description": "Dashboard data retrieved",
+          "example": {
+            "success": true,
+            "data": {
+              "totalPonds": 12,
+              "activeTasks": 5,
+              "criticalAlerts": 2,
+              "averageGrowthRate": 2.5,
+              "totalStock": 50000,
+              "feedEfficiency": 1.8,
+              "alerts": [
+                {"id": "alert_1", "type": "warning", "message": "Low oxygen in Pond A", "created_at": "2026-01-15T08:00:00Z"}
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "dashboard-alerts-list",
+      "method": "GET",
+      "path": "/dashboard/alerts",
+      "summary": "List alerts",
+      "description": "Get all alerts for the account with optional filters.",
+      "auth": true,
+      "tags": ["alerts"],
+      "query": {
+        "type": {"type": "string", "description": "Filter by alert type (critical, warning, info)"},
+        "acknowledged": {"type": "boolean", "description": "Filter by acknowledged status"},
+        "limit": {"type": "number", "description": "Max alerts to return"}
+      },
+      "responses": {
+        "200": {
+          "description": "Alerts retrieved",
+          "example": {
+            "success": true,
+            "data": {
+              "alerts": [
+                {
+                  "id": "alert_1",
+                  "type": "critical",
+                  "message": "Low oxygen level in Pond A",
+                  "pond_id": "pond_abc",
+                  "acknowledged": false,
+                  "created_at": "2026-01-15T08:00:00Z"
+                }
+              ],
+              "total": 1,
+              "unacknowledged": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "dashboard-alerts-acknowledge",
+      "method": "PUT",
+      "path": "/dashboard/alerts/{alert_id}/acknowledge",
+      "summary": "Acknowledge an alert",
+      "description": "Mark an alert as acknowledged.",
+      "auth": true,
+      "tags": ["alerts"],
+      "params": {
+        "alert_id": {"type": "string", "description": "Alert ID to acknowledge"}
+      },
+      "responses": {
+        "200": {
+          "description": "Alert acknowledged",
+          "example": {
+            "success": true,
+            "data": {"message": "Alert acknowledged"}
+          }
+        },
+        "404": {"description": "Alert not found"}
+      }
+    },
+    {
+      "id": "api-dashboard",
+      "method": "GET",
+      "path": "/api/dashboard",
+      "summary": "Get dashboard (API alias)",
+      "description": "API alias for /dashboard endpoint.",
+      "auth": true,
+      "tags": ["dashboard", "api"],
+      "responses": {
+        "200": {"description": "Dashboard data retrieved"}
+      }
+    },
+    {
+      "id": "api-alerts-list",
+      "method": "GET",
+      "path": "/api/alerts",
+      "summary": "List alerts (API alias)",
+      "description": "API alias for /dashboard/alerts endpoint.",
+      "auth": true,
+      "tags": ["alerts", "api"],
+      "responses": {
+        "200": {"description": "Alerts retrieved"}
+      }
+    },
+    {
+      "id": "api-alerts-acknowledge",
+      "method": "PUT",
+      "path": "/api/alerts/{alert_id}/acknowledge",
+      "summary": "Acknowledge alert (API alias)",
+      "description": "API alias for /dashboard/alerts/{id}/acknowledge endpoint.",
+      "auth": true,
+      "tags": ["alerts", "api"],
+      "params": {
+        "alert_id": {"type": "string", "description": "Alert ID"}
+      },
+      "responses": {
+        "200": {"description": "Alert acknowledged"}
+      }
+    }
+  ]
+}
+

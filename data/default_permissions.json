@@ -1,0 +1,351 @@
+[
+  {
+    "code": "user:create",
+    "name": "Create Users",
+    "category": "user",
+    "description": "Create new user accounts"
+  },
+  {
+    "code": "user:read",
+    "name": "View Users",
+    "category": "user",
+    "description": "View user profiles"
+  },
+  {
+    "code": "user:update",
+    "name": "Update Users",
+    "category": "user",
+    "description": "Edit user information"
+  },
+  {
+    "code": "user:delete",
+    "name": "Delete Users",
+    "category": "user",
+    "description": "Delete user accounts"
+  },
+  {
+    "code": "user:list",
+    "name": "List Users",
+    "category": "user",
+    "description": "View list of all users"
+  },
+  {
+    "code": "pond:create",
+    "name": "Create Ponds",
+    "category": "pond",
+    "description": "Add new ponds"
+  },
+  {
+    "code": "pond:read",
+    "name": "View Ponds",
+    "category": "pond",
+    "description": "View pond details"
+  },
+  {
+    "code": "pond:update",
+    "name": "Update Ponds",
+    "category": "pond",
+    "description": "Edit pond information"
+  },
+  {
+    "code": "pond:delete",
+    "name": "Delete Ponds",
+    "category": "pond",
+    "description": "Delete ponds"
+  },
+  {
+    "code": "pond:list",
+    "name": "List Ponds",
+    "category": "pond",
+    "description": "View all ponds"
+  },
+  {
+    "code": "fish:create",
+    "name": "Create Fish Species",
+    "category": "fish",
+    "description": "Add new fish species"
+  },
+  {
+    "code": "fish:read",
+    "name": "View Fish",
+    "category": "fish",
+    "description": "View fish data"
+  },
+  {
+    "code": "fish:update",
+    "name": "Update Fish",
+    "category": "fish",
+    "description": "Edit fish information"
+  },
+  {
+    "code": "fish:delete",
+    "name": "Delete Fish",
+    "category": "fish",
+    "description": "Delete fish records"
+  },
+  {
+    "code": "fish:stock",
+    "name": "Stock Fish",
+    "category": "fish",
+    "description": "Add fish to ponds"
+  },
+  {
+    "code": "fish:transfer",
+    "name": "Transfer Fish",
+    "category": "fish",
+    "description": "Transfer fish between ponds"
+  },
+  {
+    "code": "fish:harvest",
+    "name": "Harvest Fish",
+    "category": "fish",
+    "description": "Record fish harvests"
+  },
+  {
+    "code": "fish:mortality",
+    "name": "Record Mortality",
+    "category": "fish",
+    "description": "Log fish deaths"
+  },
+  {
+    "code": "feeding:create",
+    "name": "Record Feeding",
+    "category": "feeding",
+    "description": "Log feeding activities"
+  },
+  {
+    "code": "feeding:read",
+    "name": "View Feeding",
+    "category": "feeding",
+    "description": "View feeding records"
+  },
+  {
+    "code": "feeding:update",
+    "name": "Update Feeding",
+    "category": "feeding",
+    "description": "Edit feeding records"
+  },
+  {
+    "code": "feeding:schedule",
+    "name": "Manage Schedule",
+    "category": "feeding",
+    "description": "Manage feeding schedules"
+  },
+  {
+    "code": "feeding:inventory",
+    "name": "Manage Feed Inventory",
+    "category": "feeding",
+    "description": "Track feed stock"
+  },
+  {
+    "code": "sampling:create",
+    "name": "Record Sampling",
+    "category": "sampling",
+    "description": "Log growth samples"
+  },
+  {
+    "code": "sampling:read",
+    "name": "View Sampling",
+    "category": "sampling",
+    "description": "View sampling data"
+  },
+  {
+    "code": "sampling:approve",
+    "name": "Approve Sampling",
+    "category": "sampling",
+    "description": "Verify sampling records"
+  },
+  {
+    "code": "growth:read",
+    "name": "View Growth Data",
+    "category": "sampling",
+    "description": "View growth analytics"
+  },
+  {
+    "code": "expense:create",
+    "name": "Create Expenses",
+    "category": "expense",
+    "description": "Record expenses"
+  },
+  {
+    "code": "expense:read",
+    "name": "View Expenses",
+    "category": "expense",
+    "description": "View expense records"
+  },
+  {
+    "code": "expense:update",
+    "name": "Update Expenses",
+    "category": "expense",
+    "description": "Edit expense records"
+  },
+  {
+    "code": "expense:approve",
+    "name": "Approve Expenses",
+    "category": "expense",
+    "description": "Approve expense claims"
+  },
+  {
+    "code": "expense:delete",
+    "name": "Delete Expenses",
+    "category": "expense",
+    "description": "Delete expense records"
+  },
+  {
+    "code": "transaction:create",
+    "name": "Create Transactions",
+    "category": "transaction",
+    "description": "Record transactions"
+  },
+  {
+    "code": "transaction:read",
+    "name": "View Transactions",
+    "category": "transaction",
+    "description": "View transaction history"
+  },
+  {
+    "code": "bank:manage",
+    "name": "Manage Bank Accounts",
+    "category": "bank",
+    "description": "Full bank account access"
+  },
+  {
+    "code": "bank:read",
+    "name": "View Bank Accounts",
+    "category": "bank",
+    "description": "View bank account info"
+  },
+  {
+    "code": "task:create",
+    "name": "Create Tasks",
+    "category": "task",
+    "description": "Create new tasks"
+  },
+  {
+    "code": "task:read",
+    "name": "View Tasks",
+    "category": "task",
+    "description": "View task details"
+  },
+  {
+    "code": "task:assign",
+    "name": "Assign Tasks",
+    "category": "task",
+    "description": "Assign tasks to users"
+  },
+  {
+    "code": "task:complete",
+    "name": "Complete Tasks",
+    "category": "task",
+    "description": "Mark tasks as complete"
+  },
+  {
+    "code": "task:delete",
+    "name": "Delete Tasks",
+    "category": "task",
+    "description": "Delete tasks"
+  },
+  {
+    "code": "report:operational",
+    "name": "Operational Reports",
+    "category": "report",
+    "description": "View operations reports"
+  },
+  {
+    "code": "report:financial",
+    "name": "Financial Reports",
+    "category": "report",
+    "description": "View financial reports"
+  },
+  {
+    "code": "report:export",
+    "name": "Export Reports",
+    "category": "report",
+    "description": "Export report data"
+  },
+  {
+    "code": "report:create",
+    "name": "Create Reports",
+    "category": "report",
+    "description": "Generate custom reports"
+  },
+  {
+    "code": "message:send",
+    "name": "Send Messages",
+    "category": "message",
+    "description": "Send chat messages"
+  },
+  {
+    "code": "message:group_create",
+    "name": "Create Groups",
+    "category": "message",
+    "description": "Create chat groups"
+  },
+  {
+    "code": "message:broadcast",
+    "name": "Broadcast Messages",
+    "category": "message",
+    "description": "Send broadcasts to all"
+  },
+  {
+    "code": "settings:system",
+    "name": "System Settings",
+    "category": "settings",
+    "description": "Manage system settings"
+  },
+  {
+    "code": "settings:farm",
+    "name": "Farm Settings",
+    "category": "settings",
+    "description": "Manage farm settings"
+  },
+  {
+    "code": "audit:read",
+    "name": "View Audit Logs",
+    "category": "audit",
+    "description": "Access audit trail"
+  },
+  {
+    "code": "role:create",
+    "name": "Create Roles",
+    "category": "role",
+    "description": "Create new roles"
+  },
+  {
+    "code": "role:update",
+    "name": "Update Roles",
+    "category": "role",
+    "description": "Modify role permissions"
+  },
+  {
+    "code": "role:delete",
+    "name": "Delete Roles",
+    "category": "role",
+    "description": "Delete custom roles"
+  },
+  {
+    "code": "role:assign",
+    "name": "Assign Roles",
+    "category": "role",
+    "description": "Assign roles to users"
+  },
+  {
+    "code": "permission:grant",
+    "name": "Grant Permissions",
+    "category": "permission",
+    "description": "Grant permissions to users"
+  },
+  {
+    "code": "permission:revoke",
+    "name": "Revoke Permissions",
+    "category": "permission",
+    "description": "Revoke user permissions"
+  },
+  {
+    "code": "permission:request:review",
+    "name": "Review Requests",
+    "category": "permission",
+    "description": "Review permission requests"
+  }
+]
+

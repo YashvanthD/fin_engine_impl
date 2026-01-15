@@ -1,0 +1,31 @@
+[
+  {
+    "code": "starter",
+    "name": "Starter Feed",
+    "protein_pct": 40,
+    "size_mm": 0.5,
+    "for_weight_g": "0-5"
+  },
+  {
+    "code": "grower",
+    "name": "Grower Feed",
+    "protein_pct": 35,
+    "size_mm": 2,
+    "for_weight_g": "5-100"
+  },
+  {
+    "code": "finisher",
+    "name": "Finisher Feed",
+    "protein_pct": 30,
+    "size_mm": 4,
+    "for_weight_g": "100-500"
+  },
+  {
+    "code": "broodstock",
+    "name": "Broodstock Feed",
+    "protein_pct": 45,
+    "size_mm": 6,
+    "for_weight_g": "500+"
+  }
+]
+

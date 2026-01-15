@@ -1,0 +1,21 @@
+{
+  "timezone": "Asia/Kolkata",
+  "currency": "INR",
+  "currency_symbol": "₹",
+  "date_format": "DD/MM/YYYY",
+  "time_format": "HH:mm",
+  "weight_unit": "kg",
+  "length_unit": "m",
+  "area_unit": "sq.m",
+  "temperature_unit": "C",
+  "language": "en",
+  "notifications_enabled": true,
+  "email_notifications": true,
+  "sms_notifications": false,
+  "auto_backup": true,
+  "backup_frequency": "daily",
+  "session_timeout_minutes": 60,
+  "max_login_attempts": 5,
+  "password_min_length": 8
+}
+

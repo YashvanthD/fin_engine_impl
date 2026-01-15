@@ -100,6 +100,11 @@ def require_admin(func: Callable) -> Callable:
     return require_role('admin')(func)
 
 
+def require_owner(func: Callable) -> Callable:
+    """Shortcut decorator to require owner role."""
+    return require_role('owner')(func)
+
+
 def validate_json(*required_fields: str) -> Callable:
     """Decorator to validate that required JSON fields are present.
 

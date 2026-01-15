@@ -1,0 +1,95 @@
+{
+  "id": "public",
+  "name": "Public Endpoints",
+  "description": "Public endpoints that don't require authentication.",
+  "endpoints": [
+    {
+      "id": "public-health",
+      "method": "GET",
+      "path": "/public/health",
+      "summary": "Health check",
+      "description": "Check if the server is running and healthy.",
+      "auth": false,
+      "tags": ["health"],
+      "responses": {
+        "200": {
+          "description": "Server is healthy",
+          "example": {
+            "success": true,
+            "data": {
+              "status": "healthy",
+              "timestamp": "2026-01-15T10:00:00Z",
+              "version": "1.1.0"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "public-version",
+      "method": "GET",
+      "path": "/public/version",
+      "summary": "Get API version",
+      "description": "Get the current API version information.",
+      "auth": false,
+      "tags": ["version"],
+      "responses": {
+        "200": {
+          "description": "Version info retrieved",
+          "example": {
+            "success": true,
+            "data": {
+              "version": "1.1.0",
+              "build": "2026.01.15"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "public-fish-species",
+      "method": "GET",
+      "path": "/public/fish/species",
+      "summary": "Get public fish species list",
+      "description": "Get list of common fish species (no auth required).",
+      "auth": false,
+      "tags": ["fish"],
+      "responses": {
+        "200": {
+          "description": "Species list retrieved",
+          "example": {
+            "success": true,
+            "data": [
+              {"name": "Tilapia", "scientific_name": "Oreochromis niloticus"},
+              {"name": "Catfish", "scientific_name": "Clarias gariepinus"},
+              {"name": "Carp", "scientific_name": "Cyprinus carpio"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "public-countries",
+      "method": "GET",
+      "path": "/public/countries",
+      "summary": "Get countries list",
+      "description": "Get list of supported countries.",
+      "auth": false,
+      "tags": ["reference"],
+      "responses": {
+        "200": {
+          "description": "Countries list retrieved",
+          "example": {
+            "success": true,
+            "data": [
+              {"code": "IN", "name": "India"},
+              {"code": "US", "name": "United States"},
+              {"code": "NG", "name": "Nigeria"}
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
+

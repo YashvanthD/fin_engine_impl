@@ -1,0 +1,124 @@
+[
+  {
+    "role_code": "owner",
+    "name": "Owner",
+    "description": "Farm owner with full system access",
+    "level": 1,
+    "is_system": true,
+    "permissions": ["*"]
+  },
+  {
+    "role_code": "admin",
+    "name": "Admin",
+    "description": "Administrator with full system access",
+    "level": 1,
+    "is_system": true,
+    "permissions": ["*"]
+  },
+  {
+    "role_code": "manager",
+    "name": "Manager",
+    "description": "Farm manager with operational control",
+    "level": 2,
+    "is_system": true,
+    "permissions": [
+      "user:create", "user:read", "user:update", "user:list",
+      "pond:create", "pond:read", "pond:update", "pond:delete", "pond:list",
+      "fish:create", "fish:read", "fish:update", "fish:delete", "fish:stock", "fish:transfer", "fish:harvest", "fish:mortality",
+      "feeding:create", "feeding:read", "feeding:update", "feeding:schedule", "feeding:inventory",
+      "sampling:create", "sampling:read", "sampling:approve", "growth:read",
+      "expense:create", "expense:read", "expense:update", "expense:approve", "transaction:create", "transaction:read", "bank:read",
+      "task:create", "task:read", "task:assign", "task:complete", "task:delete",
+      "report:operational", "report:financial", "report:export", "report:create",
+      "message:send", "message:group_create", "message:broadcast",
+      "settings:farm", "audit:read",
+      "role:assign", "permission:grant", "permission:revoke", "permission:request:review"
+    ]
+  },
+  {
+    "role_code": "supervisor",
+    "name": "Supervisor",
+    "description": "Team lead with field oversight",
+    "level": 3,
+    "is_system": true,
+    "permissions": [
+      "user:read", "user:list",
+      "pond:read", "pond:update", "pond:list",
+      "fish:read", "fish:stock", "fish:transfer", "fish:mortality", "fish:harvest",
+      "feeding:create", "feeding:read", "feeding:update", "feeding:schedule", "feeding:inventory",
+      "sampling:create", "sampling:read", "sampling:approve", "growth:read",
+      "expense:create", "expense:read",
+      "task:create", "task:read", "task:assign", "task:complete",
+      "report:operational",
+      "message:send", "message:group_create"
+    ]
+  },
+  {
+    "role_code": "analyst",
+    "name": "Analyst",
+    "description": "Data analyst with reporting access",
+    "level": 3,
+    "is_system": true,
+    "permissions": [
+      "user:read", "user:list",
+      "pond:read", "pond:list",
+      "fish:read",
+      "feeding:read", "feeding:schedule", "feeding:inventory",
+      "sampling:read", "growth:read",
+      "expense:read", "transaction:read",
+      "task:read",
+      "report:operational", "report:financial", "report:export", "report:create",
+      "message:send",
+      "audit:read"
+    ]
+  },
+  {
+    "role_code": "accountant",
+    "name": "Accountant",
+    "description": "Financial management access",
+    "level": 3,
+    "is_system": true,
+    "permissions": [
+      "user:read", "user:list",
+      "pond:read", "pond:list",
+      "fish:read", "fish:stock", "fish:harvest",
+      "feeding:read", "feeding:schedule", "feeding:inventory",
+      "sampling:read", "growth:read",
+      "expense:create", "expense:read", "expense:update", "expense:approve",
+      "transaction:create", "transaction:read",
+      "bank:manage", "bank:read",
+      "report:operational", "report:financial", "report:export", "report:create",
+      "message:send",
+      "audit:read"
+    ]
+  },
+  {
+    "role_code": "feeder",
+    "name": "Feeder",
+    "description": "Fish feeding staff",
+    "level": 4,
+    "is_system": true,
+    "permissions": [
+      "pond:read", "pond:list",
+      "fish:read",
+      "feeding:create", "feeding:read", "feeding:schedule", "feeding:inventory",
+      "task:read", "task:complete",
+      "message:send"
+    ]
+  },
+  {
+    "role_code": "worker",
+    "name": "Worker",
+    "description": "General field worker",
+    "level": 5,
+    "is_system": true,
+    "permissions": [
+      "pond:read", "pond:list",
+      "fish:read",
+      "sampling:create",
+      "task:read", "task:complete",
+      "message:send"
+    ]
+  }
+]
+

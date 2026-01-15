@@ -21,29 +21,36 @@ class MCPTools:
     """MCP Tools for data access and manipulation."""
 
     def __init__(self):
-        self._repos = {}
-        self._init_repositories()
+        self._repos = None  # Lazy initialization
 
-    def _init_repositories(self):
-        """Initialize repository connections."""
-        try:
-            from fin_server.repository.mongo_helper import get_collection
-            self._repos = {
-                'users': get_collection('users'),
-                'companies': get_collection('companies'),
-                'fish': get_collection('fish'),
-                'fish_analytics': get_collection('fish_analytics'),
-                'fish_mapping': get_collection('fish_mapping'),
-                'pond': get_collection('pond'),
-                'pond_event': get_collection('pond_event'),
-                'expenses': get_collection('expenses'),
-                'transactions': get_collection('transactions'),
-                'feeding': get_collection('feeding'),
-                'sampling': get_collection('sampling'),
-            }
-            logger.info("MCP Tools repositories initialized")
-        except Exception as e:
-            logger.error(f"Failed to initialize MCP repositories: {e}")
+    def _get_repos(self):
+        """Lazy initialize repositories when first needed."""
+        if self._repos is None:
+            self._repos = {}
+            try:
+                from fin_server.repository.mongo_helper import get_collection
+                self._repos = {
+                    'users': get_collection('users'),
+                    'companies': get_collection('companies'),
+                    'fish': get_collection('fish'),
+                    'fish_analytics': get_collection('fish_analytics'),
+                    'fish_mapping': get_collection('fish_mapping'),
+                    'pond': get_collection('pond'),
+                    'pond_event': get_collection('pond_event'),
+                    'expenses': get_collection('expenses'),
+                    'transactions': get_collection('transactions'),
+                    'feeding': get_collection('feeding'),
+                    'sampling': get_collection('sampling'),
+                }
+                logger.info("MCP Tools repositories initialized")
+            except Exception as e:
+                logger.error(f"Failed to initialize MCP repositories: {e}")
+        return self._repos
+
+    def _get_repo(self, name: str):
+        """Get a specific repository by name."""
+        repos = self._get_repos()
+        return repos.get(name) if repos else None
 
     def get_tool_definitions(self) -> List[Dict[str, Any]]:
         """Get list of available MCP tool definitions."""

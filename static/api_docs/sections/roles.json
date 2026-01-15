@@ -1,0 +1,218 @@
+{
+  "id": "roles",
+  "name": "Roles & Permissions",
+  "description": "Role and permission management endpoints for RBAC.",
+  "endpoints": [
+    {
+      "id": "roles-list",
+      "method": "GET",
+      "path": "/role/roles",
+      "summary": "Get all available roles",
+      "description": "Get all available roles for the account.",
+      "auth": true,
+      "tags": ["roles"],
+      "request": {},
+      "responses": {
+        "200": {
+          "description": "Roles retrieved",
+          "example": {
+            "roles": [
+              {"role_code": "owner", "name": "Owner", "level": 1, "permissions": ["*"]},
+              {"role_code": "manager", "name": "Manager", "level": 2, "permissions": ["pond:*", "fish:*"]},
+              {"role_code": "worker", "name": "Worker", "level": 5, "permissions": ["task:complete"]}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "roles-create",
+      "method": "POST",
+      "path": "/role/roles",
+      "summary": "Create a new custom role",
+      "description": "Create a new custom role with specified permissions. Requires admin access.",
+      "auth": true,
+      "tags": ["roles"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "role_code": {"type": "string", "required": true, "description": "Unique role code", "example": "quality_inspector"},
+          "name": {"type": "string", "required": true, "description": "Display name", "example": "Quality Inspector"},
+          "description": {"type": "string", "required": false, "description": "Role description"},
+          "permissions": {"type": "array", "required": true, "description": "List of permission codes"},
+          "level": {"type": "number", "required": false, "description": "Hierarchy level (1=highest)", "example": 4}
+        },
+        "example": {
+          "role_code": "quality_inspector",
+          "name": "Quality Inspector",
+          "description": "Inspects fish quality",
+          "permissions": ["pond:read", "sampling:create"],
+          "level": 4
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Role created",
+          "example": {
+            "success": true,
+            "message": "Role 'quality_inspector' created successfully",
+            "role": {"role_code": "quality_inspector", "name": "Quality Inspector"}
+          }
+        },
+        "400": {"description": "Validation error"}
+      }
+    },
+    {
+      "id": "roles-update",
+      "method": "PUT",
+      "path": "/role/roles/{role_code}",
+      "summary": "Update a role's permissions",
+      "description": "Update the permissions for an existing role. Requires admin access.",
+      "auth": true,
+      "tags": ["roles"],
+      "params": {
+        "role_code": {"type": "string", "description": "Role code to update"}
+      },
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "permissions": {"type": "array", "required": true, "description": "New list of permission codes"}
+        }
+      },
+      "responses": {
+        "200": {"description": "Role updated"},
+        "400": {"description": "Invalid permissions"},
+        "404": {"description": "Role not found"}
+      }
+    },
+    {
+      "id": "roles-delete",
+      "method": "DELETE",
+      "path": "/role/roles/{role_code}",
+      "summary": "Delete a custom role",
+      "description": "Delete a custom role. System roles cannot be deleted. Requires owner access.",
+      "auth": true,
+      "tags": ["roles"],
+      "params": {
+        "role_code": {"type": "string", "description": "Role code to delete"}
+      },
+      "responses": {
+        "200": {"description": "Role deleted"},
+        "400": {"description": "Cannot delete system role"},
+        "404": {"description": "Role not found"}
+      }
+    },
+    {
+      "id": "permissions-list",
+      "method": "GET",
+      "path": "/role/permissions",
+      "summary": "Get all available permissions",
+      "description": "Get all available permissions. Use ?grouped=true to get by category.",
+      "auth": true,
+      "tags": ["permissions"],
+      "query": {
+        "grouped": {"type": "boolean", "description": "If true, returns permissions grouped by category"}
+      },
+      "responses": {
+        "200": {
+          "description": "Permissions retrieved",
+          "example": {
+            "permissions": [
+              {"code": "user:create", "name": "Create Users", "category": "user"},
+              {"code": "pond:read", "name": "View Ponds", "category": "pond"}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "permissions-create",
+      "method": "POST",
+      "path": "/role/permissions",
+      "summary": "Create a custom permission",
+      "description": "Create a new custom permission. Requires owner access.",
+      "auth": true,
+      "tags": ["permissions"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "permission_code": {"type": "string", "required": true, "description": "Unique permission code"},
+          "name": {"type": "string", "required": true, "description": "Display name"},
+          "description": {"type": "string", "required": false, "description": "Description"},
+          "category": {"type": "string", "required": false, "description": "Category for grouping", "example": "custom"}
+        }
+      },
+      "responses": {
+        "201": {"description": "Permission created"},
+        "400": {"description": "Validation error"}
+      }
+    },
+    {
+      "id": "user-permissions-get",
+      "method": "GET",
+      "path": "/role/users/{user_key}/permissions",
+      "summary": "Get a user's permissions",
+      "description": "Get effective permissions for a specific user.",
+      "auth": true,
+      "tags": ["user-permissions"],
+      "params": {
+        "user_key": {"type": "string", "description": "User key"}
+      },
+      "responses": {
+        "200": {
+          "description": "User permissions retrieved",
+          "example": {
+            "user_key": "usr_abc123",
+            "role": "manager",
+            "permissions": ["pond:*", "fish:read"]
+          }
+        }
+      }
+    },
+    {
+      "id": "user-permissions-grant",
+      "method": "POST",
+      "path": "/role/users/{user_key}/permissions",
+      "summary": "Grant permissions to a user",
+      "description": "Grant additional permissions to a user beyond their role.",
+      "auth": true,
+      "tags": ["user-permissions"],
+      "params": {
+        "user_key": {"type": "string", "description": "User key"}
+      },
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "permissions": {"type": "array", "required": true, "description": "Permissions to grant"}
+        }
+      },
+      "responses": {
+        "200": {"description": "Permissions granted"},
+        "400": {"description": "Invalid permissions"}
+      }
+    },
+    {
+      "id": "user-role-assign",
+      "method": "PUT",
+      "path": "/role/users/{user_key}/role",
+      "summary": "Assign role to a user",
+      "description": "Assign a role to a user. Requires admin access.",
+      "auth": true,
+      "tags": ["user-permissions"],
+      "params": {
+        "user_key": {"type": "string", "description": "User key"}
+      },
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "role": {"type": "string", "required": true, "description": "Role code to assign"}
+        }
+      },
+      "responses": {
+        "200": {"description": "Role assigned"},
+        "400": {"description": "Invalid role"}
+      }
+    }
+  ]
+}
+
