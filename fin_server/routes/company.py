@@ -43,7 +43,8 @@ def _build_company_users_list(account_key):
         {
             'user_key': u.get('user_key'),
             'username': u.get('username'),
-            'roles': u.get('roles', []),
+            'role': u.get('role', 'user'),
+            'authorities': u.get('authorities', []),
             'joined_date': u.get('joined_date'),
             'active': bool(u.get('refresh_tokens'))
         }
@@ -202,7 +203,8 @@ def register_company():
         'admin': {
             'user_key': admin_user_key,
             'username': admin_data.get('username'),
-            'roles': admin_data.get('roles', [])
+            'role': admin_data.get('role', 'admin'),
+            'authorities': admin_data.get('authorities', [])
         },
         'access_token': access_token,
         'refresh_token': refresh_token

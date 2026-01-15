@@ -159,7 +159,8 @@ def build_access_payload(user_dto: UserDTO) -> Dict[str, Any]:
     return {
         'user_key': user_dto.user_key,
         'account_key': user_dto.account_key,
-        'roles': user_dto.roles,
+        'role': user_dto.role,
+        'authorities': user_dto.authorities,
         'type': 'access'
     }
 
@@ -169,7 +170,8 @@ def build_refresh_payload(user_dto: UserDTO) -> Dict[str, Any]:
     return {
         'user_key': user_dto.user_key,
         'account_key': user_dto.account_key,
-        'roles': user_dto.roles,
+        'role': user_dto.role,
+        'authorities': user_dto.authorities,
         'type': 'refresh'
     }
 
@@ -193,7 +195,8 @@ def build_user_response(
         'success': True,
         'user_key': user_dto.user_key,
         'account_key': user_dto.account_key,
-        'roles': user_dto.roles,
+        'role': user_dto.role,
+        'authorities': user_dto.authorities,
         'settings': user_dto.settings,
         'subscription': user_dto.subscription,
         'user': {k: v for k, v in user_dict.items() if k not in ['password', 'refresh_tokens']}

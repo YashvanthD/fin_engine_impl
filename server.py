@@ -125,18 +125,23 @@ def create_app() -> Flask:
             pass
         return response
 
+    logger = logging.getLogger(__name__)
+
     @app.route('/metrics', methods=['GET'])
     def _metrics_endpoint():
+        logger.info("Metrics endpoint called")
         return jsonify(metrics_collector.get_metrics())
 
     @app.route('/')
     def index():
+        logger.info("Index endpoint called")
         from flask import redirect
         return redirect('/docs')
 
     @app.route('/docs')
     @app.route('/docs/')
     def api_docs():
+        logger.info("API docs endpoint called")
         from flask import send_from_directory
         import os
         docs_dir = os.path.join(os.path.dirname(__file__), 'static', 'api_docs')
@@ -144,6 +149,7 @@ def create_app() -> Flask:
 
     @app.route('/docs/<path:filename>')
     def api_docs_static(filename):
+        logger.info(f"API docs static file requested: {filename}")
         from flask import send_from_directory
         import os
         docs_dir = os.path.join(os.path.dirname(__file__), 'static', 'api_docs')

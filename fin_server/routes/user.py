@@ -77,13 +77,15 @@ def _build_user_response(doc):
 
     return {
         'id': uid,
+        'user_key': uid,
         'email': normalized.get('email'),
         'name': _get_display_name(normalized),
-        'role': _get_primary_role(normalized),
+        'role': normalized.get('role'),
+        'authorities': normalized.get('authorities', []),
         'phone': normalized.get('phone'),
         'avatar': normalized.get('avatar'),
         'permissions': normalized.get('permissions') or normalized.get('actions') or [],
-        'createdAt': normalized.get('created_at') or normalized.get('joinedDate'),
+        'createdAt': normalized.get('created_at') or normalized.get('joinedDate') or normalized.get('joined_date'),
         'lastLogin': normalized.get('last_login') or normalized.get('lastLogin'),
         'managerId': normalized.get('manager_id') or normalized.get('managerId')
     }
@@ -203,7 +205,8 @@ def get_me(auth_payload):
     return respond_success({
         'user_key': user_dto.user_key,
         'account_key': user_dto.account_key,
-        'roles': user_dto.roles,
+        'role': user_dto.role,
+        'authorities': user_dto.authorities,
         'settings': user_dto.settings,
         'subscription': user_dto.subscription,
         'user': doc
@@ -349,10 +352,13 @@ def delete_user(account_key, user_key, auth_payload):
 def api_list_users(auth_payload):
     """API endpoint to list users."""
     account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"Fetching users list | account_key: {account_key}, user_key: {user_key}")
 
     users = user_repo.find({'account_key': account_key})
     result = [_build_user_response(u) for u in users]
 
+    logger.debug(f"Users fetched: {users}")
     return respond_success({'users': result})
 
 
@@ -361,14 +367,19 @@ def api_list_users(auth_payload):
 @require_auth
 def api_get_user(user_id, auth_payload):
     """API endpoint to get a single user."""
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"Fetching user with ID: {user_id} | account_key: {account_key}, user_key: {user_key}")
+
     user = user_repo.find_one({
         'user_key': user_id,
-        'account_key': auth_payload.get('account_key')
+        'account_key': account_key
     }) or user_repo.find_one({'_id': user_id})
 
     if not user:
         return respond_error('User not found', status=404)
 
+    logger.debug(f"User details: {user}")
     return respond_success({'user': _build_user_response(user)})
 
 
@@ -377,12 +388,16 @@ def api_get_user(user_id, auth_payload):
 @require_auth
 def api_create_user(auth_payload):
     """API endpoint to create a user."""
-    data = request.get_json(force=True)
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"Creating a new user | account_key: {account_key}, user_key: {user_key}")
 
-    user_doc = build_user(data, account_key=auth_payload.get('account_key'))
+    data = request.get_json(force=True)
+    user_doc = build_user(data, account_key=account_key)
     inserted_id = user_repo.create(user_doc)
 
     user_doc['_id'] = inserted_id
+    logger.debug(f"User created: {user_doc}")
     return respond_success({'user': _build_user_response(user_doc)})
 
 
@@ -391,13 +406,17 @@ def api_create_user(auth_payload):
 @require_auth
 def api_patch_user(user_id, auth_payload):
     """API endpoint to update a user."""
-    data = request.get_json(force=True)
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"Updating user with ID: {user_id} | account_key: {account_key}, user_key: {user_key}")
 
+    data = request.get_json(force=True)
     user_repo.update({
         'user_key': user_id,
-        'account_key': auth_payload.get('account_key')
+        'account_key': account_key
     }, data)
 
+    logger.debug(f"User updated: {user_id}")
     return respond_success({'updated': True})
 
 
@@ -406,9 +425,14 @@ def api_patch_user(user_id, auth_payload):
 @require_auth
 def api_delete_user(user_id, auth_payload):
     """API endpoint to delete a user."""
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"Deleting user with ID: {user_id} | account_key: {account_key}, user_key: {user_key}")
+
     user_repo.delete({
         'user_key': user_id,
-        'account_key': auth_payload.get('account_key')
+        'account_key': account_key
     })
 
+    logger.debug(f"User deleted: {user_id}")
     return respond_success({'deleted': True})

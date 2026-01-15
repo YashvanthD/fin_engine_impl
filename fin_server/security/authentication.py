@@ -283,7 +283,8 @@ class AuthSecurity:
             refresh_payload = {
                 'user_key': user_dto.user_key,
                 'account_key': user_dto.account_key,
-                'roles': user_dto.roles,
+                'role': user_dto.role,
+                'authorities': user_dto.authorities,
                 'type': 'refresh'
             }
             new_refresh_token = cls.create_refresh_token(refresh_payload)

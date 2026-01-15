@@ -37,9 +37,39 @@ def validate_signup_user(data, account_key):
         errors['password'] = 'Password is required.'
     if not account_key or not str(account_key).strip():
         errors['account_key'] = 'Account key is required.'
-    roles = data.get('roles')
-    if not roles:
-        errors['roles'] = 'Roles are required.'
+
+    # Validate role - must be a string
+    role = data.get('role')
+    if not role:
+        errors['role'] = 'Role is required.'
+    else:
+        # Validate role exists in defaults
+        try:
+            from config.defaults import defaults
+            valid_roles = [r.get('role_code') for r in defaults.get_roles()]
+            if role not in valid_roles:
+                errors['role'] = f"Invalid role: {role}. Valid roles: {', '.join(valid_roles)}"
+        except Exception:
+            pass
+
+    # Validate authorities (optional) - array of special permissions
+    authorities = data.get('authorities')
+    if authorities is not None:
+        if not isinstance(authorities, list):
+            errors['authorities'] = 'Authorities must be an array of permission codes.'
+        else:
+            # Validate each authority exists
+            try:
+                from config.defaults import defaults
+                valid_permissions = [p.get('code') for p in defaults.get_permissions()]
+                invalid_auths = [a for a in authorities if a not in valid_permissions]
+                if invalid_auths:
+                    errors['authorities'] = f"Invalid authorities: {', '.join(invalid_auths)}"
+            except Exception:
+                pass
+    else:
+        data['authorities'] = []
+
     actions = data.get('actions')
     if actions is None:
         data['actions'] = []

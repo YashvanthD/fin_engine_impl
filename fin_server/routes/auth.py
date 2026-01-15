@@ -24,6 +24,7 @@ from fin_server.services.auth_service import (
     generate_new_refresh_token,
     build_token_response,
 )
+from fin_server.services.permission_service import get_permission_service
 from fin_server.utils.decorators import handle_errors, require_auth
 
 logger = logging.getLogger(__name__)
@@ -139,6 +140,10 @@ def login():
     logger.info("Login endpoint called")
     data = request.get_json(force=True)
 
+    account_key = data.get('account_key')
+    user_key = data.get('user_key')
+    logger.info(f"Login attempt for account_key={account_key}, user_key={user_key}")
+
     response, status = handle_login(
         username=data.get('username'),
         password=data.get('password'),
@@ -247,14 +252,21 @@ def list_account_users(auth_payload):
 
     user_key = auth_payload.get('user_key')
     account_key = auth_payload.get('account_key')
-    roles = auth_payload.get('roles', [])
+    role = auth_payload.get('role', 'user')
+    logger.info(f"List account users role={role}")
+    # Use the permission service to check dynamic permissions
+    permission_service = get_permission_service()
+    can_view_all_users = permission_service.get_permission_by_user_key_and_account_key(
+        user_key, account_key, 'VIEW_ALL_USERS', role
+    )
 
-    if 'admin' in roles:
+    # Allow users with specific roles or dynamic permission to see all users
+    if role in ['manager', 'admin', 'owner'] or can_view_all_users:
         user_list = UserDTO.find_many_by_account(account_key)
         logger.info("Fetched %d users for account", len(user_list))
         return respond_success({'users': user_list})
 
-    # Non-admin sees only self
+    # Non-authorized users see only self
     user_dto = UserDTO.find_by_user_key(user_key, account_key)
     if not user_dto:
         return respond_error('User not found', status=404)
@@ -304,7 +316,8 @@ def _build_user_info_response(user_dto: UserDTO) -> dict:
     return {
         'user_key': user_dto.user_key,
         'account_key': user_dto.account_key,
-        'roles': user_dto.roles,
+        'role': user_dto.role,
+        'authorities': user_dto.authorities,
         'settings': user_dto.settings,
         'subscription': user_dto.subscription,
         'last_active': user_dto.last_active,
@@ -352,7 +365,7 @@ def get_user_permissions(auth_payload):
 
     user_key = auth_payload.get('user_key')
     account_key = auth_payload.get('account_key')
-    roles = auth_payload.get('roles', [])
+    role = auth_payload.get('role', 'user')
 
     user_dto = UserDTO.find_by_user_key(user_key, account_key)
     if not user_dto:
@@ -364,7 +377,7 @@ def get_user_permissions(auth_payload):
     # Build permission response
     return respond_success({
         'user_key': user_key,
-        'roles': roles,
+        'role': role,
         'permissions': permissions,
     })
 
@@ -378,30 +391,28 @@ def user_subscriptions(auth_payload):
 
     user_key = auth_payload.get('user_key')
     account_key = auth_payload.get('account_key')
-    roles = auth_payload.get('roles', [])
+    role = auth_payload.get('role', 'user')
 
     user_dto = UserDTO.find_by_user_key(user_key, account_key)
     if not user_dto:
         return respond_error('User not found', status=404)
 
     if request.method == 'PUT':
-        if 'admin' not in roles:
-            return respond_error('Only admin can update subscriptions', status=403)
+        if role == 'admin':
+            updated_subscription = request.get_json(force=True).get('subscription', {})
 
-        updated_subscription = request.get_json(force=True).get('subscription', {})
+            # Update for all users in account
+            for user in UserDTO.find_many_by_account(account_key):
+                dto = UserDTO.find_by_user_key(user['user_key'], account_key)
+                if dto:
+                    dto.subscription = updated_subscription
+                    dto.save()
 
-        # Update for all users in account
-        for user in UserDTO.find_many_by_account(account_key):
-            dto = UserDTO.find_by_user_key(user['user_key'], account_key)
-            if dto:
-                dto.subscription = updated_subscription
-                dto.save()
-
-        logger.info("Subscription updated for account: %s", account_key)
+            logger.info("Subscription updated for account: %s", account_key)
 
     # Build response based on role
     subscription = user_dto.subscription or {}
-    if 'admin' in roles:
+    if 'admin' in role:
         resp_subscription = subscription
     else:
         resp_subscription = {
@@ -481,7 +492,8 @@ def api_auth_refresh():
     access_token = AuthSecurity.encode_token({
         'user_key': user_key,
         'account_key': user.get('account_key'),
-        'roles': user.get('roles', []),
+        'role': user.get('role', 'user'),
+        'authorities': user.get('authorities', []),
         'type': 'access'
     })
 

@@ -248,7 +248,7 @@ def assign_role(auth_payload):
         user_key=user_key,
         new_role=new_role,
         assigned_by=auth_payload.get('user_key'),
-        assigner_role=auth_payload.get('roles', ['worker'])[0] if auth_payload.get('roles') else 'worker',
+        assigner_role=auth_payload.get('role', 'worker'),
         account_key=auth_payload.get('account_key'),
         reason=reason
     )
@@ -280,8 +280,8 @@ def get_user_permissions(user_key: str, auth_payload):
     """
     # Users can view their own permissions, admins can view anyone's
     if user_key != auth_payload.get('user_key'):
-        user_roles = auth_payload.get('roles', [])
-        if 'owner' not in user_roles and 'manager' not in user_roles and 'admin' not in user_roles:
+        user_role = auth_payload.get('role', '')
+        if user_role not in ['owner', 'manager', 'admin']:
             return jsonify({'error': 'Cannot view other users\' permissions'}), 403
 
     # Get user's role from users collection

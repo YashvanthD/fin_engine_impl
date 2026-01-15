@@ -9,7 +9,7 @@ class UserDTO:
     _cache = {}
     _CACHE_EXPIRY_SECONDS = 86400  # 1 day
 
-    def __init__(self, user_id=None, account_key=None, user_key=None, roles=None, refresh_tokens=None, settings=None, subscription=None, password=None, **kwargs):
+    def __init__(self, user_id=None, account_key=None, user_key=None, role=None, authorities=None, refresh_tokens=None, settings=None, subscription=None, password=None, **kwargs):
         # Allow user_id to be optional for backward/DB compatibility; other fields default to None
         self.user_id = user_id
         self.account_key = account_key
@@ -21,7 +21,11 @@ class UserDTO:
         if self.user_key is None and 'user_key' in kwargs:
             self.user_key = kwargs.get('user_key')
 
-        self.roles = roles or []
+        # Role is a single string
+        self.role = role or 'user'
+
+        # Authorities are special permissions beyond the role
+        self.authorities = authorities if isinstance(authorities, list) else []
         self._refresh_tokens = refresh_tokens or []
         self._refresh_token_cache = set(self._refresh_tokens)
         self.settings = settings or {}
@@ -68,7 +72,8 @@ class UserDTO:
             'user_id': str(self.user_id) if self.user_id is not None else None,
             'account_key': self.account_key,
             'user_key': self.user_key,
-            'roles': self.roles,
+            'role': self.role,
+            'authorities': self.authorities,
             'refresh_tokens': self._refresh_tokens,
             'last_update': int(self._last_activity),
             'last_active': int(self._last_activity),
@@ -94,7 +99,7 @@ class UserDTO:
         raise AttributeError(f"'UserDTO' object has no attribute '{item}'")
 
     def __setattr__(self, key, value):
-        if key in {'user_id', 'account_key', 'user_key', 'roles', '_refresh_tokens', '_refresh_token_cache', '_extra_fields', '_last_activity', 'settings', 'subscription', 'password'}:
+        if key in {'user_id', 'account_key', 'user_key', 'role', 'authorities', '_refresh_tokens', '_refresh_token_cache', '_extra_fields', '_last_activity', 'settings', 'subscription', 'password'}:
             super().__setattr__(key, value)
         else:
             self._extra_fields[key] = value

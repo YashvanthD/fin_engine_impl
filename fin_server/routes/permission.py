@@ -6,6 +6,7 @@ Endpoints for:
 - Manage assigned ponds
 """
 from flask import Blueprint, request, jsonify, g
+import logging
 
 from fin_server.security.decorators import require_auth, require_admin
 from fin_server.services.permission_service import get_permission_service
@@ -13,6 +14,8 @@ from fin_server.services.permission_service import get_permission_service
 permission_bp = Blueprint('permission', __name__, url_prefix='/permission')
 
 service = get_permission_service()
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -121,6 +124,10 @@ def check_permission():
     """
     data = request.get_json() or {}
     user = g.current_user
+
+    account_key = request.headers.get('account_key')
+    user_key = request.headers.get('user_key')
+    logger.info(f"Checking permissions for account_key={account_key}, user_key={user_key}, data={data}")
 
     # Single check
     if 'feature' in data:

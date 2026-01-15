@@ -18,6 +18,8 @@ def create_bank_account_for_user(user_doc: Dict[str, Any], account_type: str = '
     Returns the inserted_id.
     """
     bank_accounts = get_collection('bank_accounts')
+    if bank_accounts is None:
+        raise ValueError("The 'bank_accounts' collection could not be retrieved. Ensure the database is properly configured.")
     # If a bank account for this user already exists, raise an error (do not create duplicate)
     user_key = user_doc.get('user_key')
     try:
@@ -54,6 +56,8 @@ def ensure_organization_account(account_key: str, account_name: Optional[str] = 
     Returns the bank account doc or inserted_id.
     """
     bank_accounts = get_collection('bank_accounts')
+    if bank_accounts is None:
+        raise ValueError("The 'bank_accounts' collection could not be retrieved. Ensure the database is properly configured.")
     # try find
     try:
         existing = bank_accounts.find_one({'account_key': account_key, 'type': 'organization'})

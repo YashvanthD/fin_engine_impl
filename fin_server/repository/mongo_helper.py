@@ -94,11 +94,19 @@ class MongoRepo:
 
         # Initialize database references (may be None if client not connected)
         if self._client:
-            self.user_db = self._client[self.user_db_name]
-            self.media_db = self._client[self.media_db_name]
-            self.expenses_db = self._client[self.expenses_db_name]
-            self.fish_db = self._client[self.fish_db_name]
-            self.analytics_db = self._client[self.analytics_db_name]
+            try:
+                self.user_db = self._client[self.user_db_name]
+                self.media_db = self._client[self.media_db_name]
+                self.expenses_db = self._client[self.expenses_db_name]
+                self.fish_db = self._client[self.fish_db_name]
+                self.analytics_db = self._client[self.analytics_db_name]
+            except Exception as e:
+                logger.error(f"Failed to initialize one or more databases: {e}")
+                self.user_db = None
+                self.media_db = None
+                self.expenses_db = None
+                self.fish_db = None
+                self.analytics_db = None
         else:
             self.user_db = None
             self.media_db = None
@@ -130,7 +138,18 @@ class MongoRepo:
 
         # EXPENSE/TRANSACTION DB REPOSITORIES
         self.expenses: Any = None
-        self.transactions: Any = None
+        self.fin_accounts = None
+        self.bank_accounts = None
+        self.payment_methods = None
+        self.transactions = None
+        self.payments = None
+        self.bank_statements = None
+        self.statement_lines = None
+        self.reconciliations = None
+        self.expense_claims = None
+        self.approvals = None
+        self.settlement_batches = None
+        self.audit_logs = None
         self.feeding: Any = None
 
         if self._client:
@@ -159,11 +178,19 @@ class MongoRepo:
         self.fish_db_name = config.FISH_DB_NAME
         self.analytics_db_name = config.ANALYTICS_DB_NAME
 
-        self.user_db = self._client[self.user_db_name]
-        self.media_db = self._client[self.media_db_name]
-        self.expenses_db = self._client[self.expenses_db_name]
-        self.fish_db = self._client[self.fish_db_name]
-        self.analytics_db = self._client[self.analytics_db_name]
+        try:
+            self.user_db = self._client[self.user_db_name]
+            self.media_db = self._client[self.media_db_name]
+            self.expenses_db = self._client[self.expenses_db_name]
+            self.fish_db = self._client[self.fish_db_name]
+            self.analytics_db = self._client[self.analytics_db_name]
+        except Exception as e:
+            logger.error(f"Failed to initialize one or more databases: {e}")
+            self.user_db = None
+            self.media_db = None
+            self.expenses_db = None
+            self.fish_db = None
+            self.analytics_db = None
 
     def init_repositories(self):
         if not self._client:
@@ -203,8 +230,22 @@ class MongoRepo:
 
             # EXPENSE/TRANSACTION DB REPOSITORIES
             self.expenses = ExpensesRepository(self.expenses_db)
-            self.transactions = TransactionsRepository(self.expenses_db)
+            self.fin_accounts = self.expenses.fin_accounts
+            self.bank_accounts = self.expenses.bank_accounts
+            self.payment_methods = self.expenses.payment_methods
+            self.transactions = self.expenses.transactions
+            self.payments = self.expenses.payments
+            self.bank_statements = self.expenses.bank_statements
+            self.statement_lines = self.expenses.statement_lines
+            self.reconciliations = self.expenses.reconciliations
+            self.expense_claims = self.expenses.expense_claims
+            self.approvals = self.expenses.approvals
+            self.settlement_batches = self.expenses.settlement_batches
+            self.audit_logs = self.expenses.audit_logs
+
             self.feeding = FeedingRepository(self.expenses_db)
+
+
         except Exception as e:
             logger.error(f"Error initializing repositories: {e}")
             raise e

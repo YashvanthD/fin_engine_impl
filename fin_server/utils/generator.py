@@ -378,43 +378,64 @@ def derive_stock_id_from_dto(dto: dict) -> str:
     return generate_stock_id()
 
 
+def get_subscription_for_account(account_key: str):
+    """Fetch subscription details for the given account key from an admin user."""
+    try:
+        admin_doc = user_repo.find_one({
+            'account_key': account_key,
+            'role': 'admin'
+        })
+        if admin_doc and 'subscription' in admin_doc:
+            return admin_doc['subscription']
+    except Exception:
+        pass
+    return default_subscription()
+
+
+
 def build_user(data, account_key=None):
     user_data = data.copy()
     user_data['account_key'] = account_key if account_key else ensure_unique_account_key()
     # If account_key is provided, try to fetch admin's subscription
-    admin_subscription = None
-    if account_key:
-        admin_doc = user_repo.find_one({
-            'account_key': account_key,
-            'roles': {'$in': ['admin']}
-        })
-        if admin_doc and 'subscription' in admin_doc:
-            admin_subscription = admin_doc['subscription']
     # Use the new unique user key generator
     user_data['user_key'] = ensure_unique_user_key()
+
+    subscription = get_subscription_for_account(account_key)
+
+    # Role is a single string value
+    role = user_data.get('role', 'user')
+    user_data['role'] = role
+
+    # Authorities are special permissions granted beyond the role
+    authorities = user_data.get('authorities', [])
+    if not isinstance(authorities, list):
+        authorities = []
+    user_data['authorities'] = authorities
+
     # Set permission level based on role
-    roles = user_data.get('roles', ['user'])
-    if isinstance(roles, str):
-        roles = [roles]
-    if 'admin' in roles:
-        # Require company_name for admin
-        company_name = user_data.get('company_name')
-        if not company_name:
-            raise ValueError('company_name is required for admin signup')
-        user_data['company_name'] = company_name
+    if role in ['admin', 'owner']:
+        if role == 'admin':
+            company_name = user_data.get('company_name')
+            if not company_name:
+                raise ValueError('company_name is required for admin signup')
+            user_data['company_name'] = company_name
         user_data['permission'] = {'level': 'admin', 'granted': True}
+    elif role == 'manager':
+        user_data['permission'] = {'level': 'manager', 'granted': True}
     else:
         user_data['permission'] = {'level': 'user', 'granted': True}
+
     user_data['joined_date'] = get_current_timestamp()
     # Use admin's subscription if available, else default
-    user_data['subscription'] = admin_subscription if admin_subscription else default_subscription()
+    user_data['subscription'] = subscription if subscription else default_subscription()
     if 'password' in user_data:
         user_data['password'] = base64.b64encode(user_data['password'].encode('utf-8')).decode('utf-8')
     refresh_payload = {
         'user_key': user_data['user_key'],
         'account_key': user_data['account_key'],
         'permission': user_data['permission'],
-        'roles': user_data.get('roles', ['user']),
+        'role': user_data['role'],
+        'authorities': user_data['authorities'],
         'type': 'refresh'
     }
     refresh_token = AuthSecurity.create_refresh_token(refresh_payload)
@@ -427,7 +448,8 @@ def build_refresh(user_data):
         'user_key': user_data['user_key'],
         'account_key': user_data['account_key'],
         'permission': user_data['permission'],
-        'roles': user_data.get('roles', []),
+        'role': user_data.get('role', 'user'),
+        'authorities': user_data.get('authorities', []),
         'type': 'refresh'
     }
     refresh_token = AuthSecurity.create_refresh_token(refresh_payload)

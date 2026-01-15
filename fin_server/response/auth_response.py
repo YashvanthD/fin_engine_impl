@@ -3,7 +3,8 @@ def build_user_response(user_dto, access_token=None, refresh_token=None):
         'success': True,
         'user_key': user_dto.user_key,
         'account_key': user_dto.account_key,
-        'roles': user_dto.roles,
+        'role': user_dto.role,
+        'authorities': user_dto.authorities,
         'settings': user_dto.settings,
         'subscription': user_dto.subscription
     }

@@ -212,7 +212,8 @@ class PermissionService:
 
             # Set True values
             for flag, value in true_flags.items():
-                update_ops['$set'][f'permissions.{feature}.{flag}'] = value
+                # Convert boolean values to strings to match expected types
+                update_ops['$set'][f'permissions.{feature}.{flag}'] = str(value)
 
             # Unset False values (remove from DB)
             if false_flags:
@@ -340,7 +341,8 @@ class PermissionService:
 
                 for flag, value in flags.items():
                     if value is True:
-                        set_ops[f'permissions.{feature}.{flag}'] = True
+                        # Convert boolean values to strings to match expected types
+                        set_ops[f'permissions.{feature}.{flag}'] = str(True)
                     elif value is False:
                         unset_ops[f'permissions.{feature}.{flag}'] = ""
 
@@ -439,6 +441,27 @@ class PermissionService:
     def get_permission_template(self) -> Dict[str, Any]:
         """Get the permission template (for reference)."""
         return copy.deepcopy(PERMISSION_TEMPLATE)
+
+    def get_permission_by_user_key_and_account_key(self, user_key: str, account_key: str, permission: str, role: str = None) -> bool:
+        """Check if a specific permission exists for a user in an account."""
+        permissions = self.get_user_permissions(user_key, account_key, role="user")
+        return permissions.get(permission, {}).get('enabled', False)
+
+    def is_dynamic_valid_permission(self, user_key: str, account_key: str, permission: str, role: str = None) -> bool:
+        """Dynamically validate if a user has a specific permission."""
+        try:
+            return self.is_admin(role)
+            return self.get_permission_by_user_key_and_account_key(user_key, account_key, permission)
+        except Exception as e:
+            logger.exception(f"Error validating dynamic permission: {e}")
+            return False
+
+    def is_admin(self, role):
+        """Check if the service is running with admin privileges."""
+        # Placeholder for actual admin check logic
+        if role != 'admin' and role != 'owner':
+            return False
+        return True
 
 
 # Singleton

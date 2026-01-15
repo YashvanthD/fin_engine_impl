@@ -65,6 +65,7 @@ def require_auth(func: Callable) -> Callable:
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         payload = get_auth_payload(request)
+        logger.debug(f"Auth payload: {payload}")
         kwargs['auth_payload'] = payload
         return func(*args, **kwargs)
     return wrapper
@@ -83,10 +84,10 @@ def require_role(*required_roles: str) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             payload = get_auth_payload(request)
-            user_roles = payload.get('roles', [])
+            user_role = payload.get('role', '')
 
-            if not any(role in user_roles for role in required_roles):
-                logger.warning("Access denied: required roles %s, user has %s", required_roles, user_roles)
+            if user_role not in required_roles:
+                logger.warning("Access denied: required roles %s, user has %s", required_roles, user_role)
                 return respond_error('Insufficient permissions', status=403)
 
             kwargs['auth_payload'] = payload
