@@ -11,7 +11,7 @@ from flask import Blueprint, request, jsonify
 from fin_server.utils.decorators import handle_errors, require_auth, require_admin, require_owner
 from fin_server.services.role_service import get_role_service
 
-role_bp = Blueprint('role', __name__, url_prefix='/role')
+role_bp = Blueprint('role', __name__, url_prefix='/api/role')
 
 role_service = get_role_service()
 

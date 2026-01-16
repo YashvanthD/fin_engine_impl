@@ -4,7 +4,7 @@ from fin_server.dto.fish_dto import FishDTO
 from fin_server.repository.mongo_helper import get_collection, MongoRepo
 from fin_server.utils.helpers import respond_error, respond_success
 
-public_bp = Blueprint('public', __name__, url_prefix='/public')
+public_bp = Blueprint('public', __name__, url_prefix='/api/public')
 
 
 # =============================================================================

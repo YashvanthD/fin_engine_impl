@@ -6,7 +6,7 @@
     {
       "id": "expenses-list",
       "method": "GET",
-      "path": "/expenses",
+      "path": "/api/expenses",
       "summary": "List expenses",
       "auth": true,
       "tags": ["expenses", "list"],
@@ -41,7 +41,7 @@
     {
       "id": "expenses-create",
       "method": "POST",
-      "path": "/expenses",
+      "path": "/api/expenses",
       "summary": "Create expense record",
       "auth": true,
       "tags": ["expenses", "create"],
@@ -71,7 +71,7 @@
     {
       "id": "expenses-get",
       "method": "GET",
-      "path": "/expenses/{expense_id}",
+      "path": "/api/expenses/{expense_id}",
       "summary": "Get expense details",
       "auth": true,
       "tags": ["expenses"],
@@ -88,7 +88,7 @@
     {
       "id": "expenses-update",
       "method": "PUT",
-      "path": "/expenses/{expense_id}",
+      "path": "/api/expenses/{expense_id}",
       "summary": "Update expense",
       "auth": true,
       "tags": ["expenses"],
@@ -110,7 +110,7 @@
     {
       "id": "expenses-delete",
       "method": "DELETE",
-      "path": "/expenses/{expense_id}",
+      "path": "/api/expenses/{expense_id}",
       "summary": "Delete expense",
       "auth": true,
       "tags": ["expenses"],
@@ -126,7 +126,7 @@
     {
       "id": "expenses-summary",
       "method": "GET",
-      "path": "/expenses/summary",
+      "path": "/api/expenses/summary",
       "summary": "Get expense summary by category",
       "auth": true,
       "tags": ["expenses", "summary"],

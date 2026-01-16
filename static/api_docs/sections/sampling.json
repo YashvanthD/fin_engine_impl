@@ -6,7 +6,7 @@
     {
       "id": "sampling-list",
       "method": "GET",
-      "path": "/sampling",
+      "path": "/api/sampling",
       "summary": "List sampling records",
       "description": "Get sampling records with optional filters.",
       "auth": true,
@@ -42,7 +42,7 @@
     {
       "id": "sampling-create",
       "method": "POST",
-      "path": "/sampling",
+      "path": "/api/sampling",
       "summary": "Create a sampling record",
       "description": "Record a new fish sampling.",
       "auth": true,
@@ -72,7 +72,7 @@
     {
       "id": "sampling-get",
       "method": "GET",
-      "path": "/sampling/{id}",
+      "path": "/api/sampling/{id}",
       "summary": "Get a sampling record",
       "description": "Get details of a specific sampling record.",
       "auth": true,
@@ -88,7 +88,7 @@
     {
       "id": "sampling-buy",
       "method": "POST",
-      "path": "/sampling/buy",
+      "path": "/api/sampling/buy",
       "summary": "Record a fish purchase (buy)",
       "description": "Record buying fish and adding to a pond. Creates sampling record and expense.",
       "auth": true,
@@ -134,7 +134,7 @@
     {
       "id": "sampling-growth",
       "method": "GET",
-      "path": "/sampling/growth/{pond_id}",
+      "path": "/api/sampling/growth/{pond_id}",
       "summary": "Get growth data for a pond",
       "description": "Get growth analytics and trends for a specific pond.",
       "auth": true,

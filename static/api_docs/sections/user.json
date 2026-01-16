@@ -1,27 +1,67 @@
 {
   "id": "user",
   "name": "User Management",
-  "description": "User profile and account management endpoints.",
+  "description": "User profile, settings, and account management endpoints. All endpoints are under /api/user/*",
+  "baseUrl": "/api/user",
   "endpoints": [
     {
-      "id": "user-profile-get",
+      "id": "user-me",
       "method": "GET",
-      "path": "/user/profile",
-      "summary": "Get user profile",
+      "path": "/api/user/me",
+      "summary": "Get current user info",
+      "description": "Get the current authenticated user's basic information including role, settings, and subscription.",
       "auth": true,
       "tags": ["profile"],
       "request": {},
       "responses": {
         "200": {
+          "description": "User info retrieved",
           "example": {
             "success": true,
             "data": {
               "user_key": "usr_abc123",
-              "email": "user@example.com",
-              "name": "John Doe",
-              "phone": "+1234567890",
+              "account_key": "acc_xyz789",
               "role": "admin",
-              "created_at": "2026-01-01T00:00:00Z"
+              "authorities": ["VIEW_ALL_USERS"],
+              "settings": {"timezone": "UTC"},
+              "subscription": {"subscription_type": "free"},
+              "user": {
+                "email": "user@example.com",
+                "name": "John Doe"
+              }
+            }
+          }
+        },
+        "401": {"description": "User is logged out"},
+        "404": {"description": "User not found"}
+      }
+    },
+    {
+      "id": "user-profile-get",
+      "method": "GET",
+      "path": "/api/user/profile",
+      "summary": "Get user profile",
+      "description": "Get the current user's detailed profile information.",
+      "auth": true,
+      "tags": ["profile"],
+      "request": {},
+      "responses": {
+        "200": {
+          "description": "Profile retrieved",
+          "example": {
+            "success": true,
+            "data": {
+              "user": {
+                "id": "usr_abc123",
+                "user_key": "usr_abc123",
+                "email": "user@example.com",
+                "name": "John Doe",
+                "phone": "+1234567890",
+                "role": "admin",
+                "authorities": [],
+                "createdAt": "2026-01-01T00:00:00Z",
+                "lastLogin": "2026-01-15T10:30:00Z"
+              }
             }
           }
         }
@@ -30,50 +70,307 @@
     {
       "id": "user-profile-update",
       "method": "PUT",
-      "path": "/user/profile",
+      "path": "/api/user/profile",
       "summary": "Update user profile",
+      "description": "Update the current user's profile fields.",
       "auth": true,
       "tags": ["profile"],
       "request": {
         "contentType": "application/json",
         "body": {
-          "name": {"type": "string", "required": false},
-          "phone": {"type": "string", "required": false},
-          "avatar_url": {"type": "string", "required": false}
+          "first_name": {"type": "string", "required": false, "description": "First name"},
+          "last_name": {"type": "string", "required": false, "description": "Last name"},
+          "dob": {"type": "string", "required": false, "description": "Date of birth"},
+          "address1": {"type": "string", "required": false, "description": "Address line 1"},
+          "address2": {"type": "string", "required": false, "description": "Address line 2"},
+          "pincode": {"type": "string", "required": false, "description": "Postal code"},
+          "timezone": {"type": "string", "required": false, "description": "Timezone"}
         },
         "example": {
-          "name": "John Doe",
-          "phone": "+1234567890",
-          "avatar_url": "https://..."
+          "first_name": "John",
+          "last_name": "Doe",
+          "timezone": "America/New_York"
         }
       },
       "responses": {
-        "200": {"description": "Profile updated"}
+        "200": {"description": "Profile updated", "example": {"success": true, "data": {"message": "Profile updated"}}}
       }
     },
     {
       "id": "user-password",
       "method": "PUT",
-      "path": "/user/password",
+      "path": "/api/user/password",
       "summary": "Change password",
+      "description": "Change the current user's password.",
       "auth": true,
       "tags": ["password", "security"],
       "request": {
         "contentType": "application/json",
         "body": {
-          "current_password": {"type": "string", "required": true},
-          "new_password": {"type": "string", "required": true, "description": "Min 8 characters"}
+          "old_password": {"type": "string", "required": true, "description": "Current password"},
+          "new_password": {"type": "string", "required": true, "description": "New password (min 8 characters)"}
         },
         "example": {
-          "current_password": "oldpassword",
-          "new_password": "newpassword"
+          "old_password": "oldpassword",
+          "new_password": "newpassword123"
         }
       },
       "responses": {
-        "200": {"description": "Password changed"},
-        "401": {"description": "Current password incorrect"}
+        "200": {"description": "Password changed", "example": {"success": true, "data": {"message": "Password updated"}}},
+        "400": {"description": "Old password is incorrect or missing fields"}
+      }
+    },
+    {
+      "id": "user-logout",
+      "method": "POST",
+      "path": "/api/user/logout",
+      "summary": "Logout user",
+      "description": "Logout the current user by clearing all refresh tokens.",
+      "auth": true,
+      "tags": ["logout"],
+      "request": {},
+      "responses": {
+        "200": {"description": "Logged out", "example": {"success": true, "data": {"message": "Logged out"}}}
+      }
+    },
+    {
+      "id": "user-settings-get",
+      "method": "GET",
+      "path": "/api/user/settings",
+      "summary": "Get user settings",
+      "description": "Get the current user's settings and subscription information.",
+      "auth": true,
+      "tags": ["settings"],
+      "request": {},
+      "responses": {
+        "200": {
+          "description": "Settings retrieved",
+          "example": {
+            "success": true,
+            "data": {
+              "user_key": "usr_abc123",
+              "account_key": "acc_xyz789",
+              "settings": {"timezone": "UTC", "notifications": {"email": true}},
+              "subscription": {"subscription_type": "free"}
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "user-settings-update",
+      "method": "PUT",
+      "path": "/api/user/settings",
+      "summary": "Update user settings",
+      "description": "Update the current user's settings.",
+      "auth": true,
+      "tags": ["settings"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "settings": {"type": "object", "required": true, "description": "Settings object"}
+        },
+        "example": {
+          "settings": {"timezone": "America/New_York", "notifications": {"email": true, "push": false}}
+        }
+      },
+      "responses": {
+        "200": {"description": "Settings updated", "example": {"success": true, "data": {"message": "Settings updated"}}}
+      }
+    },
+    {
+      "id": "user-settings-notifications",
+      "method": "PUT",
+      "path": "/api/user/settings/notifications",
+      "summary": "Update notification settings",
+      "description": "Update the current user's notification preferences.",
+      "auth": true,
+      "tags": ["settings", "notifications"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "notifications": {"type": "object", "required": true, "description": "Notification settings"}
+        },
+        "example": {
+          "notifications": {"email": true, "push": true, "sms": false}
+        }
+      },
+      "responses": {
+        "200": {"description": "Notification settings updated"}
+      }
+    },
+    {
+      "id": "user-settings-help",
+      "method": "PUT",
+      "path": "/api/user/settings/help_support",
+      "summary": "Update help & support settings",
+      "description": "Update the current user's help and support preferences.",
+      "auth": true,
+      "tags": ["settings"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "help_support": {"type": "object", "required": true, "description": "Help & support settings"}
+        },
+        "example": {
+          "help_support": {"show_tips": true, "contact_preference": "email"}
+        }
+      },
+      "responses": {
+        "200": {"description": "Help & support updated"}
+      }
+    },
+    {
+      "id": "user-list",
+      "method": "GET",
+      "path": "/api/user/list",
+      "summary": "List all users in account",
+      "description": "List all users in the current account. Optionally include phone numbers.",
+      "auth": true,
+      "tags": ["users", "admin"],
+      "queryParams": {
+        "phone": {"type": "boolean", "required": false, "description": "Include phone numbers in response", "default": false}
+      },
+      "request": {},
+      "responses": {
+        "200": {
+          "description": "Users list",
+          "example": {
+            "success": true,
+            "data": {
+              "users": [
+                {"id": "usr_abc123", "user_key": "usr_abc123", "email": "admin@example.com", "name": "John Doe", "role": "admin"},
+                {"id": "usr_def456", "user_key": "usr_def456", "email": "worker@example.com", "name": "Jane Smith", "role": "worker"}
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "user-get",
+      "method": "GET",
+      "path": "/api/user/{user_id}",
+      "summary": "Get a specific user",
+      "description": "Get detailed information about a specific user by their ID.",
+      "auth": true,
+      "tags": ["users"],
+      "pathParams": {
+        "user_id": {"type": "string", "required": true, "description": "User ID or user_key"}
+      },
+      "request": {},
+      "responses": {
+        "200": {
+          "description": "User details",
+          "example": {
+            "success": true,
+            "data": {
+              "user": {
+                "id": "usr_abc123",
+                "user_key": "usr_abc123",
+                "email": "user@example.com",
+                "name": "John Doe",
+                "role": "admin"
+              }
+            }
+          }
+        },
+        "404": {"description": "User not found"}
+      }
+    },
+    {
+      "id": "user-create",
+      "method": "POST",
+      "path": "/api/user/",
+      "summary": "Create a new user (admin only)",
+      "description": "Create a new user in the current account. Requires admin role.",
+      "auth": true,
+      "tags": ["users", "admin"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "email": {"type": "string", "required": true, "description": "User email address"},
+          "password": {"type": "string", "required": true, "description": "User password"},
+          "name": {"type": "string", "required": true, "description": "Full name"},
+          "role": {"type": "string", "required": true, "description": "User role (admin, manager, supervisor, worker)"},
+          "phone": {"type": "string", "required": false, "description": "Phone number"},
+          "authorities": {"type": "array", "required": false, "description": "Additional permissions"}
+        },
+        "example": {
+          "email": "newuser@example.com",
+          "password": "password123",
+          "name": "New User",
+          "role": "worker",
+          "phone": "+1234567890"
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "User created",
+          "example": {
+            "success": true,
+            "data": {
+              "user": {
+                "id": "usr_ghi789",
+                "user_key": "usr_ghi789",
+                "email": "newuser@example.com",
+                "name": "New User",
+                "role": "worker"
+              }
+            }
+          }
+        },
+        "400": {"description": "Validation error"},
+        "403": {"description": "Admin role required"}
+      }
+    },
+    {
+      "id": "user-update",
+      "method": "PUT",
+      "path": "/api/user/{user_id}",
+      "summary": "Update a user",
+      "description": "Update a user's information. Also supports PATCH method.",
+      "auth": true,
+      "tags": ["users"],
+      "pathParams": {
+        "user_id": {"type": "string", "required": true, "description": "User ID or user_key"}
+      },
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "name": {"type": "string", "required": false, "description": "Full name"},
+          "phone": {"type": "string", "required": false, "description": "Phone number"},
+          "role": {"type": "string", "required": false, "description": "User role"},
+          "authorities": {"type": "array", "required": false, "description": "Additional permissions"}
+        },
+        "example": {
+          "name": "Updated Name",
+          "role": "manager"
+        }
+      },
+      "responses": {
+        "200": {"description": "User updated", "example": {"success": true, "data": {"updated": true, "user_key": "usr_abc123"}}},
+        "404": {"description": "User not found"}
+      }
+    },
+    {
+      "id": "user-delete",
+      "method": "DELETE",
+      "path": "/api/user/{user_id}",
+      "summary": "Delete a user (admin only)",
+      "description": "Delete a user from the account. Requires admin role. Cannot delete yourself.",
+      "auth": true,
+      "tags": ["users", "admin"],
+      "pathParams": {
+        "user_id": {"type": "string", "required": true, "description": "User ID or user_key"}
+      },
+      "request": {},
+      "responses": {
+        "200": {"description": "User deleted", "example": {"success": true, "data": {"deleted": true, "user_key": "usr_abc123"}}},
+        "400": {"description": "Cannot delete yourself"},
+        "403": {"description": "Admin role required"},
+        "404": {"description": "User not found"}
       }
     }
   ]
 }
-

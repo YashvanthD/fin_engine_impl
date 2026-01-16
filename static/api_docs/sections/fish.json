@@ -6,7 +6,7 @@
     {
       "id": "fish-list",
       "method": "GET",
-      "path": "/fish",
+      "path": "/api/fish",
       "summary": "List all fish species",
       "auth": true,
       "tags": ["fish", "list"],
@@ -36,7 +36,7 @@
     {
       "id": "fish-create",
       "method": "POST",
-      "path": "/fish",
+      "path": "/api/fish",
       "summary": "Add a new fish species",
       "auth": true,
       "tags": ["fish", "create"],
@@ -63,7 +63,7 @@
     {
       "id": "fish-get",
       "method": "GET",
-      "path": "/fish/{species_code}",
+      "path": "/api/fish/{species_code}",
       "summary": "Get fish species details",
       "auth": true,
       "tags": ["fish"],
@@ -80,7 +80,7 @@
     {
       "id": "fish-update",
       "method": "PUT",
-      "path": "/fish/{species_code}",
+      "path": "/api/fish/{species_code}",
       "summary": "Update fish species",
       "auth": true,
       "tags": ["fish"],
@@ -102,7 +102,7 @@
     {
       "id": "fish-delete",
       "method": "DELETE",
-      "path": "/fish/{species_code}",
+      "path": "/api/fish/{species_code}",
       "summary": "Remove fish species",
       "auth": true,
       "tags": ["fish"],
@@ -118,7 +118,7 @@
     {
       "id": "fish-analytics-all",
       "method": "GET",
-      "path": "/fish/analytics",
+      "path": "/api/fish/analytics",
       "summary": "Get analytics for all fish",
       "description": "Get aggregated analytics for all fish species mapped to the current account.",
       "auth": true,
@@ -160,7 +160,7 @@
     {
       "id": "fish-analytics",
       "method": "GET",
-      "path": "/fish/{species_id}/analytics",
+      "path": "/api/fish/{species_id}/analytics",
       "summary": "Get analytics for a specific fish species",
       "description": "Get detailed growth and population analytics for a specific fish species.",
       "auth": true,
@@ -203,7 +203,7 @@
     {
       "id": "fish-fields",
       "method": "GET",
-      "path": "/fish/fields",
+      "path": "/api/fish/fields",
       "summary": "Get available fish fields",
       "description": "Get a list of all available fields/attributes for fish entities.",
       "auth": true,
@@ -223,7 +223,7 @@
     {
       "id": "fish-distinct",
       "method": "GET",
-      "path": "/fish/distinct/{field}",
+      "path": "/api/fish/distinct/{field}",
       "summary": "Get distinct values for a field",
       "description": "Get all distinct values for a specific fish field.",
       "auth": true,
@@ -249,7 +249,7 @@
     {
       "id": "fish-stats",
       "method": "GET",
-      "path": "/fish/stats/{field}",
+      "path": "/api/fish/stats/{field}",
       "summary": "Get statistics for a field",
       "description": "Get statistical information (min, max, avg, count) for a specific fish field.",
       "auth": true,
@@ -280,7 +280,7 @@
     {
       "id": "fish-batch-add",
       "method": "POST",
-      "path": "/fish",
+      "path": "/api/fish",
       "summary": "Add a batch of fish to an existing species",
       "description": "Add a batch of fish (count) to an existing species with age information. This updates fish analytics.",
       "auth": true,

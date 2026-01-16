@@ -13,7 +13,7 @@ from fin_server.utils.validation import compute_total_amount_from_payload
 from fin_server.services.sampling_service import perform_buy_sampling
 from fin_server.services.expense_service import handle_sampling_deletion
 
-sampling_bp = Blueprint('sampling', __name__, url_prefix='/sampling')
+sampling_bp = Blueprint('sampling', __name__, url_prefix='/api/sampling')
 
 sampling_repo = get_collection('sampling')
 pond_repo = get_collection('pond')

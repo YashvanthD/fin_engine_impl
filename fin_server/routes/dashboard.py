@@ -16,7 +16,7 @@ from fin_server.utils.helpers import respond_success, respond_error, normalize_d
 logger = logging.getLogger(__name__)
 
 # Blueprint
-dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/dashboard')
+dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/api/dashboard')
 
 # API Blueprint for /api prefix
 dashboard_api_bp = Blueprint('dashboard_api', __name__, url_prefix='/api')

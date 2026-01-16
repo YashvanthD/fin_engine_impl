@@ -5,6 +5,8 @@ This module provides endpoints for:
 - Login with credentials or refresh token
 - Token generation and refresh
 - User settings and subscriptions
+
+All endpoints are under /api/auth/*
 """
 import logging
 
@@ -30,8 +32,8 @@ from fin_server.utils.decorators import handle_errors, require_auth
 logger = logging.getLogger(__name__)
 
 
-# Blueprint for auth routes
-auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
+# Single Blueprint for all auth routes
+auth_bp = Blueprint('auth', __name__, url_prefix='/api/auth')
 
 # Module-level repository
 user_repo = get_collection('users')
@@ -45,7 +47,7 @@ user_repo = get_collection('users')
 @handle_errors
 def signup():
     """Create the first admin user and company account."""
-    logger.info("Signup endpoint called")
+    logger.info("POST /api/auth/signup called")
     data = request.get_json(force=True)
 
     # Validate master password if provided
@@ -85,7 +87,7 @@ def signup():
 @handle_errors
 def signup_user(account_key):
     """Create additional users in an existing account (admin only)."""
-    logger.info("Account signup endpoint called for account_key: %s", account_key)
+    logger.info(f"POST /api/auth/account/{account_key}/signup called")
 
     # Validate admin token
     auth_header = request.headers.get('Authorization')
@@ -130,12 +132,12 @@ def signup_user(account_key):
 @handle_errors
 def login():
     """Login with username/email/phone and password."""
-    logger.info("Login endpoint called")
+    logger.info("POST /api/auth/login called")
     data = request.get_json(force=True)
 
     account_key = data.get('account_key')
     user_key = data.get('user_key')
-    logger.info(f"Login attempt for account_key={account_key}, user_key={user_key}")
+    logger.info(f"Login attempt | account_key: {account_key}, user_key: {user_key}")
 
     response, status = handle_login(
         username=data.get('username'),
@@ -153,7 +155,7 @@ def login():
 @handle_errors
 def generate_token():
     """Generate access or refresh tokens."""
-    logger.info("Token generation endpoint called")
+    logger.info("POST /api/auth/token called")
     data = request.get_json(force=True)
 
     token_type = data.get('type', 'access_token')
@@ -202,6 +204,39 @@ def generate_token():
     return respond_success(response, status=status, do_sanitize=False)
 
 
+@auth_bp.route('/refresh', methods=['POST'])
+@handle_errors
+def refresh_token():
+    """Refresh access token using refresh token."""
+    logger.info("POST /api/auth/refresh called")
+    data = request.get_json(force=True)
+    refresh_token = data.get('refreshToken') or data.get('refresh_token') or data.get('token')
+
+    if not refresh_token:
+        return respond_error('Missing refreshToken', status=400)
+
+    payload = AuthSecurity.decode_token(refresh_token)
+    user_key = payload.get('user_key')
+
+    user = user_repo.find_one({'user_key': user_key})
+    if not user:
+        return respond_error('User not found', status=404)
+
+    if not AuthSecurity.validate_refresh_token(user_repo, 'users', user_key, refresh_token):
+        return respond_error('Invalid or expired refresh token', status=401)
+
+    access_token = AuthSecurity.encode_token({
+        'user_key': user_key,
+        'account_key': user.get('account_key'),
+        'role': user.get('role', 'user'),
+        'authorities': user.get('authorities', []),
+        'type': 'access'
+    })
+
+    logger.info(f"Token refreshed for user_key: {user_key}")
+    return respond_success({'accessToken': access_token}, status=200, do_sanitize=False)
+
+
 # =============================================================================
 # Logout Endpoint
 # =============================================================================
@@ -211,10 +246,9 @@ def generate_token():
 @require_auth
 def auth_logout(auth_payload):
     """Logout user by clearing refresh tokens."""
-    logger.info("/auth/logout called")
-
     user_key = auth_payload.get('user_key')
     account_key = auth_payload.get('account_key')
+    logger.info(f"POST /api/auth/logout | account_key: {account_key}, user_key: {user_key}")
 
     user_dto = UserDTO.find_by_user_key(user_key, account_key)
     if not user_dto:
@@ -233,48 +267,17 @@ def auth_logout(auth_payload):
 
 
 # =============================================================================
-# User Data Endpoints
+# Current User Endpoints
 # =============================================================================
 
-@auth_bp.route('/account/users', methods=['GET'])
+@auth_bp.route('/me', methods=['GET', 'POST'])
 @handle_errors
 @require_auth
-def list_account_users(auth_payload):
-    """List users in the current account."""
-    logger.info("List account users endpoint called")
-
+def auth_me(auth_payload):
+    """Return current authenticated user's info."""
     user_key = auth_payload.get('user_key')
     account_key = auth_payload.get('account_key')
-    role = auth_payload.get('role', 'user')
-    logger.info(f"List account users role={role}")
-    # Use the permission service to check dynamic permissions
-    permission_service = get_permission_service()
-    can_view_all_users = permission_service.get_permission_by_user_key_and_account_key(
-        user_key, account_key, 'VIEW_ALL_USERS', role
-    )
-
-    # Allow users with specific roles or dynamic permission to see all users
-    if role in ['manager', 'admin', 'owner'] or can_view_all_users:
-        user_list = UserDTO.find_many_by_account(account_key)
-        logger.info("Fetched %d users for account", len(user_list))
-        return respond_success({'users': user_list})
-
-    # Non-authorized users see only self
-    user_dto = UserDTO.find_by_user_key(user_key, account_key)
-    if not user_dto:
-        return respond_error('User not found', status=404)
-    return respond_success({'user': user_dto.to_dict()})
-
-
-@auth_bp.route('/validate', methods=['GET'])
-@handle_errors
-@require_auth
-def validate_token(auth_payload):
-    """Validate current access token."""
-    logger.info("Validate token endpoint called")
-
-    user_key = auth_payload.get('user_key')
-    account_key = auth_payload.get('account_key')
+    logger.info(f"GET/POST /api/auth/me | account_key: {account_key}, user_key: {user_key}")
 
     user_dto = UserDTO.find_by_user_key(user_key, account_key)
     if not user_dto:
@@ -283,15 +286,14 @@ def validate_token(auth_payload):
     return respond_success(_build_user_info_response(user_dto))
 
 
-@auth_bp.route('/me', methods=['GET'])
+@auth_bp.route('/validate', methods=['GET'])
 @handle_errors
 @require_auth
-def auth_me(auth_payload):
-    """Return current authenticated user's info."""
-    logger.info("/auth/me endpoint called")
-
+def validate_token(auth_payload):
+    """Validate current access token."""
     user_key = auth_payload.get('user_key')
     account_key = auth_payload.get('account_key')
+    logger.info(f"GET /api/auth/validate | account_key: {account_key}, user_key: {user_key}")
 
     user_dto = UserDTO.find_by_user_key(user_key, account_key)
     if not user_dto:
@@ -319,6 +321,39 @@ def _build_user_info_response(user_dto: UserDTO) -> dict:
 
 
 # =============================================================================
+# User List Endpoint
+# =============================================================================
+
+@auth_bp.route('/account/users', methods=['GET'])
+@handle_errors
+@require_auth
+def list_account_users(auth_payload):
+    """List users in the current account."""
+    user_key = auth_payload.get('user_key')
+    account_key = auth_payload.get('account_key')
+    role = auth_payload.get('role', 'user')
+    logger.info(f"GET /api/auth/account/users | account_key: {account_key}, user_key: {user_key}, role: {role}")
+
+    # Use the permission service to check dynamic permissions
+    permission_service = get_permission_service()
+    can_view_all_users = permission_service.get_permission_by_user_key_and_account_key(
+        user_key, account_key, 'VIEW_ALL_USERS', role
+    )
+
+    # Allow users with specific roles or dynamic permission to see all users
+    if role in ['manager', 'admin', 'owner'] or can_view_all_users:
+        user_list = UserDTO.find_many_by_account(account_key)
+        logger.info(f"Fetched {len(user_list)} users for account: {account_key}")
+        return respond_success({'users': user_list})
+
+    # Non-authorized users see only self
+    user_dto = UserDTO.find_by_user_key(user_key, account_key)
+    if not user_dto:
+        return respond_error('User not found', status=404)
+    return respond_success({'user': user_dto.to_dict()})
+
+
+# =============================================================================
 # Settings Endpoints
 # =============================================================================
 
@@ -326,11 +361,10 @@ def _build_user_info_response(user_dto: UserDTO) -> dict:
 @handle_errors
 @require_auth
 def user_settings(auth_payload):
-    """Get or update user settings (deprecated - use /user/settings)."""
-    logger.info("/auth/settings called (deprecated)")
-
+    """Get or update user settings."""
     user_key = auth_payload.get('user_key')
     account_key = auth_payload.get('account_key')
+    logger.info(f"GET/PUT /api/auth/settings | account_key: {account_key}, user_key: {user_key}")
 
     user_dto = UserDTO.find_by_user_key(user_key, account_key)
     if not user_dto:
@@ -354,11 +388,10 @@ def user_settings(auth_payload):
 @require_auth
 def get_user_permissions(auth_payload):
     """Get user permissions based on roles."""
-    logger.info("/auth/permissions called")
-
     user_key = auth_payload.get('user_key')
     account_key = auth_payload.get('account_key')
     role = auth_payload.get('role', 'user')
+    logger.info(f"GET /api/auth/permissions | account_key: {account_key}, user_key: {user_key}, role: {role}")
 
     user_dto = UserDTO.find_by_user_key(user_key, account_key)
     if not user_dto:
@@ -367,7 +400,6 @@ def get_user_permissions(auth_payload):
     # Get permissions from user document or derive from roles
     permissions = user_dto.to_dict().get('permissions') or user_dto.to_dict().get('actions') or []
 
-    # Build permission response
     return respond_success({
         'user_key': user_key,
         'role': role,
@@ -380,11 +412,10 @@ def get_user_permissions(auth_payload):
 @require_auth
 def user_subscriptions(auth_payload):
     """Get or update subscription info."""
-    logger.info("Subscriptions endpoint called")
-
     user_key = auth_payload.get('user_key')
     account_key = auth_payload.get('account_key')
     role = auth_payload.get('role', 'user')
+    logger.info(f"GET/PUT /api/auth/subscriptions | account_key: {account_key}, user_key: {user_key}")
 
     user_dto = UserDTO.find_by_user_key(user_key, account_key)
     if not user_dto:
@@ -401,7 +432,7 @@ def user_subscriptions(auth_payload):
                     dto.subscription = updated_subscription
                     dto.save()
 
-            logger.info("Subscription updated for account: %s", account_key)
+            logger.info(f"Subscription updated for account: {account_key}")
 
     # Build response based on role
     subscription = user_dto.subscription or {}
@@ -425,6 +456,9 @@ def user_subscriptions(auth_payload):
 @require_auth
 def get_company_name(account_key, auth_payload):
     """Get company name for an account."""
+    requester_user_key = auth_payload.get('user_key')
+    logger.info(f"GET /api/auth/account/{account_key}/company | user_key: {requester_user_key}")
+
     admin_doc = user_repo.find_one({
         'account_key': account_key,
         'roles': {'$in': ['admin']}
@@ -434,60 +468,3 @@ def get_company_name(account_key, auth_payload):
         return respond_success({'company_name': admin_doc['company_name']})
     return respond_error('Company not found', status=404)
 
-
-# =============================================================================
-# API Blueprint for Frontend Compatibility
-# =============================================================================
-
-auth_api_bp = Blueprint('auth_api', __name__, url_prefix='/api')
-
-
-@auth_api_bp.route('/auth/me', methods=['POST'])
-@handle_errors
-@require_auth
-def api_auth_me(auth_payload):
-    """API endpoint for /auth/me (POST variant)."""
-    user = user_repo.find_one({
-        'user_key': auth_payload.get('user_key'),
-        'account_key': auth_payload.get('account_key')
-    })
-
-    if not user:
-        return respond_error('User not found', status=404)
-
-    user_out = normalize_doc(user)
-    user_out['_id'] = str(user_out.get('_id'))
-    user_out['id'] = user_out.get('user_key') or user_out['_id']
-
-    return respond_success({'user': user_out})
-
-
-@auth_api_bp.route('/auth/refresh', methods=['POST'])
-@handle_errors
-def api_auth_refresh():
-    """API endpoint for token refresh."""
-    data = request.get_json(force=True)
-    refresh_token = data.get('refreshToken') or data.get('refresh_token') or data.get('token')
-
-    if not refresh_token:
-        return respond_error('Missing refreshToken', status=400)
-
-    payload = AuthSecurity.decode_token(refresh_token)
-    user_key = payload.get('user_key')
-
-    user = user_repo.find_one({'user_key': user_key})
-    if not user:
-        return respond_error('User not found', status=404)
-
-    if not AuthSecurity.validate_refresh_token(user_repo, 'users', user_key, refresh_token):
-        return respond_error('Invalid or expired refresh token', status=401)
-
-    access_token = AuthSecurity.encode_token({
-        'user_key': user_key,
-        'account_key': user.get('account_key'),
-        'role': user.get('role', 'user'),
-        'authorities': user.get('authorities', []),
-        'type': 'access'
-    })
-
-    return respond_success({'accessToken': access_token}, status=200, do_sanitize=False)

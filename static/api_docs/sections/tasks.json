@@ -6,7 +6,7 @@
     {
       "id": "tasks-list",
       "method": "GET",
-      "path": "/tasks",
+      "path": "/api/task",
       "summary": "List tasks",
       "auth": true,
       "tags": ["tasks", "list"],
@@ -41,7 +41,7 @@
     {
       "id": "tasks-create",
       "method": "POST",
-      "path": "/tasks",
+      "path": "/api/task",
       "summary": "Create a task",
       "auth": true,
       "tags": ["tasks", "create"],
@@ -70,7 +70,7 @@
     {
       "id": "tasks-get",
       "method": "GET",
-      "path": "/tasks/{task_id}",
+      "path": "/api/task/{task_id}",
       "summary": "Get task details",
       "auth": true,
       "tags": ["tasks"],
@@ -87,7 +87,7 @@
     {
       "id": "tasks-update",
       "method": "PUT",
-      "path": "/tasks/{task_id}",
+      "path": "/api/task/{task_id}",
       "summary": "Update task",
       "auth": true,
       "tags": ["tasks"],
@@ -110,7 +110,7 @@
     {
       "id": "tasks-delete",
       "method": "DELETE",
-      "path": "/tasks/{task_id}",
+      "path": "/api/task/{task_id}",
       "summary": "Delete task",
       "auth": true,
       "tags": ["tasks"],

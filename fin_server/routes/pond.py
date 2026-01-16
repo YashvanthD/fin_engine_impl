@@ -25,7 +25,7 @@ fish_analytics_class = get_collection('fish_analytics')
 pond_event_class = get_collection('pond_event')
 pond_repository = get_collection('pond')
 fish_mapping = get_collection('fish_mapping')
-pond_bp = Blueprint('pond', __name__, url_prefix='/pond')
+pond_bp = Blueprint('pond', __name__, url_prefix='/api/pond')
 IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
 
 @pond_bp.route('', methods=['OPTIONS'])

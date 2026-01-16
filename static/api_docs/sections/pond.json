@@ -6,7 +6,7 @@
     {
       "id": "pond-list",
       "method": "GET",
-      "path": "/pond",
+      "path": "/api/pond",
       "summary": "List all ponds",
       "auth": true,
       "tags": ["pond", "list"],
@@ -34,7 +34,7 @@
     {
       "id": "pond-create",
       "method": "POST",
-      "path": "/pond",
+      "path": "/api/pond",
       "summary": "Create a new pond",
       "auth": true,
       "tags": ["pond", "create"],
@@ -64,7 +64,7 @@
     {
       "id": "pond-get",
       "method": "GET",
-      "path": "/pond/{pond_id}",
+      "path": "/api/pond/{pond_id}",
       "summary": "Get pond details",
       "auth": true,
       "tags": ["pond"],
@@ -81,7 +81,7 @@
     {
       "id": "pond-update",
       "method": "PUT",
-      "path": "/pond/{pond_id}",
+      "path": "/api/pond/{pond_id}",
       "summary": "Update pond",
       "auth": true,
       "tags": ["pond"],
@@ -104,7 +104,7 @@
     {
       "id": "pond-delete",
       "method": "DELETE",
-      "path": "/pond/{pond_id}",
+      "path": "/api/pond/{pond_id}",
       "summary": "Delete pond",
       "auth": true,
       "tags": ["pond"],
@@ -120,7 +120,7 @@
     {
       "id": "pond-stock",
       "method": "POST",
-      "path": "/pond/{pond_id}/stock",
+      "path": "/api/pond/{pond_id}/stock",
       "summary": "Add fish stock to pond",
       "auth": true,
       "tags": ["pond", "stock"],
@@ -151,7 +151,7 @@
     {
       "id": "pond-harvest",
       "method": "POST",
-      "path": "/pond/{pond_id}/harvest",
+      "path": "/api/pond/{pond_id}/harvest",
       "summary": "Record harvest from pond",
       "auth": true,
       "tags": ["pond", "harvest"],

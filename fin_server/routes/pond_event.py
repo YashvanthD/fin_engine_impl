@@ -12,7 +12,7 @@ from fin_server.utils.time_utils import get_time_date_dt
 from fin_server.utils.validation import validate_pond_event_payload
 from fin_server.services.expense_service import create_expense_with_repo
 
-pond_event_bp = Blueprint('pond_event', __name__, url_prefix='/pond_event')
+pond_event_bp = Blueprint('pond_event', __name__, url_prefix='/api/pond_event')
 
 IST_TZ = zoneinfo.ZoneInfo('Asia/Kolkata')
 

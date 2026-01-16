@@ -6,7 +6,7 @@
     {
       "id": "roles-list",
       "method": "GET",
-      "path": "/role/roles",
+      "path": "/api/role/roles",
       "summary": "Get all available roles",
       "description": "Get all available roles for the account.",
       "auth": true,
@@ -28,7 +28,7 @@
     {
       "id": "roles-create",
       "method": "POST",
-      "path": "/role/roles",
+      "path": "/api/role/roles",
       "summary": "Create a new custom role",
       "description": "Create a new custom role with specified permissions. Requires admin access.",
       "auth": true,
@@ -65,7 +65,7 @@
     {
       "id": "roles-update",
       "method": "PUT",
-      "path": "/role/roles/{role_code}",
+      "path": "/api/role/roles/{role_code}",
       "summary": "Update a role's permissions",
       "description": "Update the permissions for an existing role. Requires admin access.",
       "auth": true,
@@ -88,7 +88,7 @@
     {
       "id": "roles-delete",
       "method": "DELETE",
-      "path": "/role/roles/{role_code}",
+      "path": "/api/role/roles/{role_code}",
       "summary": "Delete a custom role",
       "description": "Delete a custom role. System roles cannot be deleted. Requires owner access.",
       "auth": true,
@@ -105,7 +105,7 @@
     {
       "id": "permissions-list",
       "method": "GET",
-      "path": "/role/permissions",
+      "path": "/api/role/permissions",
       "summary": "Get all available permissions",
       "description": "Get all available permissions. Use ?grouped=true to get by category.",
       "auth": true,
@@ -128,7 +128,7 @@
     {
       "id": "permissions-create",
       "method": "POST",
-      "path": "/role/permissions",
+      "path": "/api/role/permissions",
       "summary": "Create a custom permission",
       "description": "Create a new custom permission. Requires owner access.",
       "auth": true,
@@ -150,7 +150,7 @@
     {
       "id": "user-permissions-get",
       "method": "GET",
-      "path": "/role/users/{user_key}/permissions",
+      "path": "/api/role/users/{user_key}/permissions",
       "summary": "Get a user's permissions",
       "description": "Get effective permissions for a specific user.",
       "auth": true,
@@ -172,7 +172,7 @@
     {
       "id": "user-permissions-grant",
       "method": "POST",
-      "path": "/role/users/{user_key}/permissions",
+      "path": "/api/role/users/{user_key}/permissions",
       "summary": "Grant permissions to a user",
       "description": "Grant additional permissions to a user beyond their role.",
       "auth": true,
@@ -194,7 +194,7 @@
     {
       "id": "user-role-assign",
       "method": "PUT",
-      "path": "/role/users/{user_key}/role",
+      "path": "/api/role/users/{user_key}/role",
       "summary": "Assign role to a user",
       "description": "Assign a role to a user. Requires admin access.",
       "auth": true,

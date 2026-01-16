@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 # Blueprint
-company_bp = Blueprint('company', __name__, url_prefix='/company')
+company_bp = Blueprint('company', __name__, url_prefix='/api/company')
 
 # Repositories
 user_repo = get_collection('users')

@@ -6,7 +6,7 @@
     {
       "id": "feeding-list",
       "method": "GET",
-      "path": "/feeding",
+      "path": "/api/feeding",
       "summary": "List feeding records",
       "auth": true,
       "tags": ["feeding", "list"],
@@ -41,7 +41,7 @@
     {
       "id": "feeding-create",
       "method": "POST",
-      "path": "/feeding",
+      "path": "/api/feeding",
       "summary": "Record feeding",
       "auth": true,
       "tags": ["feeding", "create"],

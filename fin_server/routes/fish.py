@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 IST_TZ = zoneinfo.ZoneInfo(config.DEFAULT_TIMEZONE)
 
 # Blueprint
-fish_bp = Blueprint('fish', __name__, url_prefix='/fish')
+fish_bp = Blueprint('fish', __name__, url_prefix='/api/fish')
 
 # Repositories
 fish_repo = get_collection('fish')

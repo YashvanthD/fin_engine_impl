@@ -4,6 +4,8 @@ This module provides endpoints for:
 - User profile management
 - Settings and notifications
 - User listing and CRUD operations
+
+All endpoints are under /api/user/*
 """
 import logging
 
@@ -19,9 +21,8 @@ from fin_server.utils.decorators import handle_errors, require_auth, require_adm
 
 logger = logging.getLogger(__name__)
 
-# Blueprints
-user_bp = Blueprint('user', __name__, url_prefix='/user')
-user_api_bp = Blueprint('user_api', __name__, url_prefix='/api')
+# Single Blueprint for all user routes
+user_bp = Blueprint('user', __name__, url_prefix='/api/user')
 
 # Repository
 user_repo = get_collection('users')
@@ -92,15 +93,45 @@ def _build_user_response(doc):
 
 
 # =============================================================================
-# Profile Endpoints
+# Current User Endpoints (/api/user/me, /api/user/profile, etc.)
 # =============================================================================
+
+@user_bp.route('/me', methods=['GET'])
+@handle_errors
+@require_auth
+def get_me(auth_payload):
+    """Get current user's basic info."""
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"GET /api/user/me | account_key: {account_key}, user_key: {user_key}")
+
+    user_dto, error = _get_user_dto_from_payload(auth_payload)
+    if error:
+        return error
+
+    doc = user_dto.to_dict()
+    doc.pop('password', None)
+    doc.pop('refresh_tokens', None)
+
+    return respond_success({
+        'user_key': user_dto.user_key,
+        'account_key': user_dto.account_key,
+        'role': user_dto.role,
+        'authorities': user_dto.authorities,
+        'settings': user_dto.settings,
+        'subscription': user_dto.subscription,
+        'user': doc
+    })
+
 
 @user_bp.route('/profile', methods=['GET'])
 @handle_errors
 @require_auth
 def get_profile(auth_payload):
     """Get current user's profile."""
-    logger.debug('GET /user/profile called')
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"GET /api/user/profile | account_key: {account_key}, user_key: {user_key}")
 
     user_dto, error = _get_user_dto_from_payload(auth_payload)
     if error:
@@ -118,7 +149,9 @@ def get_profile(auth_payload):
 @require_auth
 def update_profile(auth_payload):
     """Update user profile fields."""
-    logger.debug('PUT /user/profile called')
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"PUT /api/user/profile | account_key: {account_key}, user_key: {user_key}")
 
     user_dto, error = _get_user_dto_from_payload(auth_payload)
     if error:
@@ -141,7 +174,9 @@ def update_profile(auth_payload):
 @require_auth
 def update_password(auth_payload):
     """Change user password."""
-    logger.debug('PUT /user/password called')
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"PUT /api/user/password | account_key: {account_key}, user_key: {user_key}")
 
     user_dto, error = _get_user_dto_from_payload(auth_payload)
     if error:
@@ -174,7 +209,9 @@ def update_password(auth_payload):
 @require_auth
 def logout(auth_payload):
     """Logout user by clearing refresh tokens."""
-    logger.debug('POST /user/logout called')
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"POST /api/user/logout | account_key: {account_key}, user_key: {user_key}")
 
     user_dto, error = _get_user_dto_from_payload(auth_payload)
     if error:
@@ -187,34 +224,8 @@ def logout(auth_payload):
     return respond_success({'message': 'Logged out'})
 
 
-@user_bp.route('/me', methods=['GET'])
-@handle_errors
-@require_auth
-def get_me(auth_payload):
-    """Get current user's basic info."""
-    logger.debug('GET /user/me called')
-
-    user_dto, error = _get_user_dto_from_payload(auth_payload)
-    if error:
-        return error
-
-    doc = user_dto.to_dict()
-    doc.pop('password', None)
-    doc.pop('refresh_tokens', None)
-
-    return respond_success({
-        'user_key': user_dto.user_key,
-        'account_key': user_dto.account_key,
-        'role': user_dto.role,
-        'authorities': user_dto.authorities,
-        'settings': user_dto.settings,
-        'subscription': user_dto.subscription,
-        'user': doc
-    })
-
-
 # =============================================================================
-# Settings Endpoints
+# Settings Endpoints (/api/user/settings/*)
 # =============================================================================
 
 @user_bp.route('/settings', methods=['GET'])
@@ -222,7 +233,9 @@ def get_me(auth_payload):
 @require_auth
 def get_settings(auth_payload):
     """Get user settings and subscription."""
-    logger.debug('GET /user/settings called')
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"GET /api/user/settings | account_key: {account_key}, user_key: {user_key}")
 
     user_dto, error = _get_user_dto_from_payload(auth_payload)
     if error:
@@ -241,7 +254,9 @@ def get_settings(auth_payload):
 @require_auth
 def update_settings(auth_payload):
     """Update user settings."""
-    logger.debug('PUT /user/settings called')
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"PUT /api/user/settings | account_key: {account_key}, user_key: {user_key}")
 
     user_dto, error = _get_user_dto_from_payload(auth_payload)
     if error:
@@ -261,7 +276,9 @@ def update_settings(auth_payload):
 @require_auth
 def update_notification_settings(auth_payload):
     """Update notification settings."""
-    logger.debug('PUT /user/settings/notifications called')
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"PUT /api/user/settings/notifications | account_key: {account_key}, user_key: {user_key}")
 
     user_dto, error = _get_user_dto_from_payload(auth_payload)
     if error:
@@ -281,7 +298,9 @@ def update_notification_settings(auth_payload):
 @require_auth
 def update_help_support(auth_payload):
     """Update help & support settings."""
-    logger.debug('PUT /user/settings/help_support called')
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"PUT /api/user/settings/help_support | account_key: {account_key}, user_key: {user_key}")
 
     user_dto, error = _get_user_dto_from_payload(auth_payload)
     if error:
@@ -297,17 +316,17 @@ def update_help_support(auth_payload):
 
 
 # =============================================================================
-# User Management Endpoints
+# User Management CRUD Endpoints (/api/user/list, /api/user/<user_id>)
 # =============================================================================
 
 @user_bp.route('/list', methods=['GET'])
 @handle_errors
 @require_auth
 def list_users(auth_payload):
-    """List users in the current account."""
-    logger.debug('GET /user/list called')
-
+    """List all users in the current account."""
     account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"GET /api/user/list | account_key: {account_key}, user_key: {user_key}")
 
     if not account_key:
         return respond_error('Missing account_key', status=400)
@@ -322,54 +341,18 @@ def list_users(auth_payload):
             user_obj.pop('phone', None)
         result.append(user_obj)
 
+    logger.debug(f"Users fetched: {len(result)} users")
     return respond_success({'users': result})
 
 
-@user_bp.route('/account/<account_key>/user/<user_key>', methods=['DELETE'])
-@handle_errors
-@require_admin
-def delete_user(account_key, user_key, auth_payload):
-    """Delete a user (admin only)."""
-    logger.debug('DELETE /user/account/%s/user/%s called', account_key, user_key)
-
-    if auth_payload.get('account_key') != account_key:
-        return respond_error('Unauthorized', status=403)
-
-    deleted_count = user_repo.delete({'account_key': account_key, 'user_key': user_key})
-
-    if deleted_count > 0:
-        return respond_success({'message': 'User deleted'})
-    return respond_error('User not found', status=404)
-
-
-# =============================================================================
-# API Blueprint Routes (/api/users)
-# =============================================================================
-
-@user_api_bp.route('/users', methods=['GET'])
+@user_bp.route('/<user_id>', methods=['GET'])
 @handle_errors
 @require_auth
-def api_list_users(auth_payload):
-    """API endpoint to list users."""
+def get_user(user_id, auth_payload):
+    """Get a single user by ID."""
     account_key = auth_payload.get('account_key')
-    user_key = auth_payload.get('user_key')
-    logger.info(f"Fetching users list | account_key: {account_key}, user_key: {user_key}")
-
-    users = user_repo.find({'account_key': account_key})
-    result = [_build_user_response(u) for u in users]
-
-    logger.debug(f"Users fetched: {users}")
-    return respond_success({'users': result})
-
-
-@user_api_bp.route('/users/<user_id>', methods=['GET'])
-@handle_errors
-@require_auth
-def api_get_user(user_id, auth_payload):
-    """API endpoint to get a single user."""
-    account_key = auth_payload.get('account_key')
-    user_key = auth_payload.get('user_key')
-    logger.info(f"Fetching user with ID: {user_id} | account_key: {account_key}, user_key: {user_key}")
+    requester_user_key = auth_payload.get('user_key')
+    logger.info(f"GET /api/user/{user_id} | account_key: {account_key}, user_key: {requester_user_key}")
 
     user = user_repo.find_one({
         'user_key': user_id,
@@ -379,62 +362,73 @@ def api_get_user(user_id, auth_payload):
     if not user:
         return respond_error('User not found', status=404)
 
-    logger.debug(f"User details: {user}")
+    logger.debug(f"User details fetched for: {user_id}")
     return respond_success({'user': _build_user_response(user)})
 
 
-@user_api_bp.route('/users', methods=['POST'])
+@user_bp.route('/', methods=['POST'])
 @handle_errors
 @require_auth
-def api_create_user(auth_payload):
-    """API endpoint to create a user."""
+@require_admin
+def create_user(auth_payload):
+    """Create a new user (admin only)."""
     account_key = auth_payload.get('account_key')
     user_key = auth_payload.get('user_key')
-    logger.info(f"Creating a new user | account_key: {account_key}, user_key: {user_key}")
+    logger.info(f"POST /api/user | account_key: {account_key}, user_key: {user_key}")
 
     data = request.get_json(force=True)
     user_doc = build_user(data, account_key=account_key)
     inserted_id = user_repo.create(user_doc)
 
     user_doc['_id'] = inserted_id
-    logger.debug(f"User created: {user_doc}")
-    return respond_success({'user': _build_user_response(user_doc)})
+    logger.info(f"User created: {user_doc.get('user_key')}")
+    return respond_success({'user': _build_user_response(user_doc)}, status=201)
 
 
-@user_api_bp.route('/users/<user_id>', methods=['PATCH'])
+@user_bp.route('/<user_id>', methods=['PUT', 'PATCH'])
 @handle_errors
 @require_auth
-def api_patch_user(user_id, auth_payload):
-    """API endpoint to update a user."""
+def update_user(user_id, auth_payload):
+    """Update a user by ID."""
     account_key = auth_payload.get('account_key')
-    user_key = auth_payload.get('user_key')
-    logger.info(f"Updating user with ID: {user_id} | account_key: {account_key}, user_key: {user_key}")
+    requester_user_key = auth_payload.get('user_key')
+    logger.info(f"PUT/PATCH /api/user/{user_id} | account_key: {account_key}, user_key: {requester_user_key}")
 
     data = request.get_json(force=True)
-    user_repo.update({
+
+    # Remove sensitive fields that shouldn't be updated directly
+    data.pop('password', None)
+    data.pop('refresh_tokens', None)
+
+    result = user_repo.update({
         'user_key': user_id,
         'account_key': account_key
     }, data)
 
     logger.debug(f"User updated: {user_id}")
-    return respond_success({'updated': True})
+    return respond_success({'updated': True, 'user_key': user_id})
 
 
-@user_api_bp.route('/users/<user_id>', methods=['DELETE'])
+@user_bp.route('/<user_id>', methods=['DELETE'])
 @handle_errors
 @require_auth
 @require_admin
-def api_delete_user(user_id, auth_payload):
-    """API endpoint to delete a user."""
+def delete_user(user_id, auth_payload):
+    """Delete a user by ID (admin only)."""
     account_key = auth_payload.get('account_key')
-    user_key = auth_payload.get('user_key')
+    requester_user_key = auth_payload.get('user_key')
+    logger.info(f"DELETE /api/user/{user_id} | account_key: {account_key}, user_key: {requester_user_key}")
 
-    logger.info(f"Deleting user with ID: {user_id} | account_key: {account_key}, user_key: {user_key}")
+    # Prevent self-deletion
+    if user_id == requester_user_key:
+        return respond_error('Cannot delete yourself', status=400)
 
-    user_repo.delete({
+    deleted_count = user_repo.delete({
         'user_key': user_id,
         'account_key': account_key
     })
 
-    logger.debug(f"User deleted: {user_id}")
-    return respond_success({'deleted': True})
+    if deleted_count > 0:
+        logger.info(f"User deleted: {user_id}")
+        return respond_success({'deleted': True, 'user_key': user_id})
+    return respond_error('User not found', status=404)

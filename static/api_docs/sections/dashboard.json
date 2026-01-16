@@ -6,7 +6,7 @@
     {
       "id": "dashboard-get",
       "method": "GET",
-      "path": "/dashboard",
+      "path": "/api/dashboard",
       "summary": "Get dashboard summary",
       "description": "Get aggregated dashboard data including stats cards and recent alerts.",
       "auth": true,
@@ -34,7 +34,7 @@
     {
       "id": "dashboard-alerts-list",
       "method": "GET",
-      "path": "/dashboard/alerts",
+      "path": "/api/dashboard/alerts",
       "summary": "List alerts",
       "description": "Get all alerts for the account with optional filters.",
       "auth": true,
@@ -70,7 +70,7 @@
     {
       "id": "dashboard-alerts-acknowledge",
       "method": "PUT",
-      "path": "/dashboard/alerts/{alert_id}/acknowledge",
+      "path": "/api/dashboard/alerts/{alert_id}/acknowledge",
       "summary": "Acknowledge an alert",
       "description": "Mark an alert as acknowledged.",
       "auth": true,

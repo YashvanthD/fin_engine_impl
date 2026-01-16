@@ -6,7 +6,7 @@
     {
       "id": "pond-event-add",
       "method": "POST",
-      "path": "/pond_event/{pond_id}/event/add",
+      "path": "/api/pond_event/{pond_id}/event/add",
       "summary": "Add fish to pond (Stocking)",
       "description": "Add new fish to a pond. Use this when stocking new fish or receiving fish from a purchase. This increases the pond's fish count and creates a positive entry in fish analytics.",
       "auth": true,
@@ -52,7 +52,7 @@
     {
       "id": "pond-event-sell",
       "method": "POST",
-      "path": "/pond_event/{pond_id}/event/sell",
+      "path": "/api/pond_event/{pond_id}/event/sell",
       "summary": "Sell fish from pond (Harvest)",
       "description": "Record fish sold from the pond. Use this when harvesting fish for sale. This decreases the pond count and can be linked to transaction/expense records for revenue tracking.",
       "auth": true,
@@ -98,7 +98,7 @@
     {
       "id": "pond-event-sample",
       "method": "POST",
-      "path": "/pond_event/{pond_id}/event/sample",
+      "path": "/api/pond_event/{pond_id}/event/sample",
       "summary": "Sample fish for growth measurement",
       "description": "Record fish sampled for growth measurement or quality testing. Sampled fish are typically removed from the population for weighing/measuring. Use this for periodic growth monitoring.",
       "auth": true,
@@ -151,7 +151,7 @@
     {
       "id": "pond-event-remove",
       "method": "POST",
-      "path": "/pond_event/{pond_id}/event/remove",
+      "path": "/api/pond_event/{pond_id}/event/remove",
       "summary": "Remove fish from pond (Mortality/Loss)",
       "description": "Remove fish from a pond due to mortality, disease culling, or other losses. Use this to record fish that are no longer in the pond but were not sold. Important for tracking mortality rates.",
       "auth": true,
@@ -196,7 +196,7 @@
     {
       "id": "pond-event-shift-out",
       "method": "POST",
-      "path": "/pond_event/{pond_id}/event/shift_out",
+      "path": "/api/pond_event/{pond_id}/event/shift_out",
       "summary": "Transfer fish OUT to another pond",
       "description": "Record fish transferred OUT of this pond to another pond within your farm. The destination pond should have a corresponding 'shift_in' event to maintain accurate counts across ponds.",
       "auth": true,
@@ -242,7 +242,7 @@
     {
       "id": "pond-event-shift-in",
       "method": "POST",
-      "path": "/pond_event/{pond_id}/event/shift_in",
+      "path": "/api/pond_event/{pond_id}/event/shift_in",
       "summary": "Transfer fish INTO this pond",
       "description": "Record fish transferred INTO this pond from another pond within your farm. The source pond should have a corresponding 'shift_out' event to maintain accurate counts across ponds.",
       "auth": true,
@@ -288,7 +288,7 @@
     {
       "id": "pond-event-list",
       "method": "GET",
-      "path": "/pond_event/{pond_id}/events",
+      "path": "/api/pond_event/{pond_id}/events",
       "summary": "Get all events for a pond",
       "description": "Retrieve the history of all events (add, sell, sample, remove, shift) for a specific pond.",
       "auth": true,
@@ -334,7 +334,7 @@
     {
       "id": "pond-event-update",
       "method": "PUT",
-      "path": "/pond_event/{pond_id}/events/{event_id}",
+      "path": "/api/pond_event/{pond_id}/events/{event_id}",
       "summary": "Update a pond event",
       "description": "Update an existing pond event. This will reconcile pond metadata and fish analytics by reversing the old event effects and applying the new values.",
       "auth": true,
@@ -379,7 +379,7 @@
     {
       "id": "pond-event-delete",
       "method": "DELETE",
-      "path": "/pond_event/{pond_id}/events/{event_id}",
+      "path": "/api/pond_event/{pond_id}/events/{event_id}",
       "summary": "Delete a pond event",
       "description": "Remove a pond event by its ID.",
       "auth": true,

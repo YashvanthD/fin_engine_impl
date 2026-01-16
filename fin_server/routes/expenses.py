@@ -20,7 +20,7 @@ from fin_server.utils.helpers import respond_success, respond_error
 logger = logging.getLogger(__name__)
 
 # Blueprint
-expenses_bp = Blueprint('expenses', __name__, url_prefix='/expenses')
+expenses_bp = Blueprint('expenses', __name__, url_prefix='/api/expenses')
 
 # Repository
 expense_repo = get_collection('expenses')

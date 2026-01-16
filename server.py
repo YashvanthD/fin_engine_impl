@@ -11,18 +11,18 @@ from flask_cors import CORS
 
 from config import config
 # Import blueprints from route modules
-from fin_server.routes.auth import auth_bp, auth_api_bp
-from fin_server.routes.user import user_bp, user_api_bp
-from fin_server.routes.task import task_bp, task_api_bp
+from fin_server.routes.auth import auth_bp
+from fin_server.routes.user import user_bp
+from fin_server.routes.task import task_bp
 from fin_server.routes.company import company_bp
-from fin_server.routes.pond import pond_bp, pond_api_bp
+from fin_server.routes.pond import pond_bp
 from fin_server.routes.fish import fish_bp
 from fin_server.routes.pond_event import pond_event_bp
 from fin_server.routes.public import public_bp
-from fin_server.routes.feeding import feeding_bp, feeding_api_bp
-from fin_server.routes.sampling import sampling_bp, sampling_api_bp
-from fin_server.routes.expenses import expenses_bp, expenses_api_bp
-from fin_server.routes.dashboard import dashboard_bp, dashboard_api_bp
+from fin_server.routes.feeding import feeding_bp
+from fin_server.routes.sampling import sampling_bp
+from fin_server.routes.expenses import expenses_bp
+from fin_server.routes.dashboard import dashboard_bp
 from fin_server.routes.role import role_bp
 from fin_server.routes.ai import openai_bp
 from fin_server.security.authentication import AuthSecurity
@@ -77,15 +77,6 @@ def create_app() -> Flask:
     app.register_blueprint(role_bp)
     app.register_blueprint(openai_bp)
 
-    # Register API blueprints
-    app.register_blueprint(auth_api_bp)
-    app.register_blueprint(user_api_bp)
-    app.register_blueprint(task_api_bp)
-    app.register_blueprint(pond_api_bp)
-    app.register_blueprint(feeding_api_bp)
-    app.register_blueprint(sampling_api_bp)
-    app.register_blueprint(expenses_api_bp)
-    app.register_blueprint(dashboard_api_bp)
 
     logging.basicConfig(level=logging.INFO)
 

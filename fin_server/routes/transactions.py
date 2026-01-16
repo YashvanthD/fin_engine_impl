@@ -17,7 +17,7 @@ from fin_server.utils.helpers import respond_success, respond_error, normalize_d
 logger = logging.getLogger(__name__)
 
 # Blueprint
-transactions_bp = Blueprint('transactions', __name__, url_prefix='/transactions')
+transactions_bp = Blueprint('transactions', __name__, url_prefix='/api/transactions')
 
 # Repository
 transactions_repo = get_collection('transactions')

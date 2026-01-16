@@ -1,10 +1,10 @@
 {
   "info": {
     "title": "Fin Engine API",
-    "version": "1.1.0",
-    "description": "Complete API reference for the Fin Engine fish farming management platform.",
+    "version": "1.2.0",
+    "description": "Complete API reference for the Fin Engine fish farming management platform. All endpoints are under /api/* prefix.",
     "baseUrl": "http://localhost:5000",
-    "lastUpdated": "2026-01-15"
+    "lastUpdated": "2026-01-16"
   },
   "sections": [
     {"id": "use-cases", "name": "Farm Use Cases Guide", "file": "sections/use-cases.json", "icon": "📖"},

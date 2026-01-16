@@ -17,7 +17,7 @@ from fin_server.utils.helpers import respond_success, respond_error, normalize_d
 logger = logging.getLogger(__name__)
 
 # Blueprint
-feeding_bp = Blueprint('feeding', __name__, url_prefix='/feeding')
+feeding_bp = Blueprint('feeding', __name__, url_prefix='/api/feeding')
 
 # Repository
 feeding_repo = get_collection('feeding')

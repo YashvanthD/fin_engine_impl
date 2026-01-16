@@ -11,7 +11,7 @@ import logging
 from fin_server.security.decorators import require_auth, require_admin
 from fin_server.services.permission_service import get_permission_service
 
-permission_bp = Blueprint('permission', __name__, url_prefix='/permission')
+permission_bp = Blueprint('permission', __name__, url_prefix='/api/permission')
 
 service = get_permission_service()
 

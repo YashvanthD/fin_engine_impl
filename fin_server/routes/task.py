@@ -18,7 +18,7 @@ from fin_server.dto.task_dto import TaskDTO
 task_repo = get_collection('task')
 user_repo = get_collection('users')
 
-task_bp = Blueprint('task', __name__, url_prefix='/task')
+task_bp = Blueprint('task', __name__, url_prefix='/api/task')
 
 @task_bp.route('/', methods=['POST'])
 def create_task():
