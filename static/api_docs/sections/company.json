@@ -6,7 +6,7 @@
     {
       "id": "company-register",
       "method": "POST",
-      "path": "/company/register",
+      "path": "/api/company/register",
       "summary": "Register a new company",
       "auth": false,
       "tags": ["registration"],
@@ -41,7 +41,7 @@
     {
       "id": "company-get",
       "method": "GET",
-      "path": "/company",
+      "path": "/api/company",
       "summary": "Get company details",
       "auth": true,
       "tags": ["company"],
@@ -64,7 +64,7 @@
     {
       "id": "company-update",
       "method": "PUT",
-      "path": "/company",
+      "path": "/api/company",
       "summary": "Update company details",
       "auth": true,
       "tags": ["company"],
@@ -84,7 +84,7 @@
     {
       "id": "company-employees-list",
       "method": "GET",
-      "path": "/company/employees",
+      "path": "/api/company/employees",
       "summary": "List company employees",
       "auth": true,
       "tags": ["employees"],
@@ -105,7 +105,7 @@
     {
       "id": "company-employees-add",
       "method": "POST",
-      "path": "/company/employees",
+      "path": "/api/company/employees",
       "summary": "Add employee to company",
       "auth": true,
       "tags": ["employees"],
@@ -132,7 +132,7 @@
     {
       "id": "company-employees-remove",
       "method": "DELETE",
-      "path": "/company/employees/{user_key}",
+      "path": "/api/company/employees/{user_key}",
       "summary": "Remove employee from company",
       "auth": true,
       "tags": ["employees"],

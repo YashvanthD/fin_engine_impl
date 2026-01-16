@@ -15,7 +15,7 @@
           "when": "First time setup - before any other operations",
           "api": {
             "method": "POST",
-            "path": "/auth/signup",
+            "path": "/api/auth/signup",
             "body": {
               "username": "farmadmin",
               "email": "admin@myfishfarm.com",
@@ -35,7 +35,7 @@
           "when": "After company registration, when you need to add team members",
           "api": {
             "method": "POST",
-            "path": "/auth/account/{account_key}/signup",
+            "path": "/api/auth/account/{account_key}/signup",
             "headers": {
               "Authorization": "Bearer {admin_token}"
             },
@@ -56,7 +56,7 @@
           "when": "Every time you start working with the system",
           "api": {
             "method": "POST",
-            "path": "/auth/login",
+            "path": "/api/auth/login",
             "body": {
               "email": "admin@myfishfarm.com",
               "password": "SecurePass123!"
@@ -78,7 +78,7 @@
           "when": "When constructing or adding a new pond to your farm",
           "api": {
             "method": "POST",
-            "path": "/pond/create",
+            "path": "/api/pond/create",
             "body": {
               "name": "Pond A - Nursery",
               "type": "nursery",
@@ -108,7 +108,7 @@
           "when": "Setting up production ponds for mature fish",
           "api": {
             "method": "POST",
-            "path": "/pond/create",
+            "path": "/api/pond/create",
             "body": {
               "name": "Pond B - Grow Out 1",
               "type": "grow-out",
@@ -133,7 +133,7 @@
           "when": "When pond specifications change or need correction",
           "api": {
             "method": "PUT",
-            "path": "/pond/update/{pond_id}",
+            "path": "/api/pond/update/{pond_id}",
             "body": {
               "capacity": 6000,
               "metadata": {
@@ -152,7 +152,7 @@
           "when": "Dashboard view, reporting, or selecting a pond for operations",
           "api": {
             "method": "GET",
-            "path": "/pond/"
+            "path": "/api/pond/"
           },
           "result": "List of all ponds with their details, fish counts, and last activity."
         },
@@ -163,7 +163,7 @@
           "when": "Detailed pond monitoring or before performing operations",
           "api": {
             "method": "GET",
-            "path": "/pond/{pond_id}"
+            "path": "/api/pond/{pond_id}"
           },
           "result": "Complete pond information with metadata, fish types, and counts."
         }
@@ -181,7 +181,7 @@
           "when": "When starting to farm a new type of fish",
           "api": {
             "method": "POST",
-            "path": "/fish/create",
+            "path": "/api/fish/create",
             "body": {
               "common_name": "Nile Tilapia",
               "scientific_name": "Oreochromis niloticus",
@@ -202,7 +202,7 @@
           "when": "Expanding to multiple fish types",
           "api": {
             "method": "POST",
-            "path": "/fish/create",
+            "path": "/api/fish/create",
             "body": {
               "common_name": "Pangasius Catfish",
               "scientific_name": "Pangasianodon hypophthalmus",
@@ -223,7 +223,7 @@
           "when": "Reviewing fish catalog or selecting species for operations",
           "api": {
             "method": "GET",
-            "path": "/fish/"
+            "path": "/api/fish/"
           },
           "result": "List of all fish species with current analytics and pond locations."
         }
@@ -241,7 +241,7 @@
           "when": "Buying new fish stock from suppliers",
           "api": {
             "method": "POST",
-            "path": "/sampling",
+            "path": "/api/sampling",
             "body": {
               "pondId": "ACC001-001",
               "species": "TILAPIA_NILE",
@@ -263,7 +263,7 @@
           "when": "Adding fish to a pond (initial stocking or restocking)",
           "api": {
             "method": "POST",
-            "path": "/pond_event/{pond_id}/event/add",
+            "path": "/api/pond_event/{pond_id}/event/add",
             "body": {
               "fish_id": "TILAPIA_NILE",
               "count": 5000,
@@ -284,7 +284,7 @@
           "when": "Tracking costs when purchase wasn't recorded via sampling",
           "api": {
             "method": "POST",
-            "path": "/expenses",
+            "path": "/api/expenses",
             "body": {
               "category": "asset",
               "type": "fish",
@@ -317,7 +317,7 @@
           "when": "After each feeding session (typically 2-3 times daily)",
           "api": {
             "method": "POST",
-            "path": "/feeding/",
+            "path": "/api/feeding/",
             "body": {
               "pondId": "ACC001-001",
               "feedType": "floating pellet",
@@ -337,7 +337,7 @@
           "when": "Evening feeding session",
           "api": {
             "method": "POST",
-            "path": "/feeding/",
+            "path": "/api/feeding/",
             "body": {
               "pondId": "ACC001-001",
               "feedType": "floating pellet",
@@ -357,7 +357,7 @@
           "when": "Buying fish feed stock",
           "api": {
             "method": "POST",
-            "path": "/expenses",
+            "path": "/api/expenses",
             "body": {
               "category": "operational",
               "type": "feed",
@@ -383,7 +383,7 @@
           "when": "Assigning work to team members",
           "api": {
             "method": "POST",
-            "path": "/task/",
+            "path": "/api/task/",
             "body": {
               "title": "Check aerators in Pond B",
               "description": "Inspect all 4 aerators, clean filters, check oil levels",
@@ -403,7 +403,7 @@
           "when": "During routine water quality monitoring (daily/weekly)",
           "api": {
             "method": "POST",
-            "path": "/water-quality/samples",
+            "path": "/api/water-quality/samples",
             "body": {
               "pond_id": "ACC001-001",
               "temperature": 28.5,
@@ -431,7 +431,7 @@
           "when": "Monthly or bi-weekly growth checks",
           "api": {
             "method": "POST",
-            "path": "/pond_event/{pond_id}/event/sample",
+            "path": "/api/pond_event/{pond_id}/event/sample",
             "body": {
               "fish_id": "TILAPIA_NILE",
               "count": 30,
@@ -459,7 +459,7 @@
           "when": "Detailed growth tracking with survival rate and FCR",
           "api": {
             "method": "POST",
-            "path": "/sampling",
+            "path": "/api/sampling",
             "body": {
               "pondId": "ACC001-001",
               "species": "TILAPIA_NILE",
@@ -481,7 +481,7 @@
           "when": "Reviewing growth progress, planning harvest",
           "api": {
             "method": "GET",
-            "path": "/fish/{species_id}/analytics",
+            "path": "/api/fish/{species_id}/analytics",
             "queryParams": {
               "min_age": 2,
               "max_age": 6
@@ -496,7 +496,7 @@
           "when": "Reviewing growth history, comparing batches",
           "api": {
             "method": "GET",
-            "path": "/sampling/history",
+            "path": "/api/sampling/history",
             "queryParams": {
               "pondId": "ACC001-001",
               "species": "TILAPIA_NILE",
@@ -521,7 +521,7 @@
           "when": "When dead fish are found in the pond",
           "api": {
             "method": "POST",
-            "path": "/pond_event/{pond_id}/event/remove",
+            "path": "/api/pond_event/{pond_id}/event/remove",
             "body": {
               "fish_id": "TILAPIA_NILE",
               "count": 25,
@@ -543,7 +543,7 @@
           "when": "Purchasing medicine or treatment supplies",
           "api": {
             "method": "POST",
-            "path": "/expenses",
+            "path": "/api/expenses",
             "body": {
               "category": "operational",
               "type": "medicine",
@@ -570,7 +570,7 @@
           "when": "After disease detection, for follow-up monitoring",
           "api": {
             "method": "POST",
-            "path": "/task/",
+            "path": "/api/task/",
             "body": {
               "title": "Daily health check - Pond A (Post-treatment)",
               "description": "Monitor fish behavior, check for new deaths, measure water quality",
@@ -597,7 +597,7 @@
           "when": "Fish are ready to move from nursery to grow-out (typically after 2-3 months)",
           "api": {
             "method": "POST",
-            "path": "/pond_event/{pond_id}/event/shift_out",
+            "path": "/api/pond_event/{pond_id}/event/shift_out",
             "pathExample": "/pond_event/ACC001-001/event/shift_out",
             "body": {
               "fish_id": "TILAPIA_NILE",
@@ -620,7 +620,7 @@
           "when": "Immediately after shift_out - to maintain accurate counts",
           "api": {
             "method": "POST",
-            "path": "/pond_event/{pond_id}/event/shift_in",
+            "path": "/api/pond_event/{pond_id}/event/shift_in",
             "pathExample": "/pond_event/ACC001-002/event/shift_in",
             "body": {
               "fish_id": "TILAPIA_NILE",
@@ -643,7 +643,7 @@
           "when": "During grading when fish show size variation",
           "api": {
             "method": "POST",
-            "path": "/pond_event/ACC001-002/event/shift_out",
+            "path": "/api/pond_event/ACC001-002/event/shift_out",
             "body": {
               "fish_id": "TILAPIA_NILE",
               "count": 500,
@@ -672,7 +672,7 @@
           "when": "When fish reach market size and there's buyer demand",
           "api": {
             "method": "POST",
-            "path": "/pond_event/{pond_id}/event/sell",
+            "path": "/api/pond_event/{pond_id}/event/sell",
             "body": {
               "fish_id": "TILAPIA_NILE",
               "count": 500,
@@ -697,7 +697,7 @@
           "when": "After harvest, when recording the financial transaction",
           "api": {
             "method": "POST",
-            "path": "/transactions",
+            "path": "/api/transactions",
             "body": {
               "type": "sale",
               "pond_id": "ACC001-002",
@@ -724,7 +724,7 @@
           "when": "End of culture cycle, pond draining",
           "api": {
             "method": "POST",
-            "path": "/pond_event/{pond_id}/event/sell",
+            "path": "/api/pond_event/{pond_id}/event/sell",
             "body": {
               "fish_id": "TILAPIA_NILE",
               "count": 2500,
@@ -749,7 +749,7 @@
           "when": "Selling to wholesaler or processor",
           "api": {
             "method": "POST",
-            "path": "/transactions",
+            "path": "/api/transactions",
             "body": {
               "type": "sale",
               "pond_id": "ACC001-002",
@@ -779,7 +779,7 @@
           "when": "When payment is received",
           "api": {
             "method": "POST",
-            "path": "/expenses",
+            "path": "/api/expenses",
             "body": {
               "category": "income",
               "type": "fish_sale",
@@ -813,7 +813,7 @@
           "when": "Monthly utility bill payment",
           "api": {
             "method": "POST",
-            "path": "/expenses",
+            "path": "/api/expenses",
             "body": {
               "category": "operational",
               "type": "utilities",
@@ -838,7 +838,7 @@
           "when": "Monthly payroll processing",
           "api": {
             "method": "POST",
-            "path": "/expenses",
+            "path": "/api/expenses",
             "body": {
               "category": "operational",
               "type": "labor",
@@ -865,7 +865,7 @@
           "when": "Buying farm equipment",
           "api": {
             "method": "POST",
-            "path": "/expenses",
+            "path": "/api/expenses",
             "body": {
               "category": "asset",
               "type": "equipment",
@@ -891,7 +891,7 @@
           "when": "Monthly review, accounting, tax filing",
           "api": {
             "method": "GET",
-            "path": "/expenses",
+            "path": "/api/expenses",
             "queryParams": {
               "start_date": "2026-01-01",
               "end_date": "2026-01-31",
@@ -907,7 +907,7 @@
           "when": "Financial reporting, reconciliation",
           "api": {
             "method": "GET",
-            "path": "/transactions",
+            "path": "/api/transactions",
             "queryParams": {
               "type": "sale",
               "startDate": "2026-01-01",
@@ -930,7 +930,7 @@
           "when": "Auditing, reviewing pond lifecycle",
           "api": {
             "method": "GET",
-            "path": "/pond_event/{pond_id}/events"
+            "path": "/api/pond_event/{pond_id}/events"
           },
           "result": "Complete event history showing adds, sales, mortalities, transfers."
         },
@@ -941,7 +941,7 @@
           "when": "Farm-wide performance review",
           "api": {
             "method": "GET",
-            "path": "/fish/analytics"
+            "path": "/api/fish/analytics"
           },
           "result": "Aggregated analytics for all species with counts and growth data."
         },
@@ -952,7 +952,7 @@
           "when": "Calculating feed conversion ratio",
           "api": {
             "method": "GET",
-            "path": "/feeding/pond/{pond_id}"
+            "path": "/api/feeding/pond/{pond_id}"
           },
           "result": "All feeding records for the pond."
         },
@@ -963,7 +963,7 @@
           "when": "Data analysis, reporting",
           "api": {
             "method": "GET",
-            "path": "/fish/stats/weight"
+            "path": "/api/fish/stats/weight"
           },
           "result": "Statistics (min, max, avg, count) for fish weights."
         },
@@ -974,7 +974,7 @@
           "when": "Task management, productivity tracking",
           "api": {
             "method": "GET",
-            "path": "/task/",
+            "path": "/api/task/",
             "queryParams": {
               "status": "pending",
               "priority": "high"
@@ -996,7 +996,7 @@
           "when": "After harvest, during pond preparation",
           "api": {
             "method": "POST",
-            "path": "/expenses",
+            "path": "/api/expenses",
             "body": {
               "category": "operational",
               "type": "maintenance",
@@ -1021,7 +1021,7 @@
           "when": "After harvest, before restocking",
           "api": {
             "method": "PUT",
-            "path": "/pond/update/{pond_id}",
+            "path": "/api/pond/update/{pond_id}",
             "body": {
               "status": "maintenance",
               "metadata": {
@@ -1040,7 +1040,7 @@
           "when": "Pond preparation complete",
           "api": {
             "method": "PUT",
-            "path": "/pond/update/{pond_id}",
+            "path": "/api/pond/update/{pond_id}",
             "body": {
               "status": "ready",
               "metadata": {
@@ -1059,7 +1059,7 @@
           "when": "Pond no longer in use",
           "api": {
             "method": "DELETE",
-            "path": "/pond/{pond_id}"
+            "path": "/api/pond/{pond_id}"
           },
           "result": "Pond and all related data archived/deleted."
         }

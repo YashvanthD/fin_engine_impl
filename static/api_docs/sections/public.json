@@ -6,7 +6,7 @@
     {
       "id": "public-health",
       "method": "GET",
-      "path": "/public/health",
+      "path": "/api/public/health",
       "summary": "Health check",
       "description": "Check if the server is running and healthy.",
       "auth": false,
@@ -28,7 +28,7 @@
     {
       "id": "public-version",
       "method": "GET",
-      "path": "/public/version",
+      "path": "/api/public/version",
       "summary": "Get API version",
       "description": "Get the current API version information.",
       "auth": false,
@@ -49,7 +49,7 @@
     {
       "id": "public-fish-species",
       "method": "GET",
-      "path": "/public/fish/species",
+      "path": "/api/public/fish/species",
       "summary": "Get public fish species list",
       "description": "Get list of common fish species (no auth required).",
       "auth": false,
@@ -71,7 +71,7 @@
     {
       "id": "public-countries",
       "method": "GET",
-      "path": "/public/countries",
+      "path": "/api/public/countries",
       "summary": "Get countries list",
       "description": "Get list of supported countries.",
       "auth": false,
