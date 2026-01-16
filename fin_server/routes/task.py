@@ -26,7 +26,9 @@ def create_task():
         payload = get_request_payload(request)
         user_key = payload.get('user_key')
         account_key = payload.get('account_key')
-        roles = payload.get('roles', [])
+        roles = payload.get('roles', payload.get('role',  []) )
+        if type (roles) is str:
+            roles = [roles]
         data = request.get_json(force=True)
         remind_before = data.get('remind_before', 30)
         # Accept both 'assignee' and 'assigned_to' for backward compatibility
@@ -43,8 +45,9 @@ def create_task():
             return respond_error('Assigned user does not exist', status=404)
         assignee = assigned_user['user_key']
         # Allow self-assignment for any user
-        if assignee != user_key and 'admin' not in roles:
-            return respond_error('Only admin can assign tasks to other users', status=403)
+        if assignee != user_key:
+            if 'admin' not in roles:
+                return respond_error('Only admin can assign tasks to other users', status=403)
         # Set default task_date as current date if not provided (IST by default)
         task_date = data.get('task_date')
         if not task_date:

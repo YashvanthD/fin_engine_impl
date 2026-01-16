@@ -2,6 +2,7 @@ import zoneinfo
 from datetime import datetime
 
 from flask import Blueprint, request, current_app
+from werkzeug.exceptions import Unauthorized
 
 from fin_server.dto.pond_dto import PondDTO
 from fin_server.exception.UnauthorizedError import UnauthorizedError
@@ -110,7 +111,7 @@ def create_pond_entity():
             pond_repository.create(pond_entity)
             created = pond_repository.find_one({'pond_id': pond_id})
             return respond_success(pond_to_dict(created), status=201)
-    except UnauthorizedError as e:
+    except (UnauthorizedError, Unauthorized) as e:
         return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception(f'Exception in create_pond_entity: {e}')
@@ -132,7 +133,7 @@ def update_pond_entity(pond_id):
             return respond_error('Pond not found or nothing updated.', status=404)
         updated = pond_repository.find_one({'pond_id': pond_id})
         return respond_success(updated)
-    except UnauthorizedError as e:
+    except (UnauthorizedError, Unauthorized) as e:
         return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception(f'Exception in update_pond_entity: {e}')
@@ -154,7 +155,7 @@ def get_pond(pond_id):
             return respond_success(pond_dto.to_dict())
         except Exception:
             return respond_success(pond_to_dict(pond))
-    except UnauthorizedError as e:
+    except (UnauthorizedError, Unauthorized) as e:
         return respond_error(str(e), status=401)
     except Exception as e:
         return respond_error('Server error', status=500)
@@ -171,7 +172,7 @@ def update_pond(pond_id):
             return respond_error('Pond not found or nothing updated.', status=404)
         updated = pond_repository.find_one({'pond_id': pond_id})
         return respond_success(updated)
-    except UnauthorizedError as e:
+    except (UnauthorizedError, Unauthorized) as e:
         return respond_error(str(e), status=401)
     except Exception as e:
         return respond_error('Server error', status=500)
@@ -207,7 +208,7 @@ def delete_pond(pond_id):
         # perform cascade delete using the service (uses get_collection internally)
         delete_summary = delete_pond_and_related(pond_id)
         return respond_success({'deleted': True, 'financials': financial_summary, 'delete_summary': delete_summary})
-    except UnauthorizedError as e:
+    except (UnauthorizedError, Unauthorized) as e:
         return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception(f'Exception in delete_pond: {e}')
@@ -251,7 +252,7 @@ def pond_fish_options(pond_id):
         # transform to simple dropdown format
         options = [{'id': f['_id'], 'species_code': f.get('species_code'), 'common_name': f.get('common_name')} for f in fish_list]
         return respond_success({'pondId': pond_id, 'options': options})
-    except UnauthorizedError as e:
+    except (UnauthorizedError, Unauthorized) as e:
         return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception(f'Exception in pond_fish_options: {e}')
@@ -306,7 +307,7 @@ def pond_activity(pond_id):
             if 'created_at' in a and hasattr(a['created_at'], 'isoformat'):
                 a['created_at'] = a['created_at'].isoformat()
         return respond_success({'pondId': pond_id, 'activities': activities})
-    except UnauthorizedError as e:
+    except (UnauthorizedError, Unauthorized) as e:
         return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception(f'Exception in pond_activity: {e}')
@@ -444,7 +445,7 @@ def pond_history(pond_id):
         # Normalize nested BSON types (ObjectId) and datetimes
         result_normalized = normalize_doc(result)
         return respond_success({'history': result_normalized})
-    except UnauthorizedError as e:
+    except (UnauthorizedError, Unauthorized) as e:
         return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception(f'Exception in pond_history: {e}')
@@ -501,7 +502,7 @@ def api_list_ponds():
             except Exception:
                 out_list.append(pond_to_dict(p))
         return respond_success({'data': out_list, 'meta': {'limit': limit, 'skip': skip}})
-    except UnauthorizedError as e:
+    except (UnauthorizedError, Unauthorized) as e:
         return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception('Error in api_list_ponds')
@@ -534,7 +535,7 @@ def api_create_pond():
         except Exception:
             res = pond_repository.create(pond_entity)
             return respond_success({'pond_id': pond_id}, status=201)
-    except UnauthorizedError as e:
+    except (UnauthorizedError, Unauthorized) as e:
         return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception('Error in api_create_pond')
@@ -553,7 +554,7 @@ def api_get_pond(pond_id):
             return respond_success({'pond': pd.to_dict()})
         except Exception:
             return respond_success({'pond': pond_to_dict(pond)})
-    except UnauthorizedError as e:
+    except (UnauthorizedError, Unauthorized) as e:
         return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception('Error in api_get_pond')
@@ -575,7 +576,7 @@ def api_patch_pond(pond_id):
             return respond_success({'pond': pd.to_dict()})
         except Exception:
             return respond_success({'pond': pond_to_dict(updated)})
-    except UnauthorizedError as e:
+    except (UnauthorizedError, Unauthorized) as e:
         return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception('Error in api_patch_pond')
@@ -589,7 +590,7 @@ def api_delete_pond(pond_id):
         if not result or not result.deleted_count:
             return respond_error('Pond not found', status=404)
         return respond_success({'deleted': True})
-    except UnauthorizedError as e:
+    except (UnauthorizedError, Unauthorized) as e:
         return respond_error(str(e), status=401)
     except Exception as e:
         current_app.logger.exception('Error in api_delete_pond')
