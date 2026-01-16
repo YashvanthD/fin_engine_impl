@@ -184,89 +184,61 @@ def get_dashboard(auth_payload):
 
 
 # =============================================================================
-# Alerts Endpoints
+# Alerts Endpoints (DEPRECATED - Use /api/notification/alert/* instead)
 # =============================================================================
 
 @dashboard_bp.route('/alerts', methods=['GET'])
 @handle_errors
 @require_auth
 def get_alerts_list(auth_payload):
-    """Get list of alerts for the account."""
-    logger.info('GET /dashboard/alerts called')
+    """Get list of alerts for the account.
+
+    DEPRECATED: Use GET /api/notification/alert/ instead.
+    This endpoint will be removed in a future version.
+    """
+    logger.warning('DEPRECATED: GET /api/dashboard/alerts - Use GET /api/notification/alert/ instead')
 
     account_key = auth_payload.get('account_key')
     limit = int(request.args.get('limit', 50))
 
     alerts = _get_alerts(account_key, limit=limit)
-    return respond_success({'alerts': alerts})
+    return respond_success({
+        'alerts': alerts,
+        '_deprecated': True,
+        '_message': 'Use GET /api/notification/alert/ instead'
+    })
 
 
 @dashboard_bp.route('/alerts/<alert_id>/acknowledge', methods=['PUT'])
 @handle_errors
 @require_auth
 def acknowledge_alert(alert_id, auth_payload):
-    """Mark an alert as acknowledged."""
-    logger.info(f'PUT /dashboard/alerts/{alert_id}/acknowledge called')
+    """Mark an alert as acknowledged.
+
+    DEPRECATED: Use PUT /api/notification/alert/{alert_id}/acknowledge instead.
+    This endpoint will be removed in a future version.
+    """
+    logger.warning(f'DEPRECATED: PUT /api/dashboard/alerts/{alert_id}/acknowledge - Use /api/notification/alert/{alert_id}/acknowledge instead')
 
     account_key = auth_payload.get('account_key')
     user_key = auth_payload.get('user_key')
 
-    try:
-        alerts_repo = get_collection('alerts')
+    # Use the new AlertHandler
+    from fin_server.websocket.handlers.alert_handler import AlertHandler
+    success = AlertHandler.acknowledge_and_emit(alert_id, account_key, user_key)
 
-        # Find and update the alert
-        from bson import ObjectId
-        try:
-            query = {'_id': ObjectId(alert_id), 'account_key': account_key}
-        except Exception:
-            query = {'alert_id': alert_id, 'account_key': account_key}
-
-        result = alerts_repo.update_one(
-            query,
-            {'$set': {
-                'acknowledged': True,
-                'acknowledged_by': user_key,
-                'acknowledged_at': datetime.now().isoformat()
-            }}
-        )
-
-        if result.modified_count == 0:
-            return respond_error('Alert not found', status=404)
-
-        return respond_success({'message': 'Alert acknowledged', 'alert_id': alert_id})
-    except Exception as e:
-        logger.exception(f'Error acknowledging alert: {e}')
-        return respond_error('Server error', status=500)
+    if success:
+        return respond_success({
+            'message': 'Alert acknowledged',
+            'alert_id': alert_id,
+            '_deprecated': True,
+            '_message': 'Use PUT /api/notification/alert/{alert_id}/acknowledge instead'
+        })
+    else:
+        return respond_error('Alert not found', status=404)
 
 
 # =============================================================================
-# API Blueprint Aliases
+# NOTE: dashboard_api_bp routes removed - use main dashboard_bp with /api/dashboard prefix
 # =============================================================================
-
-@dashboard_api_bp.route('/dashboard', methods=['GET'])
-@handle_errors
-@require_auth
-def api_get_dashboard(auth_payload):
-    """API endpoint for dashboard."""
-    return get_dashboard(auth_payload)
-
-
-@dashboard_api_bp.route('/alerts', methods=['GET'])
-@handle_errors
-@require_auth
-def api_get_alerts(auth_payload):
-    """API endpoint for alerts list."""
-    account_key = auth_payload.get('account_key')
-    limit = int(request.args.get('limit', 50))
-
-    alerts = _get_alerts(account_key, limit=limit)
-    return respond_success({'alerts': alerts})
-
-
-@dashboard_api_bp.route('/alerts/<alert_id>/acknowledge', methods=['PUT'])
-@handle_errors
-@require_auth
-def api_acknowledge_alert(alert_id, auth_payload):
-    """API endpoint to acknowledge alert."""
-    return acknowledge_alert(alert_id, auth_payload)
 

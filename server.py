@@ -29,6 +29,7 @@ from fin_server.routes.ai import openai_bp
 from fin_server.security.authentication import AuthSecurity
 from fin_server.notification.scheduler import TaskScheduler
 from fin_server.messaging.socket_server import socketio, start_notification_worker
+from fin_server.websocket.hub import init_websocket_hub
 from fin_server.utils.metrics import collector as metrics_collector
 from fin_server.utils.helpers import respond_error
 from werkzeug.exceptions import Unauthorized, Forbidden
@@ -79,6 +80,8 @@ def create_app() -> Flask:
     app.register_blueprint(notification_bp)
     app.register_blueprint(openai_bp)
 
+    # Initialize WebSocket hub for real-time notifications/alerts
+    init_websocket_hub(app, socketio)
 
     logging.basicConfig(level=logging.INFO)
 

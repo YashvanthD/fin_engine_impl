@@ -242,6 +242,7 @@ export const API_AI = {
 
 // ============================================================================
 // Notification Endpoints (/api/notification/*)
+// Now with WebSocket real-time delivery!
 // ============================================================================
 export const API_NOTIFICATION = {
   BASE: '/api/notification',
@@ -252,12 +253,47 @@ export const API_NOTIFICATION = {
   MARK_ALL_READ: '/api/notification/read-all',
   DELETE: (notificationId) => `/api/notification/${notificationId}`,
   BROADCAST: '/api/notification/broadcast',
+  WS_INFO: '/api/notification/ws-info',
   // Alert endpoints
   ALERT_LIST: '/api/notification/alert/',
   ALERT_CREATE: '/api/notification/alert/',
   ALERT_DETAIL: (alertId) => `/api/notification/alert/${alertId}`,
   ALERT_ACKNOWLEDGE: (alertId) => `/api/notification/alert/${alertId}/acknowledge`,
   ALERT_DELETE: (alertId) => `/api/notification/alert/${alertId}`,
+};
+
+// ============================================================================
+// WebSocket Events (for real-time updates)
+// Connect to /socket.io with auth token
+// ============================================================================
+export const WS_EVENTS = {
+  // Notification events (server -> client)
+  NOTIFICATION_NEW: 'notification:new',
+  NOTIFICATION_READ: 'notification:read',
+  NOTIFICATION_READ_ALL: 'notification:read_all',
+  NOTIFICATION_DELETED: 'notification:deleted',
+  NOTIFICATION_COUNT: 'notification:count',
+
+  // Alert events (server -> client)
+  ALERT_NEW: 'alert:new',
+  ALERT_ACKNOWLEDGED: 'alert:acknowledged',
+  ALERT_DELETED: 'alert:deleted',
+  ALERT_COUNT: 'alert:count',
+
+  // Client -> server events
+  MARK_NOTIFICATION_READ: 'notification:mark_read',
+  MARK_ALL_NOTIFICATIONS_READ: 'notification:mark_all_read',
+  ACKNOWLEDGE_ALERT: 'alert:acknowledge',
+
+  // Presence events
+  PRESENCE_ONLINE: 'presence:online',
+  PRESENCE_OFFLINE: 'presence:offline',
+  PRESENCE_UPDATE: 'presence:update',
+
+  // Stream events (real-time data updates)
+  STREAM_TASK_UPDATE: 'stream:task_update',
+  STREAM_POND_UPDATE: 'stream:pond_update',
+  STREAM_EXPENSE_UPDATE: 'stream:expense_update',
 };
 
 // ============================================================================
@@ -314,5 +350,6 @@ export default {
   NOTIFICATION: API_NOTIFICATION,
   AI: API_AI,
   PUBLIC: API_PUBLIC,
+  WS_EVENTS: WS_EVENTS,
 };
 

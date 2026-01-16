@@ -1,12 +1,15 @@
-"""Notification and Alert routes for creating and managing notifications.
+"""Notification and Alert routes with WebSocket integration.
 
-This module provides endpoints for:
-- Creating notifications/alerts
-- Listing notifications for a user
-- Marking notifications as read/delivered
-- Deleting notifications
+This module provides REST API endpoints for notifications and alerts.
+All create/update/delete operations also emit events via WebSocket.
 
-All endpoints are under /api/notification/*
+Endpoints:
+- /api/notification/* - Notification CRUD
+- /api/notification/alert/* - Alert CRUD
+
+WebSocket Events (emitted automatically):
+- notification:new, notification:read, notification:count
+- alert:new, alert:acknowledged, alert:count
 """
 import logging
 from datetime import datetime
@@ -20,6 +23,8 @@ from fin_server.utils.decorators import handle_errors, require_auth, require_adm
 from fin_server.utils.helpers import respond_success, respond_error, normalize_doc
 from fin_server.utils.generator import generate_uuid_hex
 from fin_server.utils.time_utils import get_time_date_dt
+from fin_server.websocket.handlers.notification_handler import NotificationHandler
+from fin_server.websocket.handlers.alert_handler import AlertHandler
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +45,7 @@ def _normalize_notification(doc):
     if not doc:
         return None
     normalized = normalize_doc(doc)
-    normalized['id'] = str(normalized.get('_id', ''))
+    normalized['id'] = normalized.get('notification_id') or str(normalized.get('_id', ''))
     return normalized
 
 
@@ -62,22 +67,24 @@ def _normalize_alert(doc):
 @handle_errors
 @require_auth
 def create_notification(auth_payload):
-    """Create a new notification.
+    """Create a notification and emit via WebSocket.
 
     Request Body:
         {
-            "user_key": "target_user_key",  // Required - who receives the notification
+            "user_key": "target_user_key",  // Required
             "title": "Notification Title",   // Required
             "message": "Notification body",  // Required
-            "type": "info|warning|error|success",  // Optional, default: "info"
-            "priority": "low|normal|high",   // Optional, default: "normal"
-            "data": {},                      // Optional - additional data
-            "link": "/path/to/resource"      // Optional - link to related resource
+            "type": "info|warning|error|success",
+            "priority": "low|normal|high",
+            "data": {},
+            "link": "/path/to/resource"
         }
+
+    WebSocket Event: notification:new (to target user)
     """
-    requester_account_key = auth_payload.get('account_key')
-    requester_user_key = auth_payload.get('user_key')
-    logger.info(f"POST /api/notification | account_key: {requester_account_key}, user_key: {requester_user_key}")
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"POST /api/notification | account_key: {account_key}, user_key: {user_key}")
 
     data = request.get_json(force=True)
 
@@ -93,41 +100,25 @@ def create_notification(auth_payload):
     if not message:
         return respond_error('message is required', status=400)
 
-    # Build notification document
-    notification_id = generate_uuid_hex(24)
-    now = get_time_date_dt(include_time=True)
+    # Create notification and emit via WebSocket
+    notification_id = NotificationHandler.create_and_emit(
+        account_key=account_key,
+        target_user_key=target_user_key,
+        title=title,
+        message=message,
+        notification_type=data.get('type', 'info'),
+        priority=data.get('priority', 'normal'),
+        data=data.get('data'),
+        link=data.get('link'),
+        created_by=user_key
+    )
 
-    notification_doc = {
-        '_id': notification_id,
-        'notification_id': notification_id,
-        'account_key': requester_account_key,
-        'user_key': target_user_key,
-        'title': title,
-        'message': message,
-        'type': data.get('type', 'info'),
-        'priority': data.get('priority', 'normal'),
-        'data': data.get('data', {}),
-        'link': data.get('link'),
-        'read': False,
-        'delivered': False,
-        'created_by': requester_user_key,
-        'created_at': now,
-        'updated_at': now
-    }
-
-    try:
-        if notification_repo:
-            notification_repo.create(notification_doc)
-        else:
-            return respond_error('Notification service unavailable', status=503)
-
-        logger.info(f"Notification created: {notification_id} for user: {target_user_key}")
+    if notification_id:
         return respond_success({
             'notification_id': notification_id,
-            'message': 'Notification created successfully'
+            'message': 'Notification created and delivered via WebSocket'
         }, status=201)
-    except Exception as e:
-        logger.exception(f'Error creating notification: {e}')
+    else:
         return respond_error('Failed to create notification', status=500)
 
 
@@ -136,24 +127,26 @@ def create_notification(auth_payload):
 @handle_errors
 @require_auth
 def list_notifications(auth_payload):
-    """List notifications for the current user."""
+    """List notifications for the current user.
+
+    Query Params:
+        unread: bool - Show only unread (default: false)
+        limit: int - Max results (default: 50)
+        skip: int - Offset for pagination
+    """
     account_key = auth_payload.get('account_key')
     user_key = auth_payload.get('user_key')
     logger.info(f"GET /api/notification | account_key: {account_key}, user_key: {user_key}")
 
-    # Query params
     unread_only = request.args.get('unread', 'false').lower() == 'true'
-    limit = int(request.args.get('limit', 50))
+    limit = min(int(request.args.get('limit', 50)), 100)
     skip = int(request.args.get('skip', 0))
 
-    try:
-        if not notification_repo:
-            return respond_error('Notification service unavailable', status=503)
+    if not notification_repo:
+        return respond_error('Notification service unavailable', status=503)
 
-        query = {
-            'account_key': account_key,
-            'user_key': user_key
-        }
+    try:
+        query = {'account_key': account_key, 'user_key': user_key}
         if unread_only:
             query['read'] = False
 
@@ -165,9 +158,18 @@ def list_notifications(auth_payload):
         )
 
         result = [_normalize_notification(n) for n in notifications]
+
+        # Get unread count
+        unread_count = notification_repo.collection.count_documents({
+            'account_key': account_key,
+            'user_key': user_key,
+            'read': False
+        })
+
         return respond_success({
             'notifications': result,
             'count': len(result),
+            'unread_count': unread_count,
             'meta': {'limit': limit, 'skip': skip}
         })
     except Exception as e:
@@ -184,10 +186,10 @@ def get_notification(notification_id, auth_payload):
     user_key = auth_payload.get('user_key')
     logger.info(f"GET /api/notification/{notification_id} | account_key: {account_key}, user_key: {user_key}")
 
-    try:
-        if not notification_repo:
-            return respond_error('Notification service unavailable', status=503)
+    if not notification_repo:
+        return respond_error('Notification service unavailable', status=503)
 
+    try:
         notification = notification_repo.find_one({
             'notification_id': notification_id,
             'account_key': account_key,
@@ -207,99 +209,98 @@ def get_notification(notification_id, auth_payload):
 @handle_errors
 @require_auth
 def mark_notification_read(notification_id, auth_payload):
-    """Mark a notification as read."""
+    """Mark a notification as read and emit via WebSocket.
+
+    WebSocket Events: notification:read, notification:count
+    """
     account_key = auth_payload.get('account_key')
     user_key = auth_payload.get('user_key')
     logger.info(f"PUT /api/notification/{notification_id}/read | account_key: {account_key}, user_key: {user_key}")
 
-    try:
-        if not notification_repo:
-            return respond_error('Notification service unavailable', status=503)
+    success = NotificationHandler.mark_read_and_emit(notification_id, user_key)
 
-        result = notification_repo.update(
-            {
-                'notification_id': notification_id,
-                'account_key': account_key,
-                'user_key': user_key
-            },
-            {
-                'read': True,
-                'read_at': get_time_date_dt(include_time=True),
-                'updated_at': get_time_date_dt(include_time=True)
-            }
-        )
-
-        if result.modified_count == 0:
-            return respond_error('Notification not found', status=404)
-
+    if success:
         return respond_success({'message': 'Notification marked as read'})
-    except Exception as e:
-        logger.exception(f'Error marking notification as read: {e}')
-        return respond_error('Failed to update notification', status=500)
+    else:
+        return respond_error('Notification not found', status=404)
 
 
 @notification_bp.route('/read-all', methods=['PUT', 'POST'])
 @handle_errors
 @require_auth
 def mark_all_notifications_read(auth_payload):
-    """Mark all notifications as read for the current user."""
+    """Mark all notifications as read and emit via WebSocket.
+
+    WebSocket Events: notification:read_all, notification:count
+    """
     account_key = auth_payload.get('account_key')
     user_key = auth_payload.get('user_key')
     logger.info(f"PUT /api/notification/read-all | account_key: {account_key}, user_key: {user_key}")
 
-    try:
-        if not notification_repo:
-            return respond_error('Notification service unavailable', status=503)
+    updated_count = NotificationHandler.mark_all_read_and_emit(user_key, account_key)
 
-        result = notification_repo.update(
-            {
-                'account_key': account_key,
-                'user_key': user_key,
-                'read': False
-            },
-            {
-                'read': True,
-                'read_at': get_time_date_dt(include_time=True),
-                'updated_at': get_time_date_dt(include_time=True)
-            },
-            multi=True
-        )
-
-        return respond_success({
-            'message': 'All notifications marked as read',
-            'updated_count': result.modified_count
-        })
-    except Exception as e:
-        logger.exception(f'Error marking all notifications as read: {e}')
-        return respond_error('Failed to update notifications', status=500)
+    return respond_success({
+        'message': 'All notifications marked as read',
+        'updated_count': updated_count
+    })
 
 
 @notification_bp.route('/<notification_id>', methods=['DELETE'])
 @handle_errors
 @require_auth
 def delete_notification(notification_id, auth_payload):
-    """Delete a notification."""
+    """Delete a notification and emit via WebSocket.
+
+    WebSocket Event: notification:deleted
+    """
     account_key = auth_payload.get('account_key')
     user_key = auth_payload.get('user_key')
     logger.info(f"DELETE /api/notification/{notification_id} | account_key: {account_key}, user_key: {user_key}")
 
-    try:
-        if not notification_repo:
-            return respond_error('Notification service unavailable', status=503)
+    success = NotificationHandler.delete_and_emit(notification_id, user_key)
 
-        result = notification_repo.delete({
-            'notification_id': notification_id,
-            'account_key': account_key,
-            'user_key': user_key
-        })
-
-        if result.deleted_count == 0:
-            return respond_error('Notification not found', status=404)
-
+    if success:
         return respond_success({'message': 'Notification deleted', 'notification_id': notification_id})
-    except Exception as e:
-        logger.exception(f'Error deleting notification: {e}')
-        return respond_error('Failed to delete notification', status=500)
+    else:
+        return respond_error('Notification not found', status=404)
+
+
+@notification_bp.route('/broadcast', methods=['POST'])
+@handle_errors
+@require_auth
+@require_admin
+def broadcast_notification(auth_payload):
+    """Broadcast notification to all users in account (admin only).
+
+    WebSocket Event: notification:new (to all users)
+    """
+    account_key = auth_payload.get('account_key')
+    user_key = auth_payload.get('user_key')
+    logger.info(f"POST /api/notification/broadcast | account_key: {account_key}, user_key: {user_key}")
+
+    data = request.get_json(force=True)
+    title = data.get('title')
+    message = data.get('message')
+
+    if not title:
+        return respond_error('title is required', status=400)
+    if not message:
+        return respond_error('message is required', status=400)
+
+    count = NotificationHandler.broadcast_and_emit(
+        account_key=account_key,
+        title=title,
+        message=message,
+        notification_type=data.get('type', 'info'),
+        priority=data.get('priority', 'normal'),
+        data=data.get('data'),
+        created_by=user_key
+    )
+
+    return respond_success({
+        'message': 'Broadcast notification sent',
+        'recipients_count': count
+    }, status=201)
 
 
 # =============================================================================
@@ -311,27 +312,25 @@ def delete_notification(notification_id, auth_payload):
 @handle_errors
 @require_auth
 def create_alert(auth_payload):
-    """Create a new alert.
+    """Create an alert and emit via WebSocket to all account users.
 
     Request Body:
         {
-            "title": "Alert Title",           // Required
-            "message": "Alert description",   // Required
-            "type": "info|warning|critical|success",  // Optional, default: "warning"
-            "severity": "low|medium|high|critical",   // Optional, default: "medium"
-            "source": "system|pond|task|expense",     // Optional, default: "system"
-            "source_id": "related_entity_id",         // Optional
-            "auto_dismiss": true,             // Optional, default: false
-            "dismiss_after_minutes": 60       // Optional, only if auto_dismiss is true
+            "title": "Alert Title",
+            "message": "Alert description",
+            "type": "info|warning|critical|success",
+            "severity": "low|medium|high|critical",
+            "source": "system|pond|task|expense",
+            "source_id": "related_entity_id"
         }
+
+    WebSocket Event: alert:new (to all account users)
     """
     account_key = auth_payload.get('account_key')
     user_key = auth_payload.get('user_key')
     logger.info(f"POST /api/notification/alert | account_key: {account_key}, user_key: {user_key}")
 
     data = request.get_json(force=True)
-
-    # Validate required fields
     title = data.get('title')
     message = data.get('message')
 
@@ -340,43 +339,25 @@ def create_alert(auth_payload):
     if not message:
         return respond_error('message is required', status=400)
 
-    # Build alert document
-    alert_id = generate_uuid_hex(24)
-    now = get_time_date_dt(include_time=True)
+    alert_id = AlertHandler.create_and_emit(
+        account_key=account_key,
+        title=title,
+        message=message,
+        alert_type=data.get('type', 'warning'),
+        severity=data.get('severity', 'medium'),
+        source=data.get('source', 'system'),
+        source_id=data.get('source_id'),
+        auto_dismiss=data.get('auto_dismiss', False),
+        dismiss_after_minutes=data.get('dismiss_after_minutes'),
+        created_by=user_key
+    )
 
-    alert_doc = {
-        '_id': alert_id,
-        'alert_id': alert_id,
-        'account_key': account_key,
-        'title': title,
-        'message': message,
-        'type': data.get('type', 'warning'),
-        'severity': data.get('severity', 'medium'),
-        'source': data.get('source', 'system'),
-        'source_id': data.get('source_id'),
-        'acknowledged': False,
-        'acknowledged_by': None,
-        'acknowledged_at': None,
-        'auto_dismiss': data.get('auto_dismiss', False),
-        'dismiss_after_minutes': data.get('dismiss_after_minutes'),
-        'created_by': user_key,
-        'created_at': now,
-        'updated_at': now
-    }
-
-    try:
-        if alerts_repo:
-            alerts_repo.create(alert_doc)
-        else:
-            return respond_error('Alert service unavailable', status=503)
-
-        logger.info(f"Alert created: {alert_id}")
+    if alert_id:
         return respond_success({
             'alert_id': alert_id,
-            'message': 'Alert created successfully'
+            'message': 'Alert created and delivered via WebSocket'
         }, status=201)
-    except Exception as e:
-        logger.exception(f'Error creating alert: {e}')
+    else:
         return respond_error('Failed to create alert', status=500)
 
 
@@ -385,22 +366,29 @@ def create_alert(auth_payload):
 @handle_errors
 @require_auth
 def list_alerts(auth_payload):
-    """List alerts for the account."""
+    """List alerts for the account.
+
+    Query Params:
+        unacknowledged: bool - Show only unacknowledged
+        severity: str - Filter by severity
+        type: str - Filter by type
+        limit: int - Max results
+        skip: int - Offset
+    """
     account_key = auth_payload.get('account_key')
     user_key = auth_payload.get('user_key')
     logger.info(f"GET /api/notification/alert | account_key: {account_key}, user_key: {user_key}")
 
-    # Query params
     unacknowledged_only = request.args.get('unacknowledged', 'false').lower() == 'true'
     severity = request.args.get('severity')
     alert_type = request.args.get('type')
-    limit = int(request.args.get('limit', 50))
+    limit = min(int(request.args.get('limit', 50)), 100)
     skip = int(request.args.get('skip', 0))
 
-    try:
-        if not alerts_repo:
-            return respond_error('Alert service unavailable', status=503)
+    if not alerts_repo:
+        return respond_error('Alert service unavailable', status=503)
 
+    try:
         query = {'account_key': account_key}
         if unacknowledged_only:
             query['acknowledged'] = False
@@ -417,9 +405,17 @@ def list_alerts(auth_payload):
         )
 
         result = [_normalize_alert(a) for a in alerts]
+
+        # Get unacknowledged count
+        unack_count = alerts_repo.collection.count_documents({
+            'account_key': account_key,
+            'acknowledged': False
+        })
+
         return respond_success({
             'alerts': result,
             'count': len(result),
+            'unacknowledged_count': unack_count,
             'meta': {'limit': limit, 'skip': skip}
         })
     except Exception as e:
@@ -436,10 +432,10 @@ def get_alert(alert_id, auth_payload):
     user_key = auth_payload.get('user_key')
     logger.info(f"GET /api/notification/alert/{alert_id} | account_key: {account_key}, user_key: {user_key}")
 
-    try:
-        if not alerts_repo:
-            return respond_error('Alert service unavailable', status=503)
+    if not alerts_repo:
+        return respond_error('Alert service unavailable', status=503)
 
+    try:
         alert = alerts_repo.find_one({
             'alert_id': alert_id,
             'account_key': account_key
@@ -457,148 +453,84 @@ def get_alert(alert_id, auth_payload):
 @notification_bp.route('/alert/<alert_id>/acknowledge', methods=['PUT', 'POST'])
 @handle_errors
 @require_auth
-def acknowledge_alert(alert_id, auth_payload):
-    """Acknowledge an alert."""
+def acknowledge_alert_route(alert_id, auth_payload):
+    """Acknowledge an alert and emit via WebSocket.
+
+    WebSocket Events: alert:acknowledged, alert:count
+    """
     account_key = auth_payload.get('account_key')
     user_key = auth_payload.get('user_key')
     logger.info(f"PUT /api/notification/alert/{alert_id}/acknowledge | account_key: {account_key}, user_key: {user_key}")
 
-    try:
-        if not alerts_repo:
-            return respond_error('Alert service unavailable', status=503)
+    success = AlertHandler.acknowledge_and_emit(alert_id, account_key, user_key)
 
-        result = alerts_repo.update(
-            {
-                'alert_id': alert_id,
-                'account_key': account_key
-            },
-            {
-                'acknowledged': True,
-                'acknowledged_by': user_key,
-                'acknowledged_at': get_time_date_dt(include_time=True),
-                'updated_at': get_time_date_dt(include_time=True)
-            }
-        )
-
-        if result.modified_count == 0:
-            return respond_error('Alert not found', status=404)
-
+    if success:
         return respond_success({'message': 'Alert acknowledged', 'alert_id': alert_id})
-    except Exception as e:
-        logger.exception(f'Error acknowledging alert: {e}')
-        return respond_error('Failed to acknowledge alert', status=500)
+    else:
+        return respond_error('Alert not found', status=404)
 
 
 @notification_bp.route('/alert/<alert_id>', methods=['DELETE'])
 @handle_errors
 @require_auth
 @require_admin
-def delete_alert(alert_id, auth_payload):
-    """Delete an alert (admin only)."""
+def delete_alert_route(alert_id, auth_payload):
+    """Delete an alert (admin only) and emit via WebSocket.
+
+    WebSocket Event: alert:deleted
+    """
     account_key = auth_payload.get('account_key')
     user_key = auth_payload.get('user_key')
     logger.info(f"DELETE /api/notification/alert/{alert_id} | account_key: {account_key}, user_key: {user_key}")
 
-    try:
-        if not alerts_repo:
-            return respond_error('Alert service unavailable', status=503)
+    success = AlertHandler.delete_and_emit(alert_id, account_key)
 
-        result = alerts_repo.delete({
-            'alert_id': alert_id,
-            'account_key': account_key
-        })
-
-        if result.deleted_count == 0:
-            return respond_error('Alert not found', status=404)
-
+    if success:
         return respond_success({'message': 'Alert deleted', 'alert_id': alert_id})
-    except Exception as e:
-        logger.exception(f'Error deleting alert: {e}')
-        return respond_error('Failed to delete alert', status=500)
+    else:
+        return respond_error('Alert not found', status=404)
 
 
 # =============================================================================
-# Broadcast Notification (Admin Only)
+# WebSocket Info Endpoint
 # =============================================================================
 
-@notification_bp.route('/broadcast', methods=['POST'])
+@notification_bp.route('/ws-info', methods=['GET'])
 @handle_errors
 @require_auth
-@require_admin
-def broadcast_notification(auth_payload):
-    """Broadcast a notification to all users in the account (admin only).
+def get_websocket_info(auth_payload):
+    """Get WebSocket connection info and available events.
 
-    Request Body:
-        {
-            "title": "Notification Title",
-            "message": "Notification body",
-            "type": "info|warning|error|success",
-            "priority": "low|normal|high"
-        }
+    Returns info about how to connect to WebSocket for real-time updates.
     """
-    account_key = auth_payload.get('account_key')
-    user_key = auth_payload.get('user_key')
-    logger.info(f"POST /api/notification/broadcast | account_key: {account_key}, user_key: {user_key}")
-
-    data = request.get_json(force=True)
-
-    title = data.get('title')
-    message = data.get('message')
-
-    if not title:
-        return respond_error('title is required', status=400)
-    if not message:
-        return respond_error('message is required', status=400)
-
-    try:
-        # Get all users in the account
-        user_repo = get_collection('users')
-        if not user_repo:
-            return respond_error('User service unavailable', status=503)
-
-        users = list(user_repo.find({'account_key': account_key}))
-
-        if not users:
-            return respond_error('No users found in account', status=404)
-
-        if not notification_repo:
-            return respond_error('Notification service unavailable', status=503)
-
-        now = get_time_date_dt(include_time=True)
-        notifications_created = 0
-
-        for user in users:
-            target_user_key = user.get('user_key')
-            if not target_user_key:
-                continue
-
-            notification_id = generate_uuid_hex(24)
-            notification_doc = {
-                '_id': notification_id,
-                'notification_id': notification_id,
-                'account_key': account_key,
-                'user_key': target_user_key,
-                'title': title,
-                'message': message,
-                'type': data.get('type', 'info'),
-                'priority': data.get('priority', 'normal'),
-                'data': data.get('data', {}),
-                'broadcast': True,
-                'read': False,
-                'delivered': False,
-                'created_by': user_key,
-                'created_at': now,
-                'updated_at': now
+    return respond_success({
+        'websocket': {
+            'url': '/socket.io',
+            'auth': {
+                'method': 'token',
+                'header': 'Authorization: Bearer <token>',
+                'query': '?token=<token>'
+            },
+            'events': {
+                'notification': [
+                    'notification:new',
+                    'notification:read',
+                    'notification:read_all',
+                    'notification:deleted',
+                    'notification:count'
+                ],
+                'alert': [
+                    'alert:new',
+                    'alert:acknowledged',
+                    'alert:deleted',
+                    'alert:count'
+                ],
+                'client_events': [
+                    'notification:mark_read',
+                    'notification:mark_all_read',
+                    'alert:acknowledge'
+                ]
             }
-            notification_repo.create(notification_doc)
-            notifications_created += 1
-
-        logger.info(f"Broadcast notification sent to {notifications_created} users")
-        return respond_success({
-            'message': 'Broadcast notification sent',
-            'recipients_count': notifications_created
-        }, status=201)
-    except Exception as e:
-        logger.exception(f'Error broadcasting notification: {e}')
-        return respond_error('Failed to broadcast notification', status=500)
-
+        },
+        'note': 'Connect to WebSocket for real-time notifications instead of polling'
+    })
