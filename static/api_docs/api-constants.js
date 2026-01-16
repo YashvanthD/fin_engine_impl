@@ -241,6 +241,26 @@ export const API_AI = {
 };
 
 // ============================================================================
+// Notification Endpoints (/api/notification/*)
+// ============================================================================
+export const API_NOTIFICATION = {
+  BASE: '/api/notification',
+  LIST: '/api/notification/',
+  CREATE: '/api/notification/',
+  DETAIL: (notificationId) => `/api/notification/${notificationId}`,
+  MARK_READ: (notificationId) => `/api/notification/${notificationId}/read`,
+  MARK_ALL_READ: '/api/notification/read-all',
+  DELETE: (notificationId) => `/api/notification/${notificationId}`,
+  BROADCAST: '/api/notification/broadcast',
+  // Alert endpoints
+  ALERT_LIST: '/api/notification/alert/',
+  ALERT_CREATE: '/api/notification/alert/',
+  ALERT_DETAIL: (alertId) => `/api/notification/alert/${alertId}`,
+  ALERT_ACKNOWLEDGE: (alertId) => `/api/notification/alert/${alertId}/acknowledge`,
+  ALERT_DELETE: (alertId) => `/api/notification/alert/${alertId}`,
+};
+
+// ============================================================================
 // Public Endpoints (/api/public/*)
 // ============================================================================
 export const API_PUBLIC = {
@@ -291,6 +311,7 @@ export default {
   DASHBOARD: API_DASHBOARD,
   ROLE: API_ROLE,
   PERMISSION: API_PERMISSION,
+  NOTIFICATION: API_NOTIFICATION,
   AI: API_AI,
   PUBLIC: API_PUBLIC,
 };

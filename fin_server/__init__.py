@@ -12,6 +12,7 @@ from .routes.expenses import expenses_bp
 from .routes.dashboard import dashboard_bp
 from .routes.role import role_bp
 from .routes.permission import permission_bp
+from .routes.notification import notification_bp
 
 # Application factory is defined in server.py for now; we re-export the
 # blueprints here so that other code (tests, alternative runners) can
@@ -32,4 +33,5 @@ __all__ = [
     "dashboard_bp",
     "role_bp",
     "permission_bp",
+    "notification_bp",
 ]

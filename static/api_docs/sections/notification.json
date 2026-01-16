@@ -1,0 +1,320 @@
+{
+  "id": "notification",
+  "name": "Notifications & Alerts",
+  "description": "Notification and alert management endpoints. All endpoints are under /api/notification/*",
+  "baseUrl": "/api/notification",
+  "endpoints": [
+    {
+      "id": "notification-create",
+      "method": "POST",
+      "path": "/api/notification/",
+      "summary": "Create a notification",
+      "description": "Create a new notification for a specific user.",
+      "auth": true,
+      "tags": ["notification", "create"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "user_key": {"type": "string", "required": true, "description": "Target user key"},
+          "title": {"type": "string", "required": true, "description": "Notification title"},
+          "message": {"type": "string", "required": true, "description": "Notification body"},
+          "type": {"type": "string", "required": false, "description": "Type: info, warning, error, success", "default": "info"},
+          "priority": {"type": "string", "required": false, "description": "Priority: low, normal, high", "default": "normal"},
+          "data": {"type": "object", "required": false, "description": "Additional data"},
+          "link": {"type": "string", "required": false, "description": "Link to related resource"}
+        },
+        "example": {
+          "user_key": "usr_abc123",
+          "title": "New Task Assigned",
+          "message": "You have been assigned a new task: Water quality check",
+          "type": "info",
+          "priority": "normal",
+          "link": "/tasks/task_xyz"
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Notification created",
+          "example": {
+            "success": true,
+            "data": {
+              "notification_id": "notif_abc123",
+              "message": "Notification created successfully"
+            }
+          }
+        },
+        "400": {"description": "Validation error"}
+      }
+    },
+    {
+      "id": "notification-list",
+      "method": "GET",
+      "path": "/api/notification/",
+      "summary": "List notifications",
+      "description": "Get notifications for the current user.",
+      "auth": true,
+      "tags": ["notification", "list"],
+      "queryParams": {
+        "unread": {"type": "boolean", "required": false, "description": "Show only unread notifications", "default": false},
+        "limit": {"type": "integer", "required": false, "default": 50},
+        "skip": {"type": "integer", "required": false, "default": 0}
+      },
+      "responses": {
+        "200": {
+          "description": "Notifications retrieved",
+          "example": {
+            "success": true,
+            "data": {
+              "notifications": [
+                {
+                  "id": "notif_abc123",
+                  "title": "New Task Assigned",
+                  "message": "You have been assigned a new task",
+                  "type": "info",
+                  "read": false,
+                  "created_at": "2026-01-16T10:00:00Z"
+                }
+              ],
+              "count": 1,
+              "meta": {"limit": 50, "skip": 0}
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "notification-detail",
+      "method": "GET",
+      "path": "/api/notification/{notification_id}",
+      "summary": "Get a notification",
+      "description": "Get details of a specific notification.",
+      "auth": true,
+      "tags": ["notification"],
+      "pathParams": {
+        "notification_id": {"type": "string", "required": true}
+      },
+      "responses": {
+        "200": {"description": "Notification details"},
+        "404": {"description": "Notification not found"}
+      }
+    },
+    {
+      "id": "notification-mark-read",
+      "method": "PUT",
+      "path": "/api/notification/{notification_id}/read",
+      "summary": "Mark notification as read",
+      "description": "Mark a specific notification as read.",
+      "auth": true,
+      "tags": ["notification"],
+      "pathParams": {
+        "notification_id": {"type": "string", "required": true}
+      },
+      "responses": {
+        "200": {"description": "Notification marked as read"},
+        "404": {"description": "Notification not found"}
+      }
+    },
+    {
+      "id": "notification-mark-all-read",
+      "method": "PUT",
+      "path": "/api/notification/read-all",
+      "summary": "Mark all notifications as read",
+      "description": "Mark all notifications as read for the current user.",
+      "auth": true,
+      "tags": ["notification"],
+      "responses": {
+        "200": {
+          "description": "All notifications marked as read",
+          "example": {
+            "success": true,
+            "data": {
+              "message": "All notifications marked as read",
+              "updated_count": 5
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "notification-delete",
+      "method": "DELETE",
+      "path": "/api/notification/{notification_id}",
+      "summary": "Delete a notification",
+      "description": "Delete a specific notification.",
+      "auth": true,
+      "tags": ["notification"],
+      "pathParams": {
+        "notification_id": {"type": "string", "required": true}
+      },
+      "responses": {
+        "200": {"description": "Notification deleted"},
+        "404": {"description": "Notification not found"}
+      }
+    },
+    {
+      "id": "notification-broadcast",
+      "method": "POST",
+      "path": "/api/notification/broadcast",
+      "summary": "Broadcast notification (admin)",
+      "description": "Send a notification to all users in the account. Requires admin role.",
+      "auth": true,
+      "tags": ["notification", "admin"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "title": {"type": "string", "required": true},
+          "message": {"type": "string", "required": true},
+          "type": {"type": "string", "required": false, "default": "info"},
+          "priority": {"type": "string", "required": false, "default": "normal"}
+        },
+        "example": {
+          "title": "System Maintenance",
+          "message": "The system will be under maintenance on Sunday 2 AM - 4 AM",
+          "type": "warning",
+          "priority": "high"
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Broadcast sent",
+          "example": {
+            "success": true,
+            "data": {
+              "message": "Broadcast notification sent",
+              "recipients_count": 10
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "alert-create",
+      "method": "POST",
+      "path": "/api/notification/alert/",
+      "summary": "Create an alert",
+      "description": "Create a new system alert for the account.",
+      "auth": true,
+      "tags": ["alert", "create"],
+      "request": {
+        "contentType": "application/json",
+        "body": {
+          "title": {"type": "string", "required": true, "description": "Alert title"},
+          "message": {"type": "string", "required": true, "description": "Alert description"},
+          "type": {"type": "string", "required": false, "description": "Type: info, warning, critical, success", "default": "warning"},
+          "severity": {"type": "string", "required": false, "description": "Severity: low, medium, high, critical", "default": "medium"},
+          "source": {"type": "string", "required": false, "description": "Source: system, pond, task, expense", "default": "system"},
+          "source_id": {"type": "string", "required": false, "description": "Related entity ID"},
+          "auto_dismiss": {"type": "boolean", "required": false, "default": false},
+          "dismiss_after_minutes": {"type": "integer", "required": false}
+        },
+        "example": {
+          "title": "Low Oxygen Level",
+          "message": "Oxygen level in Pond A is below threshold",
+          "type": "critical",
+          "severity": "high",
+          "source": "pond",
+          "source_id": "pond_001"
+        }
+      },
+      "responses": {
+        "201": {
+          "description": "Alert created",
+          "example": {
+            "success": true,
+            "data": {
+              "alert_id": "alert_xyz789",
+              "message": "Alert created successfully"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "alert-list",
+      "method": "GET",
+      "path": "/api/notification/alert/",
+      "summary": "List alerts",
+      "description": "Get alerts for the account.",
+      "auth": true,
+      "tags": ["alert", "list"],
+      "queryParams": {
+        "unacknowledged": {"type": "boolean", "required": false, "description": "Show only unacknowledged alerts", "default": false},
+        "severity": {"type": "string", "required": false, "description": "Filter by severity"},
+        "type": {"type": "string", "required": false, "description": "Filter by type"},
+        "limit": {"type": "integer", "required": false, "default": 50},
+        "skip": {"type": "integer", "required": false, "default": 0}
+      },
+      "responses": {
+        "200": {
+          "description": "Alerts retrieved",
+          "example": {
+            "success": true,
+            "data": {
+              "alerts": [
+                {
+                  "id": "alert_xyz789",
+                  "title": "Low Oxygen Level",
+                  "message": "Oxygen level in Pond A is below threshold",
+                  "type": "critical",
+                  "severity": "high",
+                  "acknowledged": false,
+                  "created_at": "2026-01-16T08:00:00Z"
+                }
+              ],
+              "count": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "alert-detail",
+      "method": "GET",
+      "path": "/api/notification/alert/{alert_id}",
+      "summary": "Get an alert",
+      "description": "Get details of a specific alert.",
+      "auth": true,
+      "tags": ["alert"],
+      "pathParams": {
+        "alert_id": {"type": "string", "required": true}
+      },
+      "responses": {
+        "200": {"description": "Alert details"},
+        "404": {"description": "Alert not found"}
+      }
+    },
+    {
+      "id": "alert-acknowledge",
+      "method": "PUT",
+      "path": "/api/notification/alert/{alert_id}/acknowledge",
+      "summary": "Acknowledge an alert",
+      "description": "Mark an alert as acknowledged.",
+      "auth": true,
+      "tags": ["alert"],
+      "pathParams": {
+        "alert_id": {"type": "string", "required": true}
+      },
+      "responses": {
+        "200": {"description": "Alert acknowledged"},
+        "404": {"description": "Alert not found"}
+      }
+    },
+    {
+      "id": "alert-delete",
+      "method": "DELETE",
+      "path": "/api/notification/alert/{alert_id}",
+      "summary": "Delete an alert (admin)",
+      "description": "Delete an alert. Requires admin role.",
+      "auth": true,
+      "tags": ["alert", "admin"],
+      "pathParams": {
+        "alert_id": {"type": "string", "required": true}
+      },
+      "responses": {
+        "200": {"description": "Alert deleted"},
+        "404": {"description": "Alert not found"}
+      }
+    }
+  ]
+}
+
