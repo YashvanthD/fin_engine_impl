@@ -174,17 +174,150 @@ alert:deleted              - Alert deleted
 alert:count                - Unacknowledged count update
 ```
 
-### 4. Chat Events (namespace: /chat)
+### 4. Chat Events (Real-time Messaging)
+
+**Important**: REST API is ONLY for initial data loading. All real-time communication uses WebSocket.
+
+**REST API (Initial Load Only):**
+- GET /api/chat/conversations - List conversations
+- GET /api/chat/conversations/{id}/messages - Get message history (with pagination)
+- GET /api/chat/search - Search messages
+- GET /api/chat/unread - Get unread counts
+
+**WebSocket Events (Real-time):**
+
+#### Client -> Server Events:
 ```
-message:send               - Send a message
-message:new                - New message received
-message:delivered          - Message delivered (single tick ✓)
-message:read               - Message read (double tick ✓✓)
-message:deleted            - Message deleted
-message:edited             - Message edited
-message:reaction           - Reaction added/removed
-typing:start               - User started typing
-typing:stop                - User stopped typing
+chat:send                  - Send a new message
+  Data: {
+    conversationId: string,     // Required
+    content: string,            // Message text
+    type: string,               // 'text', 'image', 'file', etc.
+    replyTo?: string,           // Message ID being replied to
+    tempId?: string,            // Client-side temp ID for optimistic updates
+    mediaUrl?: string,          // For media messages
+    mentions?: string[]         // User keys mentioned
+  }
+
+chat:read                  - Mark messages as read
+  Data: {
+    conversationId?: string,    // Mark all in conversation
+    messageId?: string          // Or mark specific message
+  }
+
+chat:delivered             - Mark message as delivered
+  Data: {
+    messageId: string
+  }
+
+chat:typing                - Typing indicator
+  Data: {
+    conversationId: string,
+    isTyping: boolean
+  }
+
+chat:edit                  - Edit a message
+  Data: {
+    messageId: string,
+    content: string
+  }
+
+chat:delete                - Delete a message
+  Data: {
+    messageId: string,
+    forEveryone: boolean        // Delete for all or just self
+  }
+
+chat:conversation:create   - Create new conversation
+  Data: {
+    type: 'direct' | 'group',
+    participants: string[],     // User keys
+    name?: string               // For groups
+  }
+
+chat:conversation:join     - Join conversation room
+  Data: {
+    conversationId: string
+  }
+```
+
+#### Server -> Client Events:
+```
+chat:message:sent          - Confirmation message was stored
+  Data: {
+    messageId: string,          // Server-generated ID
+    conversationId: string,
+    senderKey: string,
+    content: string,
+    type: string,
+    status: 'sent',
+    createdAt: string,          // ISO timestamp
+    tempId: string              // Client's temp ID for matching
+  }
+
+chat:message               - New message received
+  Data: { same as chat:message:sent }
+
+chat:message:delivered     - Message was delivered to recipient
+  Data: {
+    messageId: string,
+    deliveredTo: string,        // User key
+    timestamp: string
+  }
+
+chat:message:read          - Message was read
+  Data: {
+    conversationId?: string,    // If bulk read
+    messageId?: string,         // If single message
+    readBy: string,
+    timestamp: string
+  }
+
+chat:message:edited        - Message was edited
+  Data: {
+    messageId: string,
+    content: string,
+    editedAt: string
+  }
+
+chat:message:deleted       - Message was deleted
+  Data: {
+    messageId: string,
+    deletedAt: string,
+    forEveryone: boolean
+  }
+
+chat:typing:start          - User started typing
+chat:typing:stop           - User stopped typing
+  Data: {
+    conversationId: string,
+    userKey: string,
+    timestamp: string
+  }
+
+chat:conversation:created  - New conversation created
+  Data: {
+    conversationId: string,
+    type: string,
+    participants: string[],
+    name?: string,
+    createdBy: string,
+    createdAt: string
+  }
+
+chat:presence              - User presence changed
+  Data: {
+    userKey: string,
+    status: 'online' | 'offline' | 'typing',
+    timestamp: string
+  }
+
+chat:error                 - Error occurred
+  Data: {
+    code: string,               // Error code
+    message: string,
+    tempId?: string             // If related to a send attempt
+  }
 ```
 
 ### 5. Presence Events (namespace: /presence)

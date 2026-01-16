@@ -126,6 +126,12 @@ class MongoRepo:
         self.notification_queue: Any = None
         self.task: Any = None
 
+        # CHAT/MESSAGING REPOSITORIES (in media_db)
+        self.conversations: Any = None
+        self.chat_messages: Any = None
+        self.message_receipts: Any = None
+        self.user_presence: Any = None
+
         # FISH DB REPOSITORIES
         self.fish: Any = None
         self.pond: Any = None
@@ -202,8 +208,10 @@ class MongoRepo:
             from fin_server.repository.expenses_repository import ExpensesRepository
             from fin_server.repository.fish import FishRepository, FishActivityRepository, PondEventRepository, PondRepository, \
                 FishAnalyticsRepository, SamplingRepository, FeedingRepository
-            from fin_server.repository.media import MessageRepository, NotificationRepository, NotificationQueueRepository, \
-                TaskRepository
+            from fin_server.repository.media import (
+                MessageRepository, NotificationRepository, NotificationQueueRepository, TaskRepository,
+                ConversationRepository, ChatMessageRepository, UserPresenceRepository, MessageReceiptRepository
+            )
             from fin_server.repository.user import UserRepository, FishMappingRepository, CompanyRepository
             from fin_server.repository.user.ai_usage_repository import AIUsageRepository
 
@@ -219,6 +227,14 @@ class MongoRepo:
             self.notification = NotificationRepository(self.media_db)
             self.notification_queue = NotificationQueueRepository(self.media_db)
             self.task = TaskRepository(self.media_db)
+
+            # CHAT/MESSAGING REPOSITORIES (in media_db)
+            if self.media_db is not None:
+                self.conversations = ConversationRepository(self.media_db)
+                self.chat_messages = ChatMessageRepository(self.media_db)
+                self.message_receipts = MessageReceiptRepository(self.media_db)
+                self.user_presence = UserPresenceRepository(self.media_db)
+                logger.info("Chat/Messaging repositories initialized in media_db")
 
             # FISH DB REPOSITORIES
             self.fish = FishRepository(self.fish_db)

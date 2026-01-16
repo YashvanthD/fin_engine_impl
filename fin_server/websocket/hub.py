@@ -4,6 +4,7 @@ This module integrates with the existing Socket.IO server and adds:
 - Notification events
 - Alert events
 - Stream events (real-time data updates)
+- Chat/Messaging events (real-time chat)
 
 It wraps the existing messaging/socket_server.py functionality.
 """
@@ -31,6 +32,7 @@ class WebSocketHub:
         self.connected_users: Dict[str, Dict[str, Any]] = {}
         self.user_sockets: Dict[str, list] = {}
         self._initialized = False
+        self._chat_handler = None
 
     def init_app(self, app: Flask, socketio: SocketIO):
         """Initialize the WebSocket hub with Flask app and Socket.IO instance.
@@ -49,8 +51,24 @@ class WebSocketHub:
         # Register event handlers
         self._register_handlers()
 
+        # Initialize chat handler
+        self._init_chat_handler()
+
         self._initialized = True
         logger.info("WebSocket Hub initialized")
+
+    def _init_chat_handler(self):
+        """Initialize the chat handler for real-time messaging."""
+        try:
+            from fin_server.websocket.handlers.chat_handler import init_chat_handler
+            self._chat_handler = init_chat_handler(
+                self.socketio,
+                self.connected_users,
+                self.user_sockets
+            )
+            logger.info("Chat handler integrated with WebSocket Hub")
+        except Exception as e:
+            logger.error(f"Failed to initialize chat handler: {e}")
 
     def _register_handlers(self):
         """Register all WebSocket event handlers."""
@@ -117,6 +135,10 @@ class WebSocketHub:
             # Notify others of online status
             EventEmitter.notify_presence(user_key, 'online', account_key)
 
+            # Initialize chat for this user (join conversation rooms, update presence)
+            if self._chat_handler:
+                self._chat_handler.on_user_connected(user_key, account_key, socket_id)
+
             # Send pending notifications/alerts
             self._send_pending_events(user_key, account_key)
 
@@ -145,6 +167,10 @@ class WebSocketHub:
                     if not self.user_sockets[user_key]:
                         del self.user_sockets[user_key]
                         EventEmitter.notify_presence(user_key, 'offline', account_key)
+
+                        # Notify chat handler of user going offline
+                        if self._chat_handler:
+                            self._chat_handler.on_user_disconnected(user_key, account_key)
 
                 logger.info(f"User {user_key} disconnected (socket: {socket_id})")
 

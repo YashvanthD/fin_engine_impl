@@ -1,24 +1,33 @@
 """Chat/Messaging REST API routes.
 
 This module provides REST API endpoints for chat operations.
-WebSocket is used for real-time messaging, but REST APIs are needed for:
-- Fetching conversation list (with pagination)
-- Fetching message history (with pagination)
-- Searching messages
-- Getting conversation details
+These endpoints are used ONLY for initial data loading.
 
-All real-time operations (send, typing, presence) should use WebSocket.
+WebSocket is used for ALL real-time operations:
+- Sending/receiving messages (chat:send, chat:message)
+- Typing indicators (chat:typing)
+- Read receipts (chat:read)
+- Message edits/deletes (chat:edit, chat:delete)
+- Presence updates (chat:presence)
 
-Endpoints:
-- GET /api/chat/conversations - List conversations
+REST API Endpoints (Initial Load Only):
+- GET /api/chat/conversations - List conversations (initial load)
 - GET /api/chat/conversations/{id} - Get conversation details
-- GET /api/chat/conversations/{id}/messages - Get message history
+- GET /api/chat/conversations/{id}/messages - Get message history (initial/pagination)
 - GET /api/chat/search - Search messages
 - GET /api/chat/unread - Get unread counts
 
+WebSocket Events (Real-time):
+- chat:send -> chat:message:sent, chat:message (new message)
+- chat:read -> chat:message:read (read receipt)
+- chat:typing -> chat:typing:start/stop (typing indicator)
+- chat:edit -> chat:message:edited (edit message)
+- chat:delete -> chat:message:deleted (delete message)
+- chat:conversation:create -> chat:conversation:created (new conversation)
+
 Collections (separate from other modules):
 - conversations: Chat conversations
-- messages: Chat messages
+- chat_messages: Chat messages
 - message_receipts: Read/delivery receipts
 - user_presence: Online/offline status
 """
@@ -27,11 +36,8 @@ from datetime import datetime
 from typing import Optional
 
 from flask import Blueprint, request
-from werkzeug.exceptions import Unauthorized
 
-from fin_server.exception.UnauthorizedError import UnauthorizedError
 from fin_server.messaging.repository import get_messaging_repository
-from fin_server.messaging.models import ConversationType, MessageStatus
 from fin_server.repository.mongo_helper import get_collection
 from fin_server.utils.decorators import handle_errors, require_auth
 from fin_server.utils.helpers import respond_success, respond_error, normalize_doc
@@ -140,7 +146,7 @@ def list_conversations(auth_payload):
     conv_type = request.args.get('type')
 
     repo = get_messaging_repository()
-    if not repo:
+    if not repo or not repo.is_available():
         return respond_error('Chat service unavailable', status=503)
 
     try:
@@ -157,6 +163,9 @@ def list_conversations(auth_payload):
             query['conversation_type'] = conv_type
 
         # Get conversations
+        if repo.conversations is None:
+            return respond_error('Chat service unavailable', status=503)
+
         cursor = repo.conversations.find(query).sort('last_activity', -1).skip(skip).limit(limit + 1)
         conversations = list(cursor)
 
@@ -205,7 +214,7 @@ def get_conversation(conversation_id, auth_payload):
     logger.info(f"GET /api/chat/conversations/{conversation_id} | account_key: {account_key}, user_key: {user_key}")
 
     repo = get_messaging_repository()
-    if not repo:
+    if not repo or not repo.is_available():
         return respond_error('Chat service unavailable', status=503)
 
     try:
@@ -273,7 +282,7 @@ def get_messages(conversation_id, auth_payload):
     after = _parse_datetime(request.args.get('after'))
 
     repo = get_messaging_repository()
-    if not repo:
+    if not repo or not repo.is_available():
         return respond_error('Chat service unavailable', status=503)
 
     try:
@@ -284,6 +293,10 @@ def get_messages(conversation_id, auth_payload):
 
         if user_key not in conv.get('participants', []):
             return respond_error('Not authorized to view this conversation', status=403)
+
+        # Check if messages collection is available
+        if repo.messages is None:
+            return respond_error('Chat service unavailable', status=503)
 
         # Build query
         query = {
@@ -371,7 +384,7 @@ def search_messages(auth_payload):
     logger.info(f"GET /api/chat/search?q={query_text} | account_key: {account_key}, user_key: {user_key}")
 
     repo = get_messaging_repository()
-    if not repo:
+    if not repo or not repo.is_available():
         return respond_error('Chat service unavailable', status=503)
 
     try:
@@ -429,7 +442,7 @@ def get_unread_counts(auth_payload):
     logger.info(f"GET /api/chat/unread | account_key: {account_key}, user_key: {user_key}")
 
     repo = get_messaging_repository()
-    if not repo:
+    if not repo or not repo.is_available():
         return respond_error('Chat service unavailable', status=503)
 
     try:
@@ -489,11 +502,17 @@ def get_presence(auth_payload):
     logger.info(f"GET /api/chat/presence | account_key: {account_key}, checking: {len(user_keys)} users")
 
     repo = get_messaging_repository()
-    if not repo:
+    if not repo or not repo.is_available():
         return respond_error('Chat service unavailable', status=503)
 
     try:
         presence_data = {}
+
+        if repo.user_presence is None:
+            # Return offline for all users if presence collection not available
+            for uk in user_keys[:50]:
+                presence_data[uk] = {'status': 'offline', 'last_seen': None}
+            return respond_success({'presence': presence_data})
 
         for uk in user_keys[:50]:  # Limit to 50 users per request
             presence = repo.user_presence.find_one({'user_key': uk})
