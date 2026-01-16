@@ -1,0 +1,284 @@
+{
+  "id": "chat",
+  "name": "Chat & Messaging",
+  "description": "Real-time chat and messaging system. Uses WebSocket for real-time operations and REST API for fetching history.",
+  "baseUrl": "/api/chat",
+  "note": "Chat uses separate MongoDB collections: conversations, messages, message_receipts, user_presence",
+  "endpoints": [
+    {
+      "id": "chat-conversations-list",
+      "method": "GET",
+      "path": "/api/chat/conversations",
+      "summary": "List conversations",
+      "description": "Get paginated list of conversations for the current user.",
+      "auth": true,
+      "tags": ["chat", "conversations"],
+      "request": {
+        "queryParams": [
+          {"name": "limit", "type": "integer", "required": false, "default": 50, "max": 100},
+          {"name": "skip", "type": "integer", "required": false, "default": 0},
+          {"name": "include_archived", "type": "boolean", "required": false, "default": false},
+          {"name": "type", "type": "string", "required": false, "enum": ["direct", "group"]}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Conversations retrieved",
+          "example": {
+            "success": true,
+            "data": {
+              "conversations": [
+                {
+                  "id": "conv_abc123",
+                  "conversation_id": "conv_abc123",
+                  "conversation_type": "direct",
+                  "participants": ["user_1", "user_2"],
+                  "last_message": {
+                    "content": "Hello!",
+                    "sender_key": "user_1",
+                    "created_at": "2026-01-17T10:00:00Z"
+                  },
+                  "last_activity": "2026-01-17T10:00:00Z",
+                  "unread_count": 5,
+                  "is_muted": false,
+                  "is_pinned": true
+                }
+              ],
+              "count": 1,
+              "has_more": false,
+              "meta": {"limit": 50, "skip": 0}
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "chat-conversation-detail",
+      "method": "GET",
+      "path": "/api/chat/conversations/{conversation_id}",
+      "summary": "Get conversation details",
+      "description": "Get detailed information about a specific conversation including participant info.",
+      "auth": true,
+      "tags": ["chat", "conversations"],
+      "request": {
+        "pathParams": [
+          {"name": "conversation_id", "type": "string", "required": true}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Conversation details",
+          "example": {
+            "success": true,
+            "data": {
+              "conversation": {
+                "id": "conv_abc123",
+                "conversation_type": "group",
+                "name": "Project Team",
+                "description": "Team discussion",
+                "participants": ["user_1", "user_2", "user_3"],
+                "participants_info": [
+                  {"user_key": "user_1", "name": "John", "avatar_url": "/avatars/john.jpg", "is_online": true},
+                  {"user_key": "user_2", "name": "Jane", "avatar_url": "/avatars/jane.jpg", "is_online": false}
+                ],
+                "admins": ["user_1"],
+                "unread_count": 3,
+                "last_activity": "2026-01-17T12:00:00Z"
+              }
+            }
+          }
+        },
+        "404": {"description": "Conversation not found"},
+        "403": {"description": "Not authorized to view this conversation"}
+      }
+    },
+    {
+      "id": "chat-messages-list",
+      "method": "GET",
+      "path": "/api/chat/conversations/{conversation_id}/messages",
+      "summary": "Get message history",
+      "description": "Get paginated message history for a conversation. Use 'before' to load older messages, 'after' to load newer messages.",
+      "auth": true,
+      "tags": ["chat", "messages"],
+      "request": {
+        "pathParams": [
+          {"name": "conversation_id", "type": "string", "required": true}
+        ],
+        "queryParams": [
+          {"name": "limit", "type": "integer", "required": false, "default": 50, "max": 100},
+          {"name": "before", "type": "string", "required": false, "description": "ISO timestamp - get messages before this time"},
+          {"name": "after", "type": "string", "required": false, "description": "ISO timestamp - get messages after this time"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Messages retrieved",
+          "example": {
+            "success": true,
+            "data": {
+              "messages": [
+                {
+                  "id": "msg_001",
+                  "message_id": "msg_001",
+                  "conversation_id": "conv_abc123",
+                  "sender_key": "user_1",
+                  "content": "Hello everyone!",
+                  "message_type": "text",
+                  "created_at": "2026-01-17T10:00:00Z",
+                  "edited_at": null,
+                  "reply_to": null,
+                  "reactions": [{"emoji": "👍", "users": ["user_2"]}]
+                },
+                {
+                  "id": "msg_002",
+                  "message_id": "msg_002",
+                  "conversation_id": "conv_abc123",
+                  "sender_key": "user_2",
+                  "content": "Hi! How are you?",
+                  "message_type": "text",
+                  "created_at": "2026-01-17T10:01:00Z",
+                  "reply_to": "msg_001"
+                }
+              ],
+              "count": 2,
+              "has_more": true,
+              "oldest_timestamp": "2026-01-17T10:00:00Z",
+              "newest_timestamp": "2026-01-17T10:01:00Z"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "chat-search",
+      "method": "GET",
+      "path": "/api/chat/search",
+      "summary": "Search messages",
+      "description": "Search messages across all conversations or within a specific conversation.",
+      "auth": true,
+      "tags": ["chat", "search"],
+      "request": {
+        "queryParams": [
+          {"name": "q", "type": "string", "required": true, "description": "Search query (min 2 characters)"},
+          {"name": "conversation_id", "type": "string", "required": false, "description": "Limit to specific conversation"},
+          {"name": "limit", "type": "integer", "required": false, "default": 50, "max": 100}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "Search results",
+          "example": {
+            "success": true,
+            "data": {
+              "messages": [
+                {
+                  "id": "msg_123",
+                  "content": "Meeting tomorrow at 10am",
+                  "sender_key": "user_1",
+                  "conversation_id": "conv_abc",
+                  "conversation_name": "Project Team",
+                  "created_at": "2026-01-16T15:00:00Z"
+                }
+              ],
+              "count": 1,
+              "query": "meeting"
+            }
+          }
+        },
+        "400": {"description": "Search query too short"}
+      }
+    },
+    {
+      "id": "chat-unread",
+      "method": "GET",
+      "path": "/api/chat/unread",
+      "summary": "Get unread counts",
+      "description": "Get total and per-conversation unread message counts.",
+      "auth": true,
+      "tags": ["chat", "unread"],
+      "responses": {
+        "200": {
+          "description": "Unread counts",
+          "example": {
+            "success": true,
+            "data": {
+              "total_unread": 15,
+              "conversations": {
+                "conv_abc123": 5,
+                "conv_xyz789": 10
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "chat-presence",
+      "method": "GET",
+      "path": "/api/chat/presence",
+      "summary": "Get user presence",
+      "description": "Check online/offline status of users.",
+      "auth": true,
+      "tags": ["chat", "presence"],
+      "request": {
+        "queryParams": [
+          {"name": "user_keys", "type": "string", "required": true, "description": "Comma-separated user keys"}
+        ]
+      },
+      "responses": {
+        "200": {
+          "description": "User presence data",
+          "example": {
+            "success": true,
+            "data": {
+              "presence": {
+                "user_123": {"status": "online", "last_seen": null},
+                "user_456": {"status": "offline", "last_seen": "2026-01-17T10:00:00Z"}
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "websocket": {
+    "description": "Real-time messaging uses WebSocket (Socket.IO)",
+    "connection": {
+      "url": "/socket.io",
+      "auth": "Pass token in auth object or query param: ?token=<jwt>"
+    },
+    "events": {
+      "client_to_server": [
+        {"event": "message:send", "description": "Send a message", "payload": {"conversationId": "string", "content": "string", "type": "text|image|file"}},
+        {"event": "message:read", "description": "Mark messages as read", "payload": {"conversationId": "string"}},
+        {"event": "message:edit", "description": "Edit a message", "payload": {"messageId": "string", "content": "string"}},
+        {"event": "message:delete", "description": "Delete a message", "payload": {"messageId": "string", "forEveryone": "boolean"}},
+        {"event": "typing:start", "description": "User started typing", "payload": {"conversationId": "string"}},
+        {"event": "typing:stop", "description": "User stopped typing", "payload": {"conversationId": "string"}},
+        {"event": "conversation:create", "description": "Create conversation", "payload": {"participants": ["user_keys"], "name": "string", "type": "direct|group"}}
+      ],
+      "server_to_client": [
+        {"event": "message:new", "description": "New message received"},
+        {"event": "message:sent", "description": "Your message was sent (confirmation)"},
+        {"event": "message:delivered", "description": "Message delivered to recipient"},
+        {"event": "message:read", "description": "Message was read by recipient"},
+        {"event": "message:edited", "description": "Message was edited"},
+        {"event": "message:deleted", "description": "Message was deleted"},
+        {"event": "typing:update", "description": "Typing status changed"},
+        {"event": "conversation:created", "description": "New conversation created"},
+        {"event": "presence:online", "description": "User came online"},
+        {"event": "presence:offline", "description": "User went offline"}
+      ]
+    }
+  },
+  "collections": {
+    "description": "Chat uses separate MongoDB collections",
+    "list": [
+      {"name": "conversations", "description": "Chat conversations (direct, group, broadcast)"},
+      {"name": "messages", "description": "Individual chat messages"},
+      {"name": "message_receipts", "description": "Read/delivery receipts"},
+      {"name": "user_presence", "description": "Online/offline status tracking"}
+    ]
+  }
+}
+

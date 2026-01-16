@@ -21,6 +21,7 @@
     {"id": "tasks", "name": "Tasks & Schedules", "file": "sections/tasks.json", "icon": "📋"},
     {"id": "dashboard", "name": "Dashboard & Alerts", "file": "sections/dashboard.json", "icon": "📈"},
     {"id": "notification", "name": "Notifications & Alerts", "file": "sections/notification.json", "icon": "🔔"},
+    {"id": "chat", "name": "Chat & Messaging", "file": "sections/chat.json", "icon": "💬"},
     {"id": "public", "name": "Public Endpoints", "file": "sections/public.json", "icon": "🌐"},
     {"id": "ai-openai", "name": "AI Services (OpenAI)", "file": "sections/ai-openai.json", "icon": "🤖"},
     {"id": "mcp", "name": "MCP Server", "file": "sections/mcp.json", "icon": "🔌"}

@@ -263,10 +263,30 @@ export const API_NOTIFICATION = {
 };
 
 // ============================================================================
+// Chat REST API Endpoints (/api/chat/*)
+// Use for fetching history, search. Use WebSocket for real-time messaging.
+// ============================================================================
+export const API_CHAT = {
+  BASE: '/api/chat',
+  // Conversations
+  CONVERSATIONS: '/api/chat/conversations',
+  CONVERSATION_DETAIL: (conversationId) => `/api/chat/conversations/${conversationId}`,
+  CONVERSATION_MESSAGES: (conversationId) => `/api/chat/conversations/${conversationId}/messages`,
+  // Search & utilities
+  SEARCH: '/api/chat/search',
+  UNREAD: '/api/chat/unread',
+  PRESENCE: '/api/chat/presence',
+};
+
+// ============================================================================
 // WebSocket Events (for real-time updates)
 // Connect to /socket.io with auth token
 // ============================================================================
 export const WS_EVENTS = {
+  // Connection events
+  CONNECTED: 'connected',
+  ERROR: 'error',
+
   // Notification events (server -> client)
   NOTIFICATION_NEW: 'notification:new',
   NOTIFICATION_READ: 'notification:read',
@@ -280,10 +300,46 @@ export const WS_EVENTS = {
   ALERT_DELETED: 'alert:deleted',
   ALERT_COUNT: 'alert:count',
 
-  // Client -> server events
+  // Client -> server events (notifications)
   MARK_NOTIFICATION_READ: 'notification:mark_read',
   MARK_ALL_NOTIFICATIONS_READ: 'notification:mark_all_read',
   ACKNOWLEDGE_ALERT: 'alert:acknowledge',
+
+  // =========================================================================
+  // Chat/Messaging Events (fully implemented via WebSocket)
+  // =========================================================================
+
+  // Message events (client -> server)
+  MESSAGE_SEND: 'message:send',
+  MESSAGE_EDIT: 'message:edit',
+  MESSAGE_DELETE: 'message:delete',
+  MESSAGE_READ: 'message:read',
+  MESSAGE_REACTION: 'message:reaction',
+
+  // Message events (server -> client)
+  MESSAGE_SENT: 'message:sent',
+  MESSAGE_NEW: 'message:new',
+  MESSAGE_DELIVERED: 'message:delivered',
+  MESSAGE_EDITED: 'message:edited',
+  MESSAGE_DELETED: 'message:deleted',
+
+  // Typing indicators
+  TYPING_START: 'typing:start',
+  TYPING_STOP: 'typing:stop',
+  TYPING_UPDATE: 'typing:update',
+
+  // Conversation events (client -> server)
+  CONVERSATION_CREATE: 'conversation:create',
+  CONVERSATION_UPDATE: 'conversation:update',
+  CONVERSATION_ADD_PARTICIPANTS: 'conversation:add_participants',
+  CONVERSATION_REMOVE_PARTICIPANT: 'conversation:remove_participant',
+  CONVERSATION_LEAVE: 'conversation:leave',
+
+  // Conversation events (server -> client)
+  CONVERSATION_CREATED: 'conversation:created',
+  CONVERSATION_UPDATED: 'conversation:updated',
+  CONVERSATION_PARTICIPANT_ADDED: 'conversation:participant_added',
+  CONVERSATION_PARTICIPANT_REMOVED: 'conversation:participant_removed',
 
   // Presence events
   PRESENCE_ONLINE: 'presence:online',
@@ -348,6 +404,7 @@ export default {
   ROLE: API_ROLE,
   PERMISSION: API_PERMISSION,
   NOTIFICATION: API_NOTIFICATION,
+  CHAT: API_CHAT,
   AI: API_AI,
   PUBLIC: API_PUBLIC,
   WS_EVENTS: WS_EVENTS,

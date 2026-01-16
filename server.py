@@ -25,6 +25,7 @@ from fin_server.routes.expenses import expenses_bp
 from fin_server.routes.dashboard import dashboard_bp
 from fin_server.routes.role import role_bp
 from fin_server.routes.notification import notification_bp
+from fin_server.routes.chat import chat_bp
 from fin_server.routes.ai import openai_bp
 from fin_server.security.authentication import AuthSecurity
 from fin_server.notification.scheduler import TaskScheduler
@@ -78,6 +79,7 @@ def create_app() -> Flask:
     app.register_blueprint(dashboard_bp)
     app.register_blueprint(role_bp)
     app.register_blueprint(notification_bp)
+    app.register_blueprint(chat_bp)
     app.register_blueprint(openai_bp)
 
     # Initialize WebSocket hub for real-time notifications/alerts
