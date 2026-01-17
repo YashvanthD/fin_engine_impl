@@ -407,7 +407,7 @@ def get_presence(auth_payload):
     if not user_keys:
         return respond_error('user_keys parameter required', status=400)
 
-    logger.info(f"GET /api/chat/presence | account_key: {account_key}, checking: {len(user_keys)} users")
+    logger.debug(f"GET /api/chat/presence | account_key: {account_key}, checking: {len(user_keys)} users")
 
     repo = get_messaging_repository()
     if not repo or not repo.is_available():

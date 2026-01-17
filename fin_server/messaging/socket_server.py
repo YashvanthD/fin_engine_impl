@@ -30,8 +30,6 @@ from fin_server.utils.generator import generate_message_id, generate_conversatio
 
 logger = logging.getLogger(__name__)
 
-logger.info("=" * 60)
-logger.info("SOCKET_SERVER: Creating SocketIO instance...")
 
 # Socket.IO instance - will be initialized with Flask app later via init_app()
 socketio = SocketIO(
@@ -40,9 +38,6 @@ socketio = SocketIO(
     ping_interval=25
 )
 
-logger.info("SOCKET_SERVER: SocketIO instance created (not yet attached to app)")
-logger.info("SOCKET_SERVER: Will be initialized when Flask app starts")
-logger.info("=" * 60)
 
 # Connected users: {socket_id: {user_key, account_key, rooms}}
 connected_users: Dict[str, Dict[str, Any]] = {}
@@ -106,7 +101,7 @@ def emit_to_conversation(conversation_id: str, event: str, data: Any, exclude_se
 #     """Handle socket disconnection - MOVED TO hub.py"""
 #     pass
 
-logger.info("SOCKET_SERVER: Connection handlers disabled (handled by WebSocket Hub)")
+logger.debug("SOCKET_SERVER: Connection handlers disabled (handled by WebSocket Hub)")
 
 
 # =============================================================================
@@ -117,7 +112,7 @@ logger.info("SOCKET_SERVER: Connection handlers disabled (handled by WebSocket H
 @socketio.on('message:send')
 def handle_send_message(data):
     """Handle sending a new message."""
-    logger.info(f"SOCKET_SERVER: message:send received (legacy handler)")
+    logger.debug(f"SOCKET_SERVER: message:send received (legacy handler)")
     user_info = get_user_from_socket()
     if not user_info:
         emit('error', {'code': 'UNAUTHORIZED', 'message': 'Not authenticated'})
@@ -179,7 +174,7 @@ def handle_send_message(data):
                     'timestamp': datetime.utcnow().isoformat()
                 })
 
-    logger.info(f"Message {message_id} sent by {user_key} in {conversation_id}")
+    logger.debug(f"Message {message_id} sent by {user_key} in {conversation_id}")
 
 
 @socketio.on('message:edit')
@@ -519,5 +514,5 @@ def start_notification_worker():
     """Start the background notification worker."""
     t = Thread(target=notification_worker, daemon=True)
     t.start()
-    logger.info("Notification worker started")
+    logger.debug("Notification worker started")
 

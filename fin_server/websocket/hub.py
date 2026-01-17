@@ -30,7 +30,7 @@ class WebSocketHub:
 
     def init_app(self, app: Flask, socketio: SocketIO):
         """Initialize the WebSocket hub."""
-        logger.info(f"WS_HUB: init app={app.name}, mode={getattr(socketio, 'async_mode', '?')}")
+        logger.debug(f"WS_HUB: init app={app.name}, mode={getattr(socketio, 'async_mode', '?')}")
 
         self.socketio = socketio
         self.app = app
@@ -42,7 +42,7 @@ class WebSocketHub:
         self._init_chat_handler()
 
         self._initialized = True
-        logger.info("WS_HUB: initialized")
+        logger.debug("WS_HUB: initialized")
 
     def _init_chat_handler(self):
         """Initialize chat handler."""

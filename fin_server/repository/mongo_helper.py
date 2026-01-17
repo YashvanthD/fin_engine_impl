@@ -273,7 +273,7 @@ class MongoRepo:
                     name='ttl_expires_at',
                     sparse=True  # Only index documents that have expires_at field
                 )
-                logger.info("Created TTL index 'ttl_expires_at' on chat_messages.expires_at")
+                logger.debug("Created TTL index 'ttl_expires_at' on chat_messages.expires_at")
             except Exception as e:
                 # Index may already exist or creation failed
                 if 'already exists' not in str(e).lower():
@@ -330,7 +330,7 @@ class MongoRepo:
                 self.message_receipts = MessageReceiptRepository(self.media_db)
                 self.user_presence = UserPresenceRepository(self.media_db)
                 self.user_conversations = UserConversationsRepository(self.media_db)
-                logger.info("Chat/Messaging repositories initialized in media_db")
+                logger.debug("Chat/Messaging repositories initialized in media_db")
 
             # FISH DB REPOSITORIES
             self.fish = FishRepository(self.fish_db)

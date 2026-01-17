@@ -110,23 +110,16 @@ def create_app() -> Flask:
     app.register_blueprint(openai_bp)
 
     # Initialize SocketIO with Flask app FIRST
-    print("=" * 60)
-    print("INITIALIZING SOCKETIO WITH FLASK APP")
     logger.info("=" * 60)
     logger.info("INITIALIZING SOCKETIO WITH FLASK APP")
     socketio.init_app(app, cors_allowed_origins="*", async_mode='threading')
-    print(f"SocketIO initialized with async_mode: {getattr(socketio, 'async_mode', 'unknown')}")
     logger.info(f"SocketIO initialized with async_mode: {getattr(socketio, 'async_mode', 'unknown')}")
-    print("=" * 60)
     logger.info("=" * 60)
 
     # THEN Initialize WebSocket hub for real-time notifications/alerts/chat
-    print("INITIALIZING WEBSOCKET HUB")
     logger.info("INITIALIZING WEBSOCKET HUB")
     init_websocket_hub(app, socketio)
-    print("WEBSOCKET HUB INITIALIZED")
     logger.info("WEBSOCKET HUB INITIALIZED")
-    print("=" * 60)
     logger.info("=" * 60)
 
     # Error handlers
