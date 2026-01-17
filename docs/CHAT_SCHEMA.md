@@ -511,6 +511,9 @@ db.conversations.find({ participants: "184517846618" }).pretty()
 | Event | Purpose | Required Data |
 |-------|---------|---------------|
 | `chat:conversation:create` | Create conversation | `{type, participants, name?}` |
+| `chat:conversation:join` | Join conversation room | `{conversationId}` |
+| `chat:conversation:leave` | Leave conversation room | `{conversationId}` |
+| `chat:conversation:clear` | Clear all messages | `{conversationId, forEveryone?}` |
 | `chat:send` | Send message | `{conversationId, content, type?, tempId?}` |
 | `chat:read` | Mark as read | `{conversationId}` or `{messageId}` |
 | `chat:typing` | Typing indicator | `{conversationId, isTyping}` |
@@ -522,6 +525,9 @@ db.conversations.find({ participants: "184517846618" }).pretty()
 | Event | Purpose |
 |-------|---------|
 | `chat:conversation:created` | Conversation created |
+| `chat:conversation:joined` | Joined conversation room |
+| `chat:conversation:left` | Left conversation room |
+| `chat:conversation:cleared` | Conversation was cleared |
 | `chat:message:sent` | Your message was stored |
 | `chat:message` | New message received |
 | `chat:message:delivered` | Message delivered |

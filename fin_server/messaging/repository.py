@@ -618,6 +618,49 @@ class MessagingRepository:
             )
         return result.modified_count > 0
 
+    def clear_conversation(self, conversation_id: str, user_key: str, for_everyone: bool = False) -> int:
+        """Clear all messages in a conversation.
+
+        Args:
+            conversation_id: The conversation to clear
+            user_key: The user clearing the conversation
+            for_everyone: If True, deletes messages for all participants (admin only)
+                         If False, only hides messages for this user
+
+        Returns:
+            Number of messages affected
+        """
+        if self.messages is None:
+            print("REPO: ERROR - Messages collection not available")
+            return 0
+
+        print(f"REPO: clear_conversation - conv={conversation_id}, user={user_key}, for_everyone={for_everyone}")
+
+        if for_everyone:
+            # Soft delete all messages in conversation (mark as deleted)
+            result = self.messages.update_many(
+                {'conversation_id': conversation_id, 'deleted_at': None},
+                {'$set': {'deleted_at': datetime.utcnow(), 'content': '[Cleared]'}}
+            )
+            count = result.modified_count
+
+            # Also clear last_message in conversation
+            if self.conversations is not None:
+                self.conversations.update_one(
+                    {'conversation_id': conversation_id},
+                    {'$set': {'last_message': None}}
+                )
+        else:
+            # Add user to deleted_for array for all messages (hide for this user only)
+            result = self.messages.update_many(
+                {'conversation_id': conversation_id},
+                {'$addToSet': {'deleted_for': user_key}}
+            )
+            count = result.modified_count
+
+        print(f"REPO: Cleared {count} messages from conversation {conversation_id}")
+        return count
+
     def search_messages(
         self,
         user_key: str,

@@ -696,6 +696,79 @@ class ChatHandler:
                 leave_room(f"conv:{conversation_id}")
                 emit('chat:conversation:left', {'conversationId': conversation_id})
 
+        @self.socketio.on('chat:conversation:clear')
+        def handle_clear_conversation(data):
+            """Clear all messages in a conversation.
+
+            Data:
+                conversationId: str - Conversation to clear
+                forEveryone: bool - If true, clears for all participants (admin only)
+                                   If false, only hides messages for this user
+            """
+            from flask import request
+            socket_id = request.sid
+            user_info = self.connected_users.get(socket_id)
+
+            if not user_info:
+                emit(self.EVENT_ERROR, {'code': 'UNAUTHORIZED', 'message': 'Not authenticated'})
+                return
+
+            conversation_id = data.get('conversationId') or data.get('conversation_id')
+            for_everyone = data.get('forEveryone', False)
+
+            if not conversation_id:
+                emit(self.EVENT_ERROR, {'code': 'INVALID_DATA', 'message': 'conversationId required'})
+                return
+
+            user_key = user_info['user_key']
+            print(f"CHAT_HANDLER: chat:conversation:clear - conv={conversation_id}, user={user_key}, forEveryone={for_everyone}")
+
+            repo = get_messaging_repository()
+            if not repo or not repo.is_available():
+                emit(self.EVENT_ERROR, {'code': 'SERVICE_UNAVAILABLE', 'message': 'Service unavailable'})
+                return
+
+            try:
+                # Verify user is participant
+                conv = repo.get_conversation(conversation_id, user_key)
+                if not conv:
+                    emit(self.EVENT_ERROR, {'code': 'NOT_FOUND', 'message': 'Conversation not found'})
+                    return
+
+                # If clearing for everyone, check if user is admin (for groups) or participant (for direct)
+                if for_everyone:
+                    is_admin = user_key in conv.get('admins', [])
+                    is_direct = conv.get('conversation_type') == 'direct'
+                    if not is_admin and not is_direct:
+                        emit(self.EVENT_ERROR, {'code': 'FORBIDDEN', 'message': 'Only admins can clear for everyone'})
+                        return
+
+                # Clear the conversation
+                count = repo.clear_conversation(conversation_id, user_key, for_everyone)
+
+                clear_data = {
+                    'conversationId': conversation_id,
+                    'clearedAt': datetime.utcnow().isoformat(),
+                    'clearedBy': user_key,
+                    'forEveryone': for_everyone,
+                    'messagesCleared': count
+                }
+
+                # Confirm to user
+                emit('chat:conversation:cleared', clear_data)
+
+                # Notify other participants if cleared for everyone
+                if for_everyone:
+                    for participant in conv.get('participants', []):
+                        if participant != user_key:
+                            self._emit_to_user(participant, 'chat:conversation:cleared', clear_data)
+
+                print(f"CHAT_HANDLER: Conversation {conversation_id} cleared by {user_key}, {count} messages affected")
+
+            except Exception as e:
+                print(f"CHAT_HANDLER: ERROR clearing conversation: {e}")
+                emit(self.EVENT_ERROR, {'code': 'CLEAR_FAILED', 'message': str(e)})
+
     def _emit_to_user(self, user_key: str, event: str, data: Any):
         """Emit event to all connected devices of a user."""
         sockets = self.user_sockets.get(user_key, [])
