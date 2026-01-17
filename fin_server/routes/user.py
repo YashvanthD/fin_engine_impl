@@ -158,15 +158,39 @@ def update_profile(auth_payload):
         return error
 
     data = request.get_json(force=True)
+    if not data:
+        return respond_error('No data provided', status=400)
 
-    profile_fields = ['first_name', 'last_name', 'dob', 'address1', 'address2', 'pincode', 'timezone']
-    profile_data = {k: data[k] for k in profile_fields if k in data}
+    # Allowed profile fields
+    allowed_fields = [
+        'name', 'first_name', 'firstName' 'last_name', 'lastName', 'dob', 'phone','mobile',
+        'address1', 'address2', 'pincode', 'timezone', 'avatar','username', 'bio','status','designation','department','joined_date','joinedDate','password','settings','profile'
+    ]
+    if data.get('email'):
+        allowed_fields.append('email')
 
-    if 'timezone' in profile_data:
-        user_dto.settings['timezone'] = profile_data['timezone']
+    # Extract only allowed fields
+    update_data = {k: data[k] for k in allowed_fields if k in data and data[k] is not None}
 
-    user_dto.save_profile(profile_data)
-    return respond_success({'message': 'Profile updated'})
+    if not update_data:
+        return respond_error('No valid fields to update', status=400)
+
+    # Handle timezone in settings
+    if 'timezone' in update_data:
+        user_dto.settings['timezone'] = update_data['timezone']
+
+    # Update profile using the new method
+    user_dto.update_fields(update_data)
+
+    # Return updated profile
+    profile = user_dto.to_dict()
+    profile.pop('password', None)
+    profile.pop('refresh_tokens', None)
+
+    return respond_success({
+        'message': 'Profile updated',
+        'user': _build_user_response(profile)
+    })
 
 
 @user_bp.route('/password', methods=['PUT'])

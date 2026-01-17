@@ -175,18 +175,52 @@ class UserDTO:
         return result
 
     def save(self):
-        # Persist user DTO to DB using repository API (query, update_fields)
-        user_repo.update({"user_key": self.user_key}, self.to_dict())
+        """Persist user DTO to DB using repository API."""
+        repo = get_collection('users')
+        if repo is None:
+            raise RuntimeError("User repository not available")
+        repo.update({"user_key": self.user_key}, self.to_dict())
 
     def save_profile(self, profile_data):
-        self.profile = profile_data
+        """Save profile fields - merges with existing extra_fields."""
+        if not profile_data:
+            return
+        # Merge profile data into extra_fields (which become top-level fields)
+        for key, value in profile_data.items():
+            self._extra_fields[key] = value
         self.save()
+
+    def update_fields(self, fields: dict):
+        """Update specific fields on the user document."""
+        if not fields:
+            return
+        repo = get_collection('users')
+        if repo is None:
+            raise RuntimeError("User repository not available")
+        # Update in DB directly
+        repo.update({"user_key": self.user_key}, fields)
+        # Also update local cache
+        for key, value in fields.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+            else:
+                self._extra_fields[key] = value
 
     @classmethod
     def create(cls, user_data):
-        # Repository.create expects a single data dict
-        user_id = user_repo.create(user_data)
+        """Create a new user in the database."""
+        repo = get_collection('users')
+        if repo is None:
+            raise RuntimeError("User repository not available")
+        user_id = repo.create(user_data)
         return user_id
 
     def delete(self):
-        user_repo.delete({"user_key": self.user_key})
+        """Delete user from database."""
+        repo = get_collection('users')
+        if repo is None:
+            raise RuntimeError("User repository not available")
+        repo.delete({"user_key": self.user_key})
+        # Also remove from cache
+        if self.user_key in UserDTO._cache:
+            del UserDTO._cache[self.user_key]
