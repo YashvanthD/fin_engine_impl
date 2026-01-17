@@ -55,7 +55,11 @@ class WebSocketHub:
         self._init_chat_handler()
 
         self._initialized = True
-        logger.info("WebSocket Hub initialized")
+        logger.info("=" * 60)
+        logger.info("WebSocket Hub initialized SUCCESSFULLY")
+        logger.info("Registered handlers: connect, disconnect, notification:*, alert:*, presence:*, subscribe, ping")
+        logger.info("Chat handlers: chat:send, chat:read, chat:typing, chat:edit, chat:delete, chat:conversation:*")
+        logger.info("=" * 60)
 
     def _init_chat_handler(self):
         """Initialize the chat handler for real-time messaging."""
@@ -66,12 +70,17 @@ class WebSocketHub:
                 self.connected_users,
                 self.user_sockets
             )
-            logger.info("Chat handler integrated with WebSocket Hub")
+            logger.info("WEBSOCKET: Chat handler integrated with WebSocket Hub")
         except Exception as e:
-            logger.error(f"Failed to initialize chat handler: {e}")
+            logger.error(f"WEBSOCKET: Failed to initialize chat handler: {e}")
 
     def _register_handlers(self):
         """Register all WebSocket event handlers."""
+
+        # Debug: Log all incoming events
+        @self.socketio.on_error_default
+        def default_error_handler(e):
+            logger.error(f"WEBSOCKET ERROR: {e}")
 
         # =====================================================================
         # Connection Events
@@ -82,20 +91,34 @@ class WebSocketHub:
             """Handle new WebSocket connection."""
             from flask import request
 
+            logger.info("=" * 60)
+            logger.info("WEBSOCKET: New connection attempt")
+            logger.info(f"WEBSOCKET: Auth data received: {auth}")
+            logger.info(f"WEBSOCKET: Headers: {dict(request.headers)}")
+
             # Get token from auth data or headers
             token = None
             if auth and isinstance(auth, dict):
                 token = auth.get('token')
+                logger.info(f"WEBSOCKET: Token from auth dict: {token[:20] if token else 'None'}...")
 
             if not token:
                 token = request.headers.get('Authorization', '').replace('Bearer ', '')
+                if token:
+                    logger.info(f"WEBSOCKET: Token from Authorization header: {token[:20]}...")
 
             if not token:
                 token = request.args.get('token', '')
+                if token:
+                    logger.info(f"WEBSOCKET: Token from query param: {token[:20]}...")
+
+            if not token:
+                logger.warning("WEBSOCKET: No token found in auth, headers, or query params")
 
             # Authenticate
             payload = self._authenticate(token)
             if not payload:
+                logger.error("WEBSOCKET: Authentication FAILED - invalid or missing token")
                 emit('error', {'code': 'UNAUTHORIZED', 'message': 'Invalid or missing token'})
                 disconnect()
                 return False
@@ -103,6 +126,9 @@ class WebSocketHub:
             user_key = payload.get('user_key')
             account_key = payload.get('account_key')
             socket_id = request.sid
+
+            logger.info(f"WEBSOCKET: Authentication SUCCESS")
+            logger.info(f"WEBSOCKET: user_key={user_key}, account_key={account_key}, socket_id={socket_id}")
 
             # Store connection
             self.connected_users[socket_id] = {
@@ -120,9 +146,13 @@ class WebSocketHub:
                 self.user_sockets[user_key] = []
             self.user_sockets[user_key].append(socket_id)
 
+            logger.info(f"WEBSOCKET: User {user_key} now has {len(self.user_sockets[user_key])} active connection(s)")
+            logger.info(f"WEBSOCKET: Total connected users: {len(self.connected_users)}")
+
             # Join rooms
             join_room(user_key)      # Personal room
             join_room(account_key)   # Account room
+            logger.info(f"WEBSOCKET: Joined rooms: [{user_key}, {account_key}]")
 
             # Send connection success
             emit('connected', {
@@ -131,6 +161,7 @@ class WebSocketHub:
                 'socket_id': socket_id,
                 'features': ['notifications', 'alerts', 'chat', 'presence', 'streams']
             })
+            logger.info(f"WEBSOCKET: Sent 'connected' event to client")
 
             # Notify others of online status
             EventEmitter.notify_presence(user_key, 'online', account_key)
@@ -138,11 +169,13 @@ class WebSocketHub:
             # Initialize chat for this user (join conversation rooms, update presence)
             if self._chat_handler:
                 self._chat_handler.on_user_connected(user_key, account_key, socket_id)
+                logger.info(f"WEBSOCKET: Chat handler initialized for user")
 
             # Send pending notifications/alerts
             self._send_pending_events(user_key, account_key)
 
-            logger.info(f"User {user_key} connected (socket: {socket_id})")
+            logger.info(f"WEBSOCKET: Connection setup COMPLETE for {user_key}")
+            logger.info("=" * 60)
             return True
 
         @self.socketio.on('disconnect')
@@ -151,11 +184,13 @@ class WebSocketHub:
             from flask import request
 
             socket_id = request.sid
+            logger.info(f"WEBSOCKET: Disconnect event - socket_id={socket_id}")
             user_info = self.connected_users.pop(socket_id, None)
 
             if user_info:
                 user_key = user_info.get('user_key')
                 account_key = user_info.get('account_key')
+                logger.info(f"WEBSOCKET: User {user_key} disconnecting...")
 
                 # Remove from user's socket list
                 if user_key in self.user_sockets:
@@ -166,13 +201,19 @@ class WebSocketHub:
                     # If no more connections, user is offline
                     if not self.user_sockets[user_key]:
                         del self.user_sockets[user_key]
+                        logger.info(f"WEBSOCKET: User {user_key} is now OFFLINE (no more connections)")
                         EventEmitter.notify_presence(user_key, 'offline', account_key)
 
                         # Notify chat handler of user going offline
                         if self._chat_handler:
                             self._chat_handler.on_user_disconnected(user_key, account_key)
+                    else:
+                        logger.info(f"WEBSOCKET: User {user_key} still has {len(self.user_sockets[user_key])} connection(s)")
 
-                logger.info(f"User {user_key} disconnected (socket: {socket_id})")
+                logger.info(f"WEBSOCKET: Disconnect COMPLETE for {user_key} (socket: {socket_id})")
+                logger.info(f"WEBSOCKET: Total connected users: {len(self.connected_users)}")
+            else:
+                logger.warning(f"WEBSOCKET: Disconnect - no user info found for socket {socket_id}")
 
         # =====================================================================
         # Notification Events
@@ -181,8 +222,10 @@ class WebSocketHub:
         @self.socketio.on('notification:mark_read')
         def handle_notification_mark_read(data):
             """Handle marking notification as read."""
+            logger.info(f"WEBSOCKET: notification:mark_read received - data={data}")
             user_info = self._get_user_from_socket()
             if not user_info:
+                logger.warning("WEBSOCKET: notification:mark_read - user not authenticated")
                 emit('error', {'code': 'UNAUTHORIZED', 'message': 'Not authenticated'})
                 return
 

@@ -67,6 +67,7 @@ class ChatHandler:
 
     def register_handlers(self):
         """Register all chat WebSocket event handlers."""
+        logger.info("CHAT_HANDLER: Registering WebSocket chat event handlers")
 
         # =====================================================================
         # Message Events
@@ -90,9 +91,15 @@ class ChatHandler:
             """
             from flask import request
             socket_id = request.sid
+
+            logger.info("=" * 50)
+            logger.info(f"CHAT_HANDLER: 'chat:send' received from socket {socket_id}")
+            logger.info(f"CHAT_HANDLER: Data: {data}")
+
             user_info = self.connected_users.get(socket_id)
 
             if not user_info:
+                logger.warning(f"CHAT_HANDLER: Unauthorized - no user info for socket {socket_id}")
                 emit(self.EVENT_ERROR, {
                     'code': 'UNAUTHORIZED',
                     'message': 'Not authenticated'
@@ -101,6 +108,7 @@ class ChatHandler:
 
             user_key = user_info['user_key']
             account_key = user_info['account_key']
+            logger.info(f"CHAT_HANDLER: Sender: user_key={user_key}, account_key={account_key}")
 
             # Extract data
             conversation_id = data.get('conversationId') or data.get('conversation_id')
@@ -111,8 +119,11 @@ class ChatHandler:
             media_url = data.get('mediaUrl') or data.get('media_url')
             mentions = data.get('mentions', [])
 
+            logger.info(f"CHAT_HANDLER: Parsed - conv={conversation_id}, content_len={len(content) if content else 0}, type={message_type}")
+
             # Validate required fields
             if not conversation_id:
+                logger.error("CHAT_HANDLER: Missing conversationId")
                 emit(self.EVENT_ERROR, {
                     'code': 'INVALID_DATA',
                     'message': 'conversationId is required',
@@ -121,6 +132,7 @@ class ChatHandler:
                 return
 
             if not content and not media_url:
+                logger.error("CHAT_HANDLER: Missing content and mediaUrl")
                 emit(self.EVENT_ERROR, {
                     'code': 'INVALID_DATA',
                     'message': 'content or mediaUrl is required',
@@ -129,7 +141,9 @@ class ChatHandler:
                 return
 
             repo = get_messaging_repository()
+            logger.info(f"CHAT_HANDLER: Repo available: {repo is not None and repo.is_available()}")
             if not repo or not repo.is_available():
+                logger.error("CHAT_HANDLER: Chat service unavailable")
                 emit(self.EVENT_ERROR, {
                     'code': 'SERVICE_UNAVAILABLE',
                     'message': 'Chat service temporarily unavailable',
@@ -141,6 +155,7 @@ class ChatHandler:
                 # Verify user is participant in conversation
                 conv = repo.get_conversation(conversation_id, user_key)
                 if not conv:
+                    logger.error(f"CHAT_HANDLER: Conversation {conversation_id} not found or access denied")
                     emit(self.EVENT_ERROR, {
                         'code': 'NOT_FOUND',
                         'message': 'Conversation not found or access denied',
@@ -148,8 +163,11 @@ class ChatHandler:
                     })
                     return
 
+                logger.info(f"CHAT_HANDLER: Conversation found, participants: {conv.get('participants', [])}")
+
                 # Generate unique message ID
                 message_id = generate_message_id()
+                logger.info(f"CHAT_HANDLER: Generated message_id: {message_id}")
 
                 # Create message object
                 message = Message(
@@ -165,15 +183,19 @@ class ChatHandler:
                 )
 
                 # Store message in database FIRST (data consistency)
+                logger.info("CHAT_HANDLER: Storing message in database...")
                 stored_id = repo.send_message(message)
 
                 if not stored_id:
+                    logger.error("CHAT_HANDLER: Failed to store message in database")
                     emit(self.EVENT_ERROR, {
                         'code': 'STORAGE_FAILED',
                         'message': 'Failed to store message',
                         'tempId': temp_id
                     })
                     return
+
+                logger.info(f"CHAT_HANDLER: Message stored successfully, stored_id: {stored_id}")
 
                 # Build message data for broadcast
                 now = datetime.utcnow()
@@ -200,16 +222,20 @@ class ChatHandler:
                         message_data['senderAvatar'] = sender.get('avatar_url')
 
                 # Send confirmation to sender
+                logger.info(f"CHAT_HANDLER: Sending '{self.EVENT_MESSAGE_SENT}' to sender")
                 emit(self.EVENT_MESSAGE_SENT, message_data)
 
                 # Broadcast to other participants
                 participants = conv.get('participants', [])
+                logger.info(f"CHAT_HANDLER: Broadcasting to {len(participants) - 1} other participants")
                 for participant in participants:
                     if participant != user_key:
+                        logger.info(f"CHAT_HANDLER: Sending message to participant {participant}")
                         self._emit_to_user(participant, self.EVENT_MESSAGE_NEW, message_data)
 
                         # Mark as delivered if user is online
                         if participant in self.user_sockets:
+                            logger.info(f"CHAT_HANDLER: Participant {participant} is online, marking delivered")
                             repo.mark_delivered(message_id, participant)
                             # Notify sender of delivery
                             emit(self.EVENT_MESSAGE_DELIVERED, {
@@ -217,11 +243,14 @@ class ChatHandler:
                                 'deliveredTo': participant,
                                 'timestamp': now.isoformat()
                             })
+                        else:
+                            logger.info(f"CHAT_HANDLER: Participant {participant} is OFFLINE")
 
-                logger.info(f"Message {message_id} sent by {user_key} in conversation {conversation_id}")
+                logger.info(f"CHAT_HANDLER: Message {message_id} sent SUCCESSFULLY by {user_key}")
+                logger.info("=" * 50)
 
             except Exception as e:
-                logger.exception(f"Error sending message: {e}")
+                logger.exception(f"CHAT_HANDLER: Error sending message: {e}")
                 emit(self.EVENT_ERROR, {
                     'code': 'SEND_FAILED',
                     'message': str(e),
@@ -238,9 +267,12 @@ class ChatHandler:
             """
             from flask import request
             socket_id = request.sid
+            logger.info(f"CHAT_HANDLER: 'chat:read' received - data={data}")
+
             user_info = self.connected_users.get(socket_id)
 
             if not user_info:
+                logger.warning("CHAT_HANDLER: chat:read - user not authenticated")
                 return
 
             user_key = user_info['user_key']
@@ -249,11 +281,13 @@ class ChatHandler:
 
             repo = get_messaging_repository()
             if not repo or not repo.is_available():
+                logger.error("CHAT_HANDLER: chat:read - repo not available")
                 return
 
             try:
                 if conversation_id:
                     # Mark all messages in conversation as read
+                    logger.info(f"CHAT_HANDLER: Marking all messages in conversation {conversation_id} as read")
                     count = repo.mark_conversation_read(conversation_id, user_key)
 
                     # Notify other participants
@@ -633,36 +667,57 @@ class ChatHandler:
     def _emit_to_user(self, user_key: str, event: str, data: Any):
         """Emit event to all connected devices of a user."""
         sockets = self.user_sockets.get(user_key, [])
+        logger.info(f"CHAT_HANDLER: _emit_to_user - user={user_key}, event={event}, sockets={len(sockets)}")
+
+        if not sockets:
+            logger.warning(f"CHAT_HANDLER: No sockets found for user {user_key}")
+            return
+
         for sid in sockets:
-            self.socketio.emit(event, data, room=sid)
+            try:
+                self.socketio.emit(event, data, room=sid)
+                logger.info(f"CHAT_HANDLER: Emitted '{event}' to socket {sid}")
+            except Exception as e:
+                logger.error(f"CHAT_HANDLER: Error emitting to socket {sid}: {e}")
 
     def on_user_connected(self, user_key: str, account_key: str, socket_id: str):
         """Called when a user connects. Join their conversation rooms."""
+        logger.info(f"CHAT_HANDLER: on_user_connected - user={user_key}, socket={socket_id}")
+
         repo = get_messaging_repository()
         if repo and repo.is_available():
             try:
                 # Get user's conversations and join rooms
                 conversations = repo.get_user_conversations(user_key, account_key)
+                logger.info(f"CHAT_HANDLER: User has {len(conversations)} conversations")
+
                 for conv in conversations:
                     conv_id = conv.get('conversation_id') or str(conv.get('_id'))
                     join_room(f"conv:{conv_id}", sid=socket_id, namespace='/')
+                    logger.info(f"CHAT_HANDLER: Joined room conv:{conv_id}")
 
                 # Update presence
                 device_info = {}
                 repo.set_user_online(user_key, socket_id, device_info)
+                logger.info(f"CHAT_HANDLER: User {user_key} presence set to ONLINE")
 
                 # Broadcast online status
                 self._broadcast_presence(user_key, 'online', account_key)
 
             except Exception as e:
-                logger.error(f"Error on user connected: {e}")
+                logger.error(f"CHAT_HANDLER: Error on user connected: {e}")
+        else:
+            logger.warning("CHAT_HANDLER: on_user_connected - repo not available")
 
     def on_user_disconnected(self, user_key: str, account_key: str):
         """Called when a user disconnects (all devices)."""
+        logger.info(f"CHAT_HANDLER: on_user_disconnected - user={user_key}")
+
         repo = get_messaging_repository()
         if repo and repo.is_available():
             try:
                 repo.set_user_offline(user_key)
+                logger.info(f"CHAT_HANDLER: User {user_key} presence set to OFFLINE")
                 self._broadcast_presence(user_key, 'offline', account_key)
             except Exception as e:
                 logger.error(f"Error on user disconnected: {e}")

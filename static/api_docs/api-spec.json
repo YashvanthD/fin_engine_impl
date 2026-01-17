@@ -1,10 +1,10 @@
 {
   "info": {
     "title": "Fin Engine API",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "description": "Complete API reference for the Fin Engine fish farming management platform. All endpoints are under /api/* prefix.",
     "baseUrl": "http://localhost:5000",
-    "lastUpdated": "2026-01-16"
+    "lastUpdated": "2026-01-17"
   },
   "sections": [
     {"id": "use-cases", "name": "Farm Use Cases Guide", "file": "sections/use-cases.json", "icon": "📖"},
@@ -22,6 +22,7 @@
     {"id": "dashboard", "name": "Dashboard & Alerts", "file": "sections/dashboard.json", "icon": "📈"},
     {"id": "notification", "name": "Notifications & Alerts", "file": "sections/notification.json", "icon": "🔔"},
     {"id": "chat", "name": "Chat & Messaging", "file": "sections/chat.json", "icon": "💬"},
+    {"id": "websocket", "name": "WebSocket (Real-time)", "file": "sections/websocket.json", "icon": "⚡"},
     {"id": "public", "name": "Public Endpoints", "file": "sections/public.json", "icon": "🌐"},
     {"id": "ai-openai", "name": "AI Services (OpenAI)", "file": "sections/ai-openai.json", "icon": "🤖"},
     {"id": "mcp", "name": "MCP Server", "file": "sections/mcp.json", "icon": "🔌"}

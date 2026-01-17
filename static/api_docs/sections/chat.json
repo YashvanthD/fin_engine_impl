@@ -242,34 +242,280 @@
     }
   ],
   "websocket": {
-    "description": "Real-time messaging uses WebSocket (Socket.IO)",
+    "title": "WebSocket Real-time Messaging",
+    "description": "All real-time chat operations use WebSocket (Socket.IO). REST API is ONLY for initial data loading.",
+    "important": "Do NOT use REST API to send messages. All message sending MUST go through WebSocket.",
     "connection": {
-      "url": "/socket.io",
-      "auth": "Pass token in auth object or query param: ?token=<jwt>"
+      "url": "ws://localhost:5000",
+      "path": "/socket.io",
+      "transports": ["websocket", "polling"],
+      "authentication": {
+        "method1": {
+          "name": "Auth Object (Recommended)",
+          "description": "Pass token in the auth object when connecting",
+          "example": "socket = io('http://localhost:5000', { auth: { token: 'your_jwt_token' } })"
+        },
+        "method2": {
+          "name": "Query Parameter",
+          "description": "Pass token as query parameter",
+          "example": "socket = io('http://localhost:5000?token=your_jwt_token')"
+        },
+        "method3": {
+          "name": "Authorization Header",
+          "description": "Pass token in Authorization header (for some clients)",
+          "example": "headers: { 'Authorization': 'Bearer your_jwt_token' }"
+        }
+      },
+      "javascript_example": "// Using socket.io-client\nimport { io } from 'socket.io-client';\n\nconst socket = io('http://localhost:5000', {\n  auth: { token: localStorage.getItem('auth_token') },\n  transports: ['websocket', 'polling']\n});\n\nsocket.on('connect', () => {\n  console.log('Connected:', socket.id);\n});\n\nsocket.on('connected', (data) => {\n  console.log('Auth success:', data);\n});\n\nsocket.on('error', (error) => {\n  console.error('Error:', error);\n});"
     },
     "events": {
-      "client_to_server": [
-        {"event": "message:send", "description": "Send a message", "payload": {"conversationId": "string", "content": "string", "type": "text|image|file"}},
-        {"event": "message:read", "description": "Mark messages as read", "payload": {"conversationId": "string"}},
-        {"event": "message:edit", "description": "Edit a message", "payload": {"messageId": "string", "content": "string"}},
-        {"event": "message:delete", "description": "Delete a message", "payload": {"messageId": "string", "forEveryone": "boolean"}},
-        {"event": "typing:start", "description": "User started typing", "payload": {"conversationId": "string"}},
-        {"event": "typing:stop", "description": "User stopped typing", "payload": {"conversationId": "string"}},
-        {"event": "conversation:create", "description": "Create conversation", "payload": {"participants": ["user_keys"], "name": "string", "type": "direct|group"}}
-      ],
-      "server_to_client": [
-        {"event": "message:new", "description": "New message received"},
-        {"event": "message:sent", "description": "Your message was sent (confirmation)"},
-        {"event": "message:delivered", "description": "Message delivered to recipient"},
-        {"event": "message:read", "description": "Message was read by recipient"},
-        {"event": "message:edited", "description": "Message was edited"},
-        {"event": "message:deleted", "description": "Message was deleted"},
-        {"event": "typing:update", "description": "Typing status changed"},
-        {"event": "conversation:created", "description": "New conversation created"},
-        {"event": "presence:online", "description": "User came online"},
-        {"event": "presence:offline", "description": "User went offline"}
-      ]
-    }
+      "connection_events": {
+        "description": "Events for connection lifecycle",
+        "server_to_client": [
+          {
+            "event": "connected",
+            "description": "Emitted after successful authentication",
+            "payload": {
+              "message": "Connected to WebSocket Hub",
+              "user_key": "string",
+              "socket_id": "string",
+              "features": ["notifications", "alerts", "chat", "presence", "streams"]
+            }
+          },
+          {
+            "event": "error",
+            "description": "Emitted on errors",
+            "payload": {
+              "code": "UNAUTHORIZED | INVALID_DATA | NOT_FOUND | etc",
+              "message": "Error description"
+            }
+          }
+        ]
+      },
+      "chat_client_to_server": {
+        "description": "Events sent from client to server",
+        "events": [
+          {
+            "event": "chat:send",
+            "description": "Send a new message",
+            "payload": {
+              "conversationId": {"type": "string", "required": true, "description": "Target conversation ID"},
+              "content": {"type": "string", "required": true, "description": "Message text content"},
+              "type": {"type": "string", "required": false, "default": "text", "enum": ["text", "image", "file", "audio", "video"]},
+              "replyTo": {"type": "string", "required": false, "description": "Message ID being replied to"},
+              "tempId": {"type": "string", "required": false, "description": "Client-side temp ID for optimistic updates"},
+              "mediaUrl": {"type": "string", "required": false, "description": "URL for media messages"},
+              "mentions": {"type": "array", "required": false, "description": "Array of user_keys mentioned"}
+            },
+            "example": "socket.emit('chat:send', {\n  conversationId: 'conv_abc123',\n  content: 'Hello!',\n  type: 'text',\n  tempId: 'temp_' + Date.now()\n});"
+          },
+          {
+            "event": "chat:read",
+            "description": "Mark messages as read",
+            "payload": {
+              "conversationId": {"type": "string", "description": "Mark all messages in conversation as read"},
+              "messageId": {"type": "string", "description": "Or mark specific message as read"}
+            },
+            "example": "socket.emit('chat:read', { conversationId: 'conv_abc123' });"
+          },
+          {
+            "event": "chat:delivered",
+            "description": "Confirm message delivery",
+            "payload": {
+              "messageId": {"type": "string", "required": true}
+            }
+          },
+          {
+            "event": "chat:typing",
+            "description": "Send typing indicator",
+            "payload": {
+              "conversationId": {"type": "string", "required": true},
+              "isTyping": {"type": "boolean", "required": true}
+            },
+            "example": "socket.emit('chat:typing', { conversationId: 'conv_abc', isTyping: true });"
+          },
+          {
+            "event": "chat:edit",
+            "description": "Edit an existing message (sender only)",
+            "payload": {
+              "messageId": {"type": "string", "required": true},
+              "content": {"type": "string", "required": true, "description": "New message content"}
+            }
+          },
+          {
+            "event": "chat:delete",
+            "description": "Delete a message",
+            "payload": {
+              "messageId": {"type": "string", "required": true},
+              "forEveryone": {"type": "boolean", "default": false, "description": "Delete for all participants (sender only)"}
+            }
+          },
+          {
+            "event": "chat:conversation:create",
+            "description": "Create a new conversation",
+            "payload": {
+              "type": {"type": "string", "required": true, "enum": ["direct", "group"]},
+              "participants": {"type": "array", "required": true, "description": "Array of user_keys"},
+              "name": {"type": "string", "required": false, "description": "Group name (for group conversations)"}
+            }
+          },
+          {
+            "event": "chat:conversation:join",
+            "description": "Join a conversation room to receive messages",
+            "payload": {
+              "conversationId": {"type": "string", "required": true}
+            }
+          },
+          {
+            "event": "chat:conversation:leave",
+            "description": "Leave a conversation room",
+            "payload": {
+              "conversationId": {"type": "string", "required": true}
+            }
+          }
+        ]
+      },
+      "chat_server_to_client": {
+        "description": "Events sent from server to client",
+        "events": [
+          {
+            "event": "chat:message:sent",
+            "description": "Confirmation that your message was stored and sent",
+            "payload": {
+              "messageId": "Server-generated message ID",
+              "conversationId": "Conversation ID",
+              "senderKey": "Your user_key",
+              "content": "Message content",
+              "type": "Message type",
+              "status": "sent",
+              "createdAt": "ISO timestamp",
+              "tempId": "Your temp ID for matching"
+            }
+          },
+          {
+            "event": "chat:message",
+            "description": "New message received in a conversation you're part of",
+            "payload": {
+              "messageId": "string",
+              "conversationId": "string",
+              "senderKey": "string",
+              "senderName": "string",
+              "senderAvatar": "string",
+              "content": "string",
+              "type": "string",
+              "createdAt": "ISO timestamp"
+            }
+          },
+          {
+            "event": "chat:message:delivered",
+            "description": "Your message was delivered to a recipient",
+            "payload": {
+              "messageId": "string",
+              "deliveredTo": "user_key",
+              "timestamp": "ISO timestamp"
+            }
+          },
+          {
+            "event": "chat:message:read",
+            "description": "Your message was read by a recipient",
+            "payload": {
+              "messageId": "string (optional)",
+              "conversationId": "string (optional)",
+              "readBy": "user_key",
+              "timestamp": "ISO timestamp"
+            }
+          },
+          {
+            "event": "chat:message:edited",
+            "description": "A message was edited",
+            "payload": {
+              "messageId": "string",
+              "content": "New content",
+              "editedAt": "ISO timestamp"
+            }
+          },
+          {
+            "event": "chat:message:deleted",
+            "description": "A message was deleted",
+            "payload": {
+              "messageId": "string",
+              "deletedAt": "ISO timestamp",
+              "forEveryone": "boolean"
+            }
+          },
+          {
+            "event": "chat:typing:start",
+            "description": "User started typing in a conversation",
+            "payload": {
+              "conversationId": "string",
+              "userKey": "string",
+              "timestamp": "ISO timestamp"
+            }
+          },
+          {
+            "event": "chat:typing:stop",
+            "description": "User stopped typing",
+            "payload": {
+              "conversationId": "string",
+              "userKey": "string",
+              "timestamp": "ISO timestamp"
+            }
+          },
+          {
+            "event": "chat:conversation:created",
+            "description": "A new conversation was created that includes you",
+            "payload": {
+              "conversationId": "string",
+              "type": "direct | group",
+              "participants": ["user_keys"],
+              "name": "string (for groups)",
+              "createdBy": "user_key",
+              "createdAt": "ISO timestamp"
+            }
+          },
+          {
+            "event": "chat:presence",
+            "description": "User presence changed",
+            "payload": {
+              "userKey": "string",
+              "status": "online | offline | typing",
+              "timestamp": "ISO timestamp"
+            }
+          },
+          {
+            "event": "chat:error",
+            "description": "Chat operation error",
+            "payload": {
+              "code": "UNAUTHORIZED | INVALID_DATA | NOT_FOUND | SERVICE_UNAVAILABLE | SEND_FAILED | etc",
+              "message": "Error description",
+              "tempId": "Your temp ID (if applicable)"
+            }
+          }
+        ]
+      },
+      "notification_events": {
+        "description": "Notification-related events",
+        "server_to_client": [
+          {"event": "notification:new", "description": "New notification received"},
+          {"event": "notification:count", "description": "Unread notification count update"}
+        ],
+        "client_to_server": [
+          {"event": "notification:mark_read", "payload": {"notification_id": "string"}},
+          {"event": "notification:mark_all_read", "payload": {}}
+        ]
+      },
+      "alert_events": {
+        "description": "Alert-related events",
+        "server_to_client": [
+          {"event": "alert:new", "description": "New alert for the account"},
+          {"event": "alert:count", "description": "Unacknowledged alert count update"}
+        ],
+        "client_to_server": [
+          {"event": "alert:acknowledge", "payload": {"alert_id": "string"}}
+        ]
+      }
+    },
+    "full_client_example": "// Complete Socket.IO Client Example\nimport { io } from 'socket.io-client';\n\nconst API_URL = 'http://localhost:5000';\nconst token = localStorage.getItem('auth_token');\n\n// Connect\nconst socket = io(API_URL, {\n  auth: { token },\n  transports: ['websocket', 'polling']\n});\n\n// Connection events\nsocket.on('connect', () => console.log('Socket connected:', socket.id));\nsocket.on('connected', (data) => console.log('Authenticated:', data));\nsocket.on('disconnect', (reason) => console.log('Disconnected:', reason));\nsocket.on('error', (err) => console.error('Socket error:', err));\n\n// Chat events\nsocket.on('chat:message', (msg) => {\n  console.log('New message:', msg);\n  // Update UI, mark as delivered\n  socket.emit('chat:delivered', { messageId: msg.messageId });\n});\n\nsocket.on('chat:message:sent', (msg) => {\n  // Replace temp message with confirmed message\n  console.log('Message sent:', msg.messageId, 'tempId:', msg.tempId);\n});\n\nsocket.on('chat:message:delivered', (data) => {\n  console.log('Delivered to:', data.deliveredTo);\n});\n\nsocket.on('chat:message:read', (data) => {\n  console.log('Read by:', data.readBy);\n});\n\nsocket.on('chat:typing:start', (data) => {\n  console.log(data.userKey, 'is typing in', data.conversationId);\n});\n\nsocket.on('chat:error', (err) => {\n  console.error('Chat error:', err.code, err.message);\n});\n\n// Send a message\nfunction sendMessage(conversationId, content) {\n  const tempId = 'temp_' + Date.now();\n  \n  // Optimistic update\n  addMessageToUI({ tempId, content, status: 'sending' });\n  \n  socket.emit('chat:send', {\n    conversationId,\n    content,\n    type: 'text',\n    tempId\n  });\n}\n\n// Typing indicator\nlet typingTimeout;\nfunction onUserTyping(conversationId) {\n  socket.emit('chat:typing', { conversationId, isTyping: true });\n  \n  clearTimeout(typingTimeout);\n  typingTimeout = setTimeout(() => {\n    socket.emit('chat:typing', { conversationId, isTyping: false });\n  }, 2000);\n}\n\n// Mark messages as read\nfunction markConversationRead(conversationId) {\n  socket.emit('chat:read', { conversationId });\n}"
   },
   "collections": {
     "description": "Chat uses separate MongoDB collections",

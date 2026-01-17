@@ -1,0 +1,397 @@
+{
+  "id": "websocket",
+  "name": "WebSocket (Real-time)",
+  "description": "Real-time communication using Socket.IO WebSocket. Used for chat, notifications, alerts, and live data updates.",
+  "important": "WebSocket is required for sending chat messages. REST API is only for fetching initial data.",
+
+  "connection": {
+    "title": "How to Connect",
+    "url": "ws://localhost:5000",
+    "path": "/socket.io",
+    "protocol": "Socket.IO v4",
+    "transports": ["websocket", "polling"],
+
+    "authentication": {
+      "description": "You must provide a valid JWT token to connect. There are 3 ways to pass the token:",
+      "methods": [
+        {
+          "name": "Auth Object (Recommended)",
+          "description": "Pass token in the auth object when creating the socket connection",
+          "code": "const socket = io('http://localhost:5000', {\n  auth: {\n    token: 'your_jwt_token_here'\n  }\n});"
+        },
+        {
+          "name": "Query Parameter",
+          "description": "Pass token as a query parameter in the connection URL",
+          "code": "const socket = io('http://localhost:5000?token=your_jwt_token_here');"
+        },
+        {
+          "name": "Authorization Header",
+          "description": "Some clients support passing token via extraHeaders",
+          "code": "const socket = io('http://localhost:5000', {\n  extraHeaders: {\n    Authorization: 'Bearer your_jwt_token_here'\n  }\n});"
+        }
+      ]
+    },
+
+    "quick_start": {
+      "title": "Quick Start Example",
+      "javascript": "// Install: npm install socket.io-client\nimport { io } from 'socket.io-client';\n\n// Get token from your auth system\nconst token = localStorage.getItem('auth_token');\n\n// Create connection\nconst socket = io('http://localhost:5000', {\n  auth: { token },\n  transports: ['websocket', 'polling'],\n  reconnection: true,\n  reconnectionAttempts: 5,\n  reconnectionDelay: 1000\n});\n\n// Connection lifecycle\nsocket.on('connect', () => {\n  console.log('Connected! Socket ID:', socket.id);\n});\n\nsocket.on('connected', (data) => {\n  console.log('Authenticated successfully!');\n  console.log('User:', data.user_key);\n  console.log('Features:', data.features);\n});\n\nsocket.on('disconnect', (reason) => {\n  console.log('Disconnected:', reason);\n});\n\nsocket.on('connect_error', (error) => {\n  console.error('Connection error:', error.message);\n});\n\nsocket.on('error', (error) => {\n  console.error('Socket error:', error);\n});",
+      "react_native": "// Install: npm install socket.io-client\nimport { io } from 'socket.io-client';\nimport AsyncStorage from '@react-native-async-storage/async-storage';\n\nconst connectSocket = async () => {\n  const token = await AsyncStorage.getItem('auth_token');\n  \n  const socket = io('http://your-server:5000', {\n    auth: { token },\n    transports: ['websocket']\n  });\n  \n  return socket;\n};"
+    }
+  },
+
+  "events": {
+    "title": "WebSocket Events Reference",
+
+    "connection_events": {
+      "title": "Connection Events",
+      "events": [
+        {
+          "direction": "server → client",
+          "event": "connected",
+          "description": "Emitted after successful authentication. Connection is now ready to use.",
+          "payload": {
+            "message": "string - Welcome message",
+            "user_key": "string - Your user key",
+            "socket_id": "string - Socket session ID",
+            "features": "array - Available features: ['notifications', 'alerts', 'chat', 'presence', 'streams']"
+          }
+        },
+        {
+          "direction": "server → client",
+          "event": "error",
+          "description": "Emitted when an error occurs",
+          "payload": {
+            "code": "string - Error code (UNAUTHORIZED, INVALID_DATA, NOT_FOUND, etc.)",
+            "message": "string - Human readable error message"
+          }
+        }
+      ]
+    },
+
+    "chat_events": {
+      "title": "Chat Events",
+      "description": "Events for real-time messaging. All message sending MUST use WebSocket.",
+
+      "client_to_server": [
+        {
+          "event": "chat:send",
+          "description": "Send a new message to a conversation",
+          "payload": {
+            "conversationId": {"type": "string", "required": true, "description": "Target conversation ID"},
+            "content": {"type": "string", "required": true, "description": "Message text"},
+            "type": {"type": "string", "default": "text", "enum": ["text", "image", "file", "audio", "video"]},
+            "replyTo": {"type": "string", "description": "Message ID being replied to"},
+            "tempId": {"type": "string", "description": "Client-side temporary ID for optimistic UI updates"},
+            "mediaUrl": {"type": "string", "description": "URL for media attachments"},
+            "mentions": {"type": "array", "description": "Array of user_keys mentioned in message"}
+          },
+          "example": "socket.emit('chat:send', {\n  conversationId: 'conv_abc123',\n  content: 'Hello, world!',\n  type: 'text',\n  tempId: 'temp_' + Date.now()\n});"
+        },
+        {
+          "event": "chat:read",
+          "description": "Mark messages as read",
+          "payload": {
+            "conversationId": {"type": "string", "description": "Mark all messages in this conversation as read"},
+            "messageId": {"type": "string", "description": "Or mark a specific message as read"}
+          },
+          "example": "socket.emit('chat:read', { conversationId: 'conv_abc123' });"
+        },
+        {
+          "event": "chat:delivered",
+          "description": "Confirm a message was delivered to your device",
+          "payload": {
+            "messageId": {"type": "string", "required": true}
+          }
+        },
+        {
+          "event": "chat:typing",
+          "description": "Send typing indicator",
+          "payload": {
+            "conversationId": {"type": "string", "required": true},
+            "isTyping": {"type": "boolean", "required": true}
+          },
+          "example": "socket.emit('chat:typing', {\n  conversationId: 'conv_abc123',\n  isTyping: true\n});"
+        },
+        {
+          "event": "chat:edit",
+          "description": "Edit your own message",
+          "payload": {
+            "messageId": {"type": "string", "required": true},
+            "content": {"type": "string", "required": true}
+          }
+        },
+        {
+          "event": "chat:delete",
+          "description": "Delete a message",
+          "payload": {
+            "messageId": {"type": "string", "required": true},
+            "forEveryone": {"type": "boolean", "default": false, "description": "If true, delete for all participants (sender only)"}
+          }
+        },
+        {
+          "event": "chat:conversation:create",
+          "description": "Create a new conversation",
+          "payload": {
+            "type": {"type": "string", "required": true, "enum": ["direct", "group"]},
+            "participants": {"type": "array", "required": true, "description": "Array of user_keys to include"},
+            "name": {"type": "string", "description": "Group name (required for group type)"}
+          }
+        }
+      ],
+
+      "server_to_client": [
+        {
+          "event": "chat:message:sent",
+          "description": "Confirmation that your message was stored and sent successfully",
+          "payload": {
+            "messageId": "string - Server-generated unique message ID",
+            "conversationId": "string",
+            "senderKey": "string - Your user_key",
+            "content": "string",
+            "type": "string",
+            "status": "sent",
+            "createdAt": "string - ISO timestamp",
+            "tempId": "string - Your tempId for matching with optimistic update"
+          }
+        },
+        {
+          "event": "chat:message",
+          "description": "New message received in a conversation you're part of",
+          "payload": {
+            "messageId": "string",
+            "conversationId": "string",
+            "senderKey": "string",
+            "senderName": "string",
+            "senderAvatar": "string (optional)",
+            "content": "string",
+            "type": "string",
+            "createdAt": "string - ISO timestamp",
+            "replyTo": "string (optional)"
+          }
+        },
+        {
+          "event": "chat:message:delivered",
+          "description": "Your message was delivered to a recipient's device",
+          "payload": {
+            "messageId": "string",
+            "deliveredTo": "string - user_key of recipient",
+            "timestamp": "string - ISO timestamp"
+          }
+        },
+        {
+          "event": "chat:message:read",
+          "description": "Your message was read by a recipient",
+          "payload": {
+            "messageId": "string (optional)",
+            "conversationId": "string (optional)",
+            "readBy": "string - user_key",
+            "timestamp": "string - ISO timestamp"
+          }
+        },
+        {
+          "event": "chat:typing:start",
+          "description": "A user started typing in a conversation",
+          "payload": {
+            "conversationId": "string",
+            "userKey": "string",
+            "timestamp": "string"
+          }
+        },
+        {
+          "event": "chat:typing:stop",
+          "description": "A user stopped typing",
+          "payload": {
+            "conversationId": "string",
+            "userKey": "string",
+            "timestamp": "string"
+          }
+        },
+        {
+          "event": "chat:message:edited",
+          "description": "A message was edited",
+          "payload": {
+            "messageId": "string",
+            "content": "string - New content",
+            "editedAt": "string - ISO timestamp"
+          }
+        },
+        {
+          "event": "chat:message:deleted",
+          "description": "A message was deleted",
+          "payload": {
+            "messageId": "string",
+            "deletedAt": "string - ISO timestamp",
+            "forEveryone": "boolean"
+          }
+        },
+        {
+          "event": "chat:conversation:created",
+          "description": "A new conversation was created that includes you",
+          "payload": {
+            "conversationId": "string",
+            "type": "direct | group",
+            "participants": "array of user_keys",
+            "name": "string (for groups)",
+            "createdBy": "string - user_key",
+            "createdAt": "string - ISO timestamp"
+          }
+        },
+        {
+          "event": "chat:presence",
+          "description": "A user's presence status changed",
+          "payload": {
+            "userKey": "string",
+            "status": "online | offline | typing",
+            "timestamp": "string"
+          }
+        },
+        {
+          "event": "chat:error",
+          "description": "An error occurred during a chat operation",
+          "payload": {
+            "code": "string - Error code",
+            "message": "string - Error description",
+            "tempId": "string (optional) - Your tempId if related to a send"
+          },
+          "error_codes": [
+            "UNAUTHORIZED - Not authenticated",
+            "INVALID_DATA - Missing required fields",
+            "NOT_FOUND - Conversation not found",
+            "SERVICE_UNAVAILABLE - Chat service down",
+            "SEND_FAILED - Message could not be stored",
+            "EDIT_FAILED - Could not edit message",
+            "DELETE_FAILED - Could not delete message"
+          ]
+        }
+      ]
+    },
+
+    "notification_events": {
+      "title": "Notification Events",
+      "events": [
+        {
+          "direction": "server → client",
+          "event": "notification:new",
+          "description": "New notification received"
+        },
+        {
+          "direction": "server → client",
+          "event": "notification:count",
+          "description": "Unread notification count update",
+          "payload": {"count": "number"}
+        },
+        {
+          "direction": "client → server",
+          "event": "notification:mark_read",
+          "payload": {"notification_id": "string"}
+        },
+        {
+          "direction": "client → server",
+          "event": "notification:mark_all_read",
+          "payload": {}
+        }
+      ]
+    },
+
+    "alert_events": {
+      "title": "Alert Events",
+      "events": [
+        {
+          "direction": "server → client",
+          "event": "alert:new",
+          "description": "New alert for your account"
+        },
+        {
+          "direction": "server → client",
+          "event": "alert:count",
+          "description": "Unacknowledged alert count update",
+          "payload": {"count": "number"}
+        },
+        {
+          "direction": "client → server",
+          "event": "alert:acknowledge",
+          "payload": {"alert_id": "string"}
+        }
+      ]
+    },
+
+    "presence_events": {
+      "title": "Presence Events",
+      "events": [
+        {
+          "direction": "client → server",
+          "event": "presence:update",
+          "description": "Update your presence status",
+          "payload": {"status": "online | away | busy | offline"}
+        }
+      ]
+    },
+
+    "utility_events": {
+      "title": "Utility Events",
+      "events": [
+        {
+          "direction": "client → server",
+          "event": "subscribe",
+          "description": "Subscribe to a channel for updates",
+          "payload": {"channel": "string"}
+        },
+        {
+          "direction": "client → server",
+          "event": "unsubscribe",
+          "description": "Unsubscribe from a channel",
+          "payload": {"channel": "string"}
+        },
+        {
+          "direction": "client → server",
+          "event": "ping",
+          "description": "Check connection health"
+        },
+        {
+          "direction": "server → client",
+          "event": "pong",
+          "description": "Response to ping",
+          "payload": {"timestamp": "string"}
+        }
+      ]
+    }
+  },
+
+  "complete_example": {
+    "title": "Complete Implementation Example",
+    "description": "A full example showing how to implement chat in a frontend application",
+    "code": "// chat-socket.js - Complete Chat Socket Implementation\nimport { io } from 'socket.io-client';\n\nclass ChatSocket {\n  constructor(serverUrl, getToken) {\n    this.serverUrl = serverUrl;\n    this.getToken = getToken;\n    this.socket = null;\n    this.listeners = new Map();\n  }\n\n  async connect() {\n    const token = await this.getToken();\n    \n    this.socket = io(this.serverUrl, {\n      auth: { token },\n      transports: ['websocket', 'polling'],\n      reconnection: true,\n      reconnectionAttempts: 5\n    });\n\n    this.setupEventListeners();\n    return this.waitForConnection();\n  }\n\n  setupEventListeners() {\n    // Connection events\n    this.socket.on('connected', (data) => {\n      console.log('Chat connected:', data);\n      this.emit('ready', data);\n    });\n\n    this.socket.on('error', (err) => {\n      console.error('Socket error:', err);\n      this.emit('error', err);\n    });\n\n    // Chat events\n    this.socket.on('chat:message', (msg) => this.emit('message', msg));\n    this.socket.on('chat:message:sent', (msg) => this.emit('messageSent', msg));\n    this.socket.on('chat:message:delivered', (d) => this.emit('delivered', d));\n    this.socket.on('chat:message:read', (d) => this.emit('read', d));\n    this.socket.on('chat:typing:start', (d) => this.emit('typingStart', d));\n    this.socket.on('chat:typing:stop', (d) => this.emit('typingStop', d));\n    this.socket.on('chat:error', (err) => this.emit('chatError', err));\n  }\n\n  waitForConnection() {\n    return new Promise((resolve, reject) => {\n      const timeout = setTimeout(() => reject(new Error('Connection timeout')), 10000);\n      \n      this.socket.once('connected', (data) => {\n        clearTimeout(timeout);\n        resolve(data);\n      });\n      \n      this.socket.once('error', (err) => {\n        clearTimeout(timeout);\n        reject(err);\n      });\n    });\n  }\n\n  sendMessage(conversationId, content, options = {}) {\n    const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);\n    \n    this.socket.emit('chat:send', {\n      conversationId,\n      content,\n      type: options.type || 'text',\n      replyTo: options.replyTo,\n      tempId,\n      mediaUrl: options.mediaUrl,\n      mentions: options.mentions\n    });\n    \n    return tempId;\n  }\n\n  markRead(conversationId) {\n    this.socket.emit('chat:read', { conversationId });\n  }\n\n  sendTyping(conversationId, isTyping) {\n    this.socket.emit('chat:typing', { conversationId, isTyping });\n  }\n\n  editMessage(messageId, content) {\n    this.socket.emit('chat:edit', { messageId, content });\n  }\n\n  deleteMessage(messageId, forEveryone = false) {\n    this.socket.emit('chat:delete', { messageId, forEveryone });\n  }\n\n  // Event emitter pattern\n  on(event, callback) {\n    if (!this.listeners.has(event)) {\n      this.listeners.set(event, new Set());\n    }\n    this.listeners.get(event).add(callback);\n    return () => this.off(event, callback);\n  }\n\n  off(event, callback) {\n    this.listeners.get(event)?.delete(callback);\n  }\n\n  emit(event, data) {\n    this.listeners.get(event)?.forEach(cb => cb(data));\n  }\n\n  disconnect() {\n    this.socket?.disconnect();\n  }\n}\n\n// Usage:\nconst chat = new ChatSocket('http://localhost:5000', () => localStorage.getItem('token'));\n\nawait chat.connect();\n\nchat.on('message', (msg) => {\n  console.log('New message:', msg);\n  updateUI(msg);\n});\n\nchat.on('messageSent', (msg) => {\n  replaceTempMessage(msg.tempId, msg);\n});\n\nconst tempId = chat.sendMessage('conv_123', 'Hello!');\nshowOptimisticMessage(tempId, 'Hello!');"
+  },
+
+  "troubleshooting": {
+    "title": "Troubleshooting",
+    "common_issues": [
+      {
+        "problem": "Connection fails with UNAUTHORIZED error",
+        "solutions": [
+          "Check that your JWT token is valid and not expired",
+          "Ensure the token is being passed correctly in auth object or query param",
+          "Try refreshing your access token before connecting"
+        ]
+      },
+      {
+        "problem": "Messages not being received",
+        "solutions": [
+          "Verify you're connected (check for 'connected' event)",
+          "Make sure you've joined the conversation room",
+          "Check that participants are correct in the conversation"
+        ]
+      },
+      {
+        "problem": "Connection keeps disconnecting",
+        "solutions": [
+          "Check your network connection",
+          "Ensure the server is running",
+          "Look for errors in browser console",
+          "Try using polling transport as fallback"
+        ]
+      }
+    ]
+  }
+}
+

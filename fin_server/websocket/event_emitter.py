@@ -100,13 +100,17 @@ class EventEmitter:
         Returns:
             True if event was emitted to at least one socket
         """
+        logger.info(f"EVENT_EMITTER: emit_to_user called - user={user_key}, event={event}")
+
         if not _socketio:
-            logger.warning(f"Socket.IO not initialized, cannot emit {event} to user {user_key}")
+            logger.error(f"EVENT_EMITTER: Socket.IO NOT initialized, cannot emit {event} to user {user_key}")
             return False
 
         sockets = _user_sockets.get(user_key, [])
+        logger.info(f"EVENT_EMITTER: User {user_key} has {len(sockets)} connected socket(s)")
+
         if not sockets:
-            logger.debug(f"User {user_key} not connected, queuing event {event}")
+            logger.warning(f"EVENT_EMITTER: User {user_key} not connected, event {event} not delivered")
             # TODO: Queue for offline delivery
             return False
 
@@ -119,14 +123,17 @@ class EventEmitter:
             '_target_id': user_key
         }
 
+        emitted_count = 0
         for sid in sockets:
             try:
                 _socketio.emit(event, payload, room=sid)
+                emitted_count += 1
+                logger.info(f"EVENT_EMITTER: Emitted '{event}' to socket {sid}")
             except Exception as e:
-                logger.error(f"Error emitting {event} to socket {sid}: {e}")
+                logger.error(f"EVENT_EMITTER: Error emitting {event} to socket {sid}: {e}")
 
-        logger.debug(f"Emitted {event} to user {user_key} ({len(sockets)} sockets)")
-        return True
+        logger.info(f"EVENT_EMITTER: Successfully emitted '{event}' to {emitted_count}/{len(sockets)} sockets for user {user_key}")
+        return emitted_count > 0
 
     @staticmethod
     def emit_to_account(account_key: str, event: str, data: Dict[str, Any]) -> int:
@@ -140,8 +147,10 @@ class EventEmitter:
         Returns:
             Number of users the event was emitted to
         """
+        logger.info(f"EVENT_EMITTER: emit_to_account called - account={account_key}, event={event}")
+
         if not _socketio:
-            logger.warning(f"Socket.IO not initialized, cannot emit {event} to account {account_key}")
+            logger.error(f"EVENT_EMITTER: Socket.IO NOT initialized, cannot emit {event} to account {account_key}")
             return 0
 
         # Add metadata
@@ -156,10 +165,10 @@ class EventEmitter:
         # Emit to account room
         try:
             _socketio.emit(event, payload, room=account_key)
-            logger.debug(f"Emitted {event} to account room {account_key}")
+            logger.info(f"EVENT_EMITTER: Emitted '{event}' to account room '{account_key}'")
             return 1  # Room-based emit
         except Exception as e:
-            logger.error(f"Error emitting {event} to account {account_key}: {e}")
+            logger.error(f"EVENT_EMITTER: Error emitting {event} to account {account_key}: {e}")
             return 0
 
     @staticmethod
@@ -175,8 +184,10 @@ class EventEmitter:
         Returns:
             True if event was emitted
         """
+        logger.info(f"EVENT_EMITTER: emit_to_room called - room={room_id}, event={event}, exclude={exclude_sender}")
+
         if not _socketio:
-            logger.warning(f"Socket.IO not initialized, cannot emit {event} to room {room_id}")
+            logger.error(f"EVENT_EMITTER: Socket.IO NOT initialized, cannot emit {event} to room {room_id}")
             return False
 
         payload = {

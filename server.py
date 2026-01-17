@@ -82,8 +82,12 @@ def create_app() -> Flask:
     app.register_blueprint(chat_bp)
     app.register_blueprint(openai_bp)
 
-    # Initialize WebSocket hub for real-time notifications/alerts
+    # Initialize WebSocket hub for real-time notifications/alerts/chat
+    logging.info("=" * 60)
+    logging.info("INITIALIZING WEBSOCKET HUB")
     init_websocket_hub(app, socketio)
+    logging.info("WEBSOCKET HUB INITIALIZED")
+    logging.info("=" * 60)
 
     logging.basicConfig(level=logging.INFO)
 
