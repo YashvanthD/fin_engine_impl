@@ -28,9 +28,22 @@ security:
 cors:
   origins: "*"
 
-# Debug logging
+# Logging configuration
 logging:
-  level: "DEBUG"
+  # Log level: DEBUG, INFO, WARNING, ERROR
+  level: "INFO"
+  # Enable verbose debug logging
+  debug: false
+  # Log format pattern (or use individual options below)
+  # Minimal: "%(message)s"
+  # With level: "%(levelname)s - %(message)s"
+  # Full: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  pattern: "%(levelname)s - %(message)s"
+  # Individual options (used if pattern is "%(message)s")
+  include_datetime: false
+  include_name: false
+  include_level: true
+  date_format: "%H:%M:%S"
 
 # MCP Server - Enable for local AI/tool testing
 # mcp:

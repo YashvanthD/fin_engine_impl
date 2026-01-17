@@ -38,7 +38,23 @@ openai:
   timeout: 30
 
 logging:
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  # Enable debug mode (verbose logging)
+  debug: false
+  # Log format pattern
+  # Minimal: "%(message)s"
+  # With level: "%(levelname)s - %(message)s"
+  # Full: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  pattern: "%(message)s"
+  # Include datetime in logs
+  include_datetime: false
+  # Include logger name (module name)
+  include_name: false
+  # Include log level (INFO, ERROR, etc)
+  include_level: true
+  # Date format (if include_datetime is true)
+  date_format: "%H:%M:%S"
 
 notification:
   scheduler_interval_seconds: 60

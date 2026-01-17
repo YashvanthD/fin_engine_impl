@@ -317,13 +317,76 @@ class Config:
         """Logging level."""
         env_val = os.getenv('LOG_LEVEL')
         if env_val:
+            return env_val.upper()
+        # If debug mode, use DEBUG level
+        if self.LOG_DEBUG:
+            return 'DEBUG'
+        return self._get_yaml_value('logging', 'level', default='INFO')
+
+    @property
+    def LOG_DEBUG(self) -> bool:
+        """Enable debug logging (verbose)."""
+        env_val = os.getenv('LOG_DEBUG', '').lower()
+        if env_val:
+            return env_val in ('1', 'true', 'yes')
+        return self._get_yaml_value('logging', 'debug', default=False)
+
+    @property
+    def LOG_PATTERN(self) -> str:
+        """Log format pattern."""
+        env_val = os.getenv('LOG_PATTERN')
+        if env_val:
             return env_val
-        return self._get_yaml_value('logging', 'level', default='DEBUG' if self.IS_DEV else 'INFO')
+        return self._get_yaml_value('logging', 'pattern', default='%(message)s')
+
+    @property
+    def LOG_INCLUDE_DATETIME(self) -> bool:
+        """Include datetime in logs."""
+        env_val = os.getenv('LOG_INCLUDE_DATETIME', '').lower()
+        if env_val:
+            return env_val in ('1', 'true', 'yes')
+        return self._get_yaml_value('logging', 'include_datetime', default=False)
+
+    @property
+    def LOG_INCLUDE_NAME(self) -> bool:
+        """Include logger name in logs."""
+        env_val = os.getenv('LOG_INCLUDE_NAME', '').lower()
+        if env_val:
+            return env_val in ('1', 'true', 'yes')
+        return self._get_yaml_value('logging', 'include_name', default=False)
+
+    @property
+    def LOG_INCLUDE_LEVEL(self) -> bool:
+        """Include log level in logs."""
+        env_val = os.getenv('LOG_INCLUDE_LEVEL', '').lower()
+        if env_val:
+            return env_val in ('1', 'true', 'yes')
+        return self._get_yaml_value('logging', 'include_level', default=True)
+
+    @property
+    def LOG_DATE_FORMAT(self) -> str:
+        """Date format for logs."""
+        return self._get_yaml_value('logging', 'date_format', default='%H:%M:%S')
 
     @property
     def LOG_FORMAT(self) -> str:
-        """Logging format string."""
-        return self._get_yaml_value('logging', 'format', default='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        """Build log format string based on config options."""
+        # If custom pattern is set, use it
+        pattern = self.LOG_PATTERN
+        if pattern and pattern != '%(message)s':
+            return pattern
+
+        # Build format dynamically
+        parts = []
+        if self.LOG_INCLUDE_DATETIME:
+            parts.append('%(asctime)s')
+        if self.LOG_INCLUDE_NAME:
+            parts.append('%(name)s')
+        if self.LOG_INCLUDE_LEVEL:
+            parts.append('%(levelname)s')
+        parts.append('%(message)s')
+
+        return ' - '.join(parts) if len(parts) > 1 else parts[0]
 
     # ==========================================================================
     # Notification Settings

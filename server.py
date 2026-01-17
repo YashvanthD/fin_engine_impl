@@ -7,17 +7,36 @@ import argparse
 import warnings
 import logging
 
+# Import config first to get logging settings
+from config import config
+
+
+def setup_logging():
+    """Configure logging based on config settings."""
+    log_format = config.LOG_FORMAT
+    log_level = getattr(logging, config.LOG_LEVEL.upper(), logging.INFO)
+    date_format = config.LOG_DATE_FORMAT if config.LOG_INCLUDE_DATETIME else None
+
+    # Configure root logger
+    logging.basicConfig(
+        level=log_level,
+        format=log_format,
+        datefmt=date_format
+    )
+
+    # Set level for specific loggers to reduce noise
+    if not config.LOG_DEBUG:
+        logging.getLogger('werkzeug').setLevel(logging.WARNING)
+        logging.getLogger('engineio').setLevel(logging.WARNING)
+        logging.getLogger('socketio').setLevel(logging.WARNING)
+
+
 # Configure logging FIRST before any other imports
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+setup_logging()
 logger = logging.getLogger(__name__)
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-
-from config import config
 # Import blueprints from route modules
 from fin_server.routes.auth import auth_bp
 from fin_server.routes.user import user_bp

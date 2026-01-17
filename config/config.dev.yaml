@@ -37,7 +37,13 @@ timezone:
   default: "Asia/Kolkata"
 
 logging:
-  level: "DEBUG"
+  level: "INFO"
+  debug: false
+  # Minimal logs - just message with level
+  pattern: "%(levelname)s - %(message)s"
+  include_datetime: false
+  include_name: false
+  include_level: true
 
 # Dev-specific feature flags
 features:

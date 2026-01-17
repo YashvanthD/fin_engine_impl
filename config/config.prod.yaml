@@ -41,6 +41,12 @@ timezone:
 
 logging:
   level: "WARNING"
+  debug: false
+  # Production: just message
+  pattern: "%(message)s"
+  include_datetime: false
+  include_name: false
+  include_level: false
 
 rate_limit:
   enabled: true
