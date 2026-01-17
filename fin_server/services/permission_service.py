@@ -66,7 +66,7 @@ class PermissionService:
                 permissions[feature].update(flags)
 
         # Step 3: Apply user-specific overrides from DB
-        if self.user_permissions_collection:
+        if self.user_permissions_collection is not None:
             try:
                 user_doc = self.user_permissions_collection.find_one({
                     'user_key': user_key,
@@ -89,7 +89,7 @@ class PermissionService:
         Returns:
             Sparse dict with only True values
         """
-        if not self.user_permissions_collection:
+        if self.user_permissions_collection is None:
             return {}
 
         try:
@@ -183,7 +183,7 @@ class PermissionService:
         Returns:
             True if successful
         """
-        if not self.user_permissions_collection:
+        if self.user_permissions_collection is None:
             return False
 
         if feature not in PERMISSION_TEMPLATE:
@@ -284,7 +284,7 @@ class PermissionService:
             feature: Feature name
             set_by: User making the change
         """
-        if not self.user_permissions_collection:
+        if self.user_permissions_collection is None:
             return False
 
         try:
@@ -321,7 +321,7 @@ class PermissionService:
         Returns:
             True if successful
         """
-        if not self.user_permissions_collection:
+        if self.user_permissions_collection is None:
             return False
 
         try:
@@ -373,7 +373,7 @@ class PermissionService:
         set_by: str
     ) -> bool:
         """Set user's assigned ponds."""
-        if not self.user_permissions_collection:
+        if self.user_permissions_collection is None:
             return False
 
         try:
@@ -406,7 +406,7 @@ class PermissionService:
         if role in ['owner', 'manager', 'analyst', 'accountant']:
             return None
 
-        if not self.user_permissions_collection:
+        if self.user_permissions_collection is None:
             return []
 
         try:
@@ -454,8 +454,11 @@ class PermissionService:
     def is_dynamic_valid_permission(self, user_key: str, account_key: str, permission: str, role: str = None) -> bool:
         """Dynamically validate if a user has a specific permission."""
         try:
-            return self.is_admin(role)
-            return self.get_permission_by_user_key_and_account_key(user_key, account_key, permission)
+            # Admins have all permissions
+            if self.is_admin(role):
+                return True
+            # Otherwise check specific permission
+            return self.get_permission_by_user_key_and_account_key(user_key, account_key, permission, role)
         except Exception as e:
             logger.exception(f"Error validating dynamic permission: {e}")
             return False
@@ -488,4 +491,3 @@ def get_permission_service() -> PermissionService:
     if _permission_service is None:
         _permission_service = PermissionService()
     return _permission_service
-

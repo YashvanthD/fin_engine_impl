@@ -199,12 +199,106 @@ class MongoRepo:
             self.fish_db = None
             self.analytics_db = None
 
+    def _ensure_collections_created(self):
+        """Create required collections in each configured DB if they don't exist.
+
+        This avoids runtime errors when code expects collections to exist and
+        prevents creating them in the default mongodb database by explicitly
+        using configured DB names.
+        """
+        if not self._client:
+            logger.debug("_ensure_collections_created: Mongo client not available")
+            return
+
+        # Map db object -> required collection names
+        db_collections_map = {
+            'user_db': (self.user_db, [
+                'users', 'companies', 'ai_usage'
+            ]),
+            'media_db': (self.media_db, [
+                'conversations', 'chat_messages', 'message_receipts', 'user_presence', 'user_conversations',
+                'notification', 'alerts', 'notification_queue', 'message', 'task'
+            ]),
+            'expenses_db': (self.expenses_db, [
+                'expenses', 'transactions', 'bank_accounts', 'fin_accounts', 'payments'
+            ]),
+            'fish_db': (self.fish_db, [
+                'fish', 'pond', 'pond_event', 'sampling', 'fish_activity'
+            ]),
+            'analytics_db': (self.analytics_db, [
+                'fish_analytics'
+            ])
+        }
+
+        for db_name, (db_obj, coll_names) in db_collections_map.items():
+            if db_obj is None:
+                logger.debug(f"_ensure_collections_created: DB {db_name} not available, skipping")
+                continue
+            try:
+                existing = db_obj.list_collection_names()
+            except Exception as e:
+                logger.warning(f"_ensure_collections_created: Could not list collections for {db_name}: {e}")
+                existing = []
+
+            for coll_name in coll_names:
+                if coll_name in existing:
+                    logger.debug(f"Collection {coll_name} already exists in {db_name}")
+                    continue
+                try:
+                    # create_collection will create the collection in the specific DB
+                    db_obj.create_collection(coll_name)
+                    logger.info(f"Created collection '{coll_name}' in {db_name}")
+                except Exception as e:
+                    # If the collection already exists (race) or creation not permitted, ignore
+                    logger.warning(f"Could not create collection '{coll_name}' in {db_name}: {e}")
+
+    def _ensure_ttl_indexes(self):
+        """Create TTL indexes for automatic document expiration.
+
+        - chat_messages.expires_at: Auto-delete deleted/cleared messages after TTL expires
+        """
+        if not self._client:
+            return
+
+        from pymongo import ASCENDING
+
+        # TTL index on chat_messages.expires_at - documents with expires_at in the past get auto-deleted
+        if self.media_db is not None:
+            try:
+                chat_messages_coll = self.media_db['chat_messages']
+                # Create TTL index with expireAfterSeconds=0 means delete when expires_at datetime is reached
+                chat_messages_coll.create_index(
+                    [('expires_at', ASCENDING)],
+                    expireAfterSeconds=0,
+                    name='ttl_expires_at',
+                    sparse=True  # Only index documents that have expires_at field
+                )
+                logger.info("Created TTL index 'ttl_expires_at' on chat_messages.expires_at")
+            except Exception as e:
+                # Index may already exist or creation failed
+                if 'already exists' not in str(e).lower():
+                    logger.warning(f"Could not create TTL index on chat_messages: {e}")
+
     def init_repositories(self):
         if not self._client:
             logger.warning("Cannot initialize repositories - MongoDB client not connected")
             return
 
+        # Ensure DB objects are initialized and required collections exist
         try:
+            self.init_dbs()
+            # Create collections under their respective DBs if missing
+            try:
+                self._ensure_collections_created()
+            except Exception as e:
+                logger.warning(f"Error ensuring collections exist: {e}")
+
+            # Create TTL indexes for auto-expiration
+            try:
+                self._ensure_ttl_indexes()
+            except Exception as e:
+                logger.warning(f"Error ensuring TTL indexes: {e}")
+
             from fin_server.repository.expenses import TransactionsRepository
             from fin_server.repository.expenses_repository import ExpensesRepository
             from fin_server.repository.fish import FishRepository, FishActivityRepository, PondEventRepository, PondRepository, \
@@ -218,7 +312,6 @@ class MongoRepo:
             from fin_server.repository.user.ai_usage_repository import AIUsageRepository
 
             # USER DB REPOSITORIES
-            self.init_dbs()
             self.users = UserRepository(self.user_db)
             self.fish_mapping = FishMappingRepository(self.user_db)
             self.companies = CompanyRepository(self.user_db)
@@ -300,6 +393,19 @@ def get_collection(collection_name: str) -> Any:
     if coll is None:
         logger.warning(f"Repository '{collection_name}' is None")
         return None
+
+    # If the attribute is a repository wrapper (has 'collection' attr), return it
+    if hasattr(coll, 'collection'):
+        return coll
+
+    # If the attribute is a raw pymongo Collection, wrap it to avoid boolean checks
+    try:
+        from pymongo.collection import Collection as PyMongoCollection
+        if isinstance(coll, PyMongoCollection):
+            return CollectionAdapter(coll)
+    except Exception:
+        pass
+
     return coll
 
 

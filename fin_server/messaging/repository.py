@@ -600,22 +600,65 @@ class MessagingRepository:
         return result.modified_count > 0
 
     def delete_message(self, message_id: str, user_key: str, for_everyone: bool = False) -> bool:
-        """Delete a message."""
+        """Delete a message.
+
+        When deleted for everyone, sets a TTL of 7 days for automatic purge.
+        """
         if self.messages is None:
             logger.error("Messages collection not available")
             return False
+
+        from datetime import timedelta
+        TTL_DAYS = 7
+        expires_at = datetime.utcnow() + timedelta(days=TTL_DAYS)
+
         if for_everyone:
-            # Only sender can delete for everyone
+            # Only sender can delete for everyone - set TTL for auto-purge
             result = self.messages.update_one(
                 {'message_id': message_id, 'sender_key': user_key},
-                {'$set': {'deleted_at': datetime.utcnow(), 'content': None}}
+                {'$set': {
+                    'deleted_at': datetime.utcnow(),
+                    'content': None,
+                    'expires_at': expires_at  # TTL: auto-delete after 7 days
+                }}
             )
+            print(f"REPO: Message {message_id} marked deleted, expires_at={expires_at}")
         else:
             # Delete only for this user (add to deleted_for list)
-            result = self.messages.update_one(
-                {'message_id': message_id},
-                {'$addToSet': {'deleted_for': user_key}}
-            )
+            # Check if all participants have deleted - if so, set TTL
+            msg = self.messages.find_one({'message_id': message_id})
+            if msg:
+                deleted_for = set(msg.get('deleted_for', []))
+                deleted_for.add(user_key)
+
+                # Get conversation to check participants
+                conv = None
+                if self.conversations is not None:
+                    conv = self.conversations.find_one({'conversation_id': msg.get('conversation_id')})
+
+                participants = set(conv.get('participants', [])) if conv else set()
+
+                # If all participants have deleted this message, set TTL for permanent deletion
+                if participants and deleted_for >= participants:
+                    result = self.messages.update_one(
+                        {'message_id': message_id},
+                        {'$set': {
+                            'deleted_for': list(deleted_for),
+                            'deleted_at': datetime.utcnow(),
+                            'expires_at': expires_at  # TTL: auto-delete after 7 days
+                        }}
+                    )
+                    print(f"REPO: Message {message_id} deleted by all participants, expires_at={expires_at}")
+                else:
+                    result = self.messages.update_one(
+                        {'message_id': message_id},
+                        {'$addToSet': {'deleted_for': user_key}}
+                    )
+            else:
+                result = self.messages.update_one(
+                    {'message_id': message_id},
+                    {'$addToSet': {'deleted_for': user_key}}
+                )
         return result.modified_count > 0
 
     def clear_conversation(self, conversation_id: str, user_key: str, for_everyone: bool = False) -> int:
@@ -627,6 +670,8 @@ class MessagingRepository:
             for_everyone: If True, deletes messages for all participants (admin only)
                          If False, only hides messages for this user
 
+        When cleared for everyone, sets a TTL of 7 days for automatic purge.
+
         Returns:
             Number of messages affected
         """
@@ -634,15 +679,24 @@ class MessagingRepository:
             print("REPO: ERROR - Messages collection not available")
             return 0
 
+        from datetime import timedelta
+        TTL_DAYS = 7
+        expires_at = datetime.utcnow() + timedelta(days=TTL_DAYS)
+
         print(f"REPO: clear_conversation - conv={conversation_id}, user={user_key}, for_everyone={for_everyone}")
 
         if for_everyone:
-            # Soft delete all messages in conversation (mark as deleted)
+            # Soft delete all messages in conversation (mark as deleted) with TTL
             result = self.messages.update_many(
                 {'conversation_id': conversation_id, 'deleted_at': None},
-                {'$set': {'deleted_at': datetime.utcnow(), 'content': '[Cleared]'}}
+                {'$set': {
+                    'deleted_at': datetime.utcnow(),
+                    'content': '[Cleared]',
+                    'expires_at': expires_at  # TTL: auto-delete after 7 days
+                }}
             )
             count = result.modified_count
+            print(f"REPO: Cleared {count} messages, expires_at={expires_at}")
 
             # Also clear last_message in conversation
             if self.conversations is not None:

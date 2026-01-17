@@ -335,38 +335,258 @@ class WebSocketHub:
 
         @self.socketio.on('alert:acknowledge')
         def handle_alert_acknowledge(data):
-            """Handle acknowledging an alert."""
+            """Handle acknowledging an alert via WebSocket.
+
+            Data:
+                alert_id: str - Alert ID to acknowledge
+
+            Response:
+                Callback with {success: bool, alert_id: str}
+
+            Emits:
+                alert:acknowledged - To all account users
+                alert:count - Updated count to all account users
+            """
+            from flask import request
+            socket_id = request.sid
+
+            print(f"ALERT_HANDLER: alert:acknowledge received from {socket_id}")
+            print(f"ALERT_HANDLER: Data: {data}")
+
             user_info = self._get_user_from_socket()
             if not user_info:
-                emit('error', {'code': 'UNAUTHORIZED', 'message': 'Not authenticated'})
-                return
+                print("ALERT_HANDLER: Unauthorized - no user info")
+                emit('alert:error', {'code': 'UNAUTHORIZED', 'message': 'Not authenticated'})
+                return {'success': False, 'error': 'Not authenticated'}
 
             alert_id = data.get('alert_id')
             if not alert_id:
-                emit('error', {'code': 'INVALID_DATA', 'message': 'alert_id required'})
-                return
+                print("ALERT_HANDLER: Missing alert_id")
+                emit('alert:error', {'code': 'INVALID_DATA', 'message': 'alert_id required'})
+                return {'success': False, 'error': 'alert_id required'}
+
+            user_key = user_info['user_key']
+            account_key = user_info['account_key']
+            print(f"ALERT_HANDLER: User {user_key} acknowledging alert {alert_id}")
 
             # Update in database
             alerts_repo = get_collection('alerts')
-            if alerts_repo:
-                alerts_repo.update(
-                    {'alert_id': alert_id, 'account_key': user_info['account_key']},
+            if alerts_repo is None:
+                print("ALERT_HANDLER: Alerts repository not available")
+                emit('alert:error', {'code': 'SERVICE_UNAVAILABLE', 'message': 'Alert service unavailable'})
+                return {'success': False, 'error': 'Service unavailable'}
+
+            try:
+                result = alerts_repo.update(
+                    {'alert_id': alert_id, 'account_key': account_key},
                     {
                         'acknowledged': True,
-                        'acknowledged_by': user_info['user_key'],
+                        'acknowledged_by': user_key,
                         'acknowledged_at': datetime.utcnow()
                     }
                 )
 
-            # Emit to all account users
-            EventEmitter.emit_to_account(
-                user_info['account_key'],
-                EventEmitter.ALERT_ACKNOWLEDGED,
-                {
+                if result and getattr(result, 'modified_count', 0) > 0:
+                    print(f"ALERT_HANDLER: Alert {alert_id} acknowledged successfully")
+
+                    # Emit to all account users
+                    EventEmitter.emit_to_account(
+                        account_key,
+                        EventEmitter.ALERT_ACKNOWLEDGED,
+                        {
+                            'alert_id': alert_id,
+                            'acknowledged_by': user_key,
+                            'acknowledged_at': datetime.utcnow().isoformat()
+                        }
+                    )
+
+                    # Update unacknowledged count
+                    try:
+                        unack_count = alerts_repo.collection.count_documents({
+                            'account_key': account_key,
+                            'acknowledged': False
+                        })
+                        EventEmitter.update_alert_count(account_key, unack_count)
+                        print(f"ALERT_HANDLER: Updated alert count to {unack_count}")
+                    except Exception as e:
+                        print(f"ALERT_HANDLER: Error updating count: {e}")
+
+                    return {'success': True, 'alert_id': alert_id}
+                else:
+                    print(f"ALERT_HANDLER: Alert {alert_id} not found or already acknowledged")
+                    return {'success': False, 'error': 'Alert not found or already acknowledged'}
+
+            except Exception as e:
+                print(f"ALERT_HANDLER: Error acknowledging alert: {e}")
+                emit('alert:error', {'code': 'ERROR', 'message': str(e)})
+                return {'success': False, 'error': str(e)}
+
+        @self.socketio.on('alert:acknowledge_all')
+        def handle_alert_acknowledge_all(data=None):
+            """Handle acknowledging all alerts via WebSocket.
+
+            Response:
+                Callback with {success: bool, count: int}
+
+            Emits:
+                alert:acknowledged_all - To all account users
+                alert:count - Updated count (0) to all account users
+            """
+            from flask import request
+            socket_id = request.sid
+
+            print(f"ALERT_HANDLER: alert:acknowledge_all received from {socket_id}")
+
+            user_info = self._get_user_from_socket()
+            if not user_info:
+                print("ALERT_HANDLER: Unauthorized - no user info")
+                emit('alert:error', {'code': 'UNAUTHORIZED', 'message': 'Not authenticated'})
+                return {'success': False, 'error': 'Not authenticated'}
+
+            user_key = user_info['user_key']
+            account_key = user_info['account_key']
+            print(f"ALERT_HANDLER: User {user_key} acknowledging all alerts for account {account_key}")
+
+            alerts_repo = get_collection('alerts')
+            if alerts_repo is None:
+                print("ALERT_HANDLER: Alerts repository not available")
+                emit('alert:error', {'code': 'SERVICE_UNAVAILABLE', 'message': 'Alert service unavailable'})
+                return {'success': False, 'error': 'Service unavailable'}
+
+            try:
+                # Update all unacknowledged alerts
+                result = alerts_repo.collection.update_many(
+                    {'account_key': account_key, 'acknowledged': False},
+                    {'$set': {
+                        'acknowledged': True,
+                        'acknowledged_by': user_key,
+                        'acknowledged_at': datetime.utcnow()
+                    }}
+                )
+
+                count = result.modified_count if result else 0
+                print(f"ALERT_HANDLER: Acknowledged {count} alerts")
+
+                # Emit to all account users
+                EventEmitter.emit_to_account(
+                    account_key,
+                    'alert:acknowledged_all',
+                    {
+                        'acknowledged_by': user_key,
+                        'count': count,
+                        'acknowledged_at': datetime.utcnow().isoformat()
+                    }
+                )
+
+                # Update count to 0
+                EventEmitter.update_alert_count(account_key, 0)
+
+                return {'success': True, 'count': count}
+
+            except Exception as e:
+                print(f"ALERT_HANDLER: Error acknowledging all alerts: {e}")
+                emit('alert:error', {'code': 'ERROR', 'message': str(e)})
+                return {'success': False, 'error': str(e)}
+
+        @self.socketio.on('alert:dismiss')
+        def handle_alert_dismiss(data):
+            """Handle dismissing/deleting an alert via WebSocket.
+
+            Data:
+                alert_id: str - Alert ID to dismiss
+
+            Response:
+                Callback with {success: bool, alert_id: str}
+
+            Emits:
+                alert:deleted - To all account users
+                alert:count - Updated count to all account users
+            """
+            from flask import request
+            socket_id = request.sid
+
+            print(f"ALERT_HANDLER: alert:dismiss received from {socket_id}")
+            print(f"ALERT_HANDLER: Data: {data}")
+
+            user_info = self._get_user_from_socket()
+            if not user_info:
+                emit('alert:error', {'code': 'UNAUTHORIZED', 'message': 'Not authenticated'})
+                return {'success': False, 'error': 'Not authenticated'}
+
+            alert_id = data.get('alert_id')
+            if not alert_id:
+                emit('alert:error', {'code': 'INVALID_DATA', 'message': 'alert_id required'})
+                return {'success': False, 'error': 'alert_id required'}
+
+            user_key = user_info['user_key']
+            account_key = user_info['account_key']
+            print(f"ALERT_HANDLER: User {user_key} dismissing alert {alert_id}")
+
+            alerts_repo = get_collection('alerts')
+            if alerts_repo is None:
+                emit('alert:error', {'code': 'SERVICE_UNAVAILABLE', 'message': 'Alert service unavailable'})
+                return {'success': False, 'error': 'Service unavailable'}
+
+            try:
+                result = alerts_repo.delete({
                     'alert_id': alert_id,
-                    'acknowledged_by': user_info['user_key']
-                }
-            )
+                    'account_key': account_key
+                })
+
+                if result and getattr(result, 'deleted_count', 0) > 0:
+                    print(f"ALERT_HANDLER: Alert {alert_id} dismissed successfully")
+
+                    # Emit to all account users
+                    EventEmitter.emit_to_account(
+                        account_key,
+                        EventEmitter.ALERT_DELETED,
+                        {'alert_id': alert_id, 'deleted_by': user_key}
+                    )
+
+                    # Update count
+                    try:
+                        unack_count = alerts_repo.collection.count_documents({
+                            'account_key': account_key,
+                            'acknowledged': False
+                        })
+                        EventEmitter.update_alert_count(account_key, unack_count)
+                    except Exception:
+                        pass
+
+                    return {'success': True, 'alert_id': alert_id}
+                else:
+                    return {'success': False, 'error': 'Alert not found'}
+
+            except Exception as e:
+                print(f"ALERT_HANDLER: Error dismissing alert: {e}")
+                emit('alert:error', {'code': 'ERROR', 'message': str(e)})
+                return {'success': False, 'error': str(e)}
+
+        @self.socketio.on('alert:get_count')
+        def handle_alert_get_count(data=None):
+            """Get current unacknowledged alert count.
+
+            Response:
+                Callback with {success: bool, count: int}
+            """
+            user_info = self._get_user_from_socket()
+            if not user_info:
+                return {'success': False, 'error': 'Not authenticated'}
+
+            account_key = user_info['account_key']
+
+            alerts_repo = get_collection('alerts')
+            if alerts_repo is None:
+                return {'success': False, 'error': 'Service unavailable'}
+
+            try:
+                count = alerts_repo.collection.count_documents({
+                    'account_key': account_key,
+                    'acknowledged': False
+                })
+                return {'success': True, 'count': count}
+            except Exception as e:
+                return {'success': False, 'error': str(e)}
 
         # =====================================================================
         # Presence Events
