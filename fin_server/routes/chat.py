@@ -137,7 +137,7 @@ def list_conversations(auth_payload):
     """
     account_key = auth_payload.get('account_key')
     user_key = auth_payload.get('user_key')
-    logger.info(f"GET /api/chat/conversations | account_key: {account_key}, user_key: {user_key}")
+    print(f"CHAT_ROUTE: GET /api/chat/conversations | user_key={user_key}, account_key={account_key}")
 
     # Parse query params
     limit = min(int(request.args.get('limit', 50)), 100)
@@ -147,6 +147,7 @@ def list_conversations(auth_payload):
 
     repo = get_messaging_repository()
     if not repo or not repo.is_available():
+        print("CHAT_ROUTE: ERROR - Chat service unavailable")
         return respond_error('Chat service unavailable', status=503)
 
     try:
@@ -162,12 +163,20 @@ def list_conversations(auth_payload):
         if conv_type:
             query['conversation_type'] = conv_type
 
+        print(f"CHAT_ROUTE: Query: {query}")
+
         # Get conversations
         if repo.conversations is None:
+            print("CHAT_ROUTE: ERROR - Conversations collection not available")
             return respond_error('Chat service unavailable', status=503)
 
         cursor = repo.conversations.find(query).sort('last_activity', -1).skip(skip).limit(limit + 1)
         conversations = list(cursor)
+        print(f"CHAT_ROUTE: Found {len(conversations)} conversations")
+
+        # Debug: show found conversations
+        for conv in conversations[:5]:
+            print(f"CHAT_ROUTE:   - id={conv.get('conversation_id')}, participants={conv.get('participants')}")
 
         # Check if there are more
         has_more = len(conversations) > limit
@@ -274,7 +283,7 @@ def get_messages(conversation_id, auth_payload):
     """
     account_key = auth_payload.get('account_key')
     user_key = auth_payload.get('user_key')
-    logger.info(f"GET /api/chat/conversations/{conversation_id}/messages | account_key: {account_key}, user_key: {user_key}")
+    print(f"CHAT_ROUTE: GET messages - conversation_id={conversation_id}, user_key={user_key}")
 
     # Parse query params
     limit = min(int(request.args.get('limit', 50)), 100)
@@ -283,19 +292,29 @@ def get_messages(conversation_id, auth_payload):
 
     repo = get_messaging_repository()
     if not repo or not repo.is_available():
+        print("CHAT_ROUTE: ERROR - Chat service unavailable")
         return respond_error('Chat service unavailable', status=503)
 
     try:
         # Verify user has access to conversation
+        print(f"CHAT_ROUTE: Checking conversation access...")
         conv = repo.get_conversation(conversation_id, user_key)
         if not conv:
+            print(f"CHAT_ROUTE: ERROR - Conversation not found or no access")
             return respond_error('Conversation not found', status=404)
 
-        if user_key not in conv.get('participants', []):
+        participants = conv.get('participants', [])
+        print(f"CHAT_ROUTE: Conversation found, participants={participants}")
+
+        if user_key not in participants:
+            print(f"CHAT_ROUTE: ERROR - User {user_key} not in participants {participants}")
             return respond_error('Not authorized to view this conversation', status=403)
+
+        print(f"CHAT_ROUTE: Access verified, loading messages...")
 
         # Check if messages collection is available
         if repo.messages is None:
+            print("CHAT_ROUTE: ERROR - Messages collection not available")
             return respond_error('Chat service unavailable', status=503)
 
         # Build query
@@ -310,6 +329,8 @@ def get_messages(conversation_id, auth_payload):
         elif after:
             query['created_at'] = {'$gt': after}
 
+        print(f"CHAT_ROUTE: Query: {query}")
+
         # Get messages (fetch one extra to check has_more)
         sort_order = -1  # Newest first when loading older messages
         if after:
@@ -317,6 +338,7 @@ def get_messages(conversation_id, auth_payload):
 
         cursor = repo.messages.find(query).sort('created_at', sort_order).limit(limit + 1)
         messages = list(cursor)
+        print(f"CHAT_ROUTE: Found {len(messages)} messages")
 
         has_more = len(messages) > limit
         if has_more:

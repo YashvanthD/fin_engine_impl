@@ -30,13 +30,19 @@ from fin_server.utils.generator import generate_message_id, generate_conversatio
 
 logger = logging.getLogger(__name__)
 
-# Socket.IO instance - will be initialized with Flask app
+logger.info("=" * 60)
+logger.info("SOCKET_SERVER: Creating SocketIO instance...")
+
+# Socket.IO instance - will be initialized with Flask app later via init_app()
 socketio = SocketIO(
-    async_mode='threading',
     cors_allowed_origins="*",
     ping_timeout=60,
     ping_interval=25
 )
+
+logger.info("SOCKET_SERVER: SocketIO instance created (not yet attached to app)")
+logger.info("SOCKET_SERVER: Will be initialized when Flask app starts")
+logger.info("=" * 60)
 
 # Connected users: {socket_id: {user_key, account_key, rooms}}
 connected_users: Dict[str, Dict[str, Any]] = {}
@@ -83,104 +89,35 @@ def emit_to_conversation(conversation_id: str, event: str, data: Any, exclude_se
 
 
 # =============================================================================
-# Connection Events
+# Connection Events - DISABLED: Now handled by WebSocket Hub (hub.py)
+# The hub.py registers connect/disconnect handlers after socketio.init_app()
 # =============================================================================
 
-@socketio.on('connect')
-def handle_connect():
-    """Handle new socket connection."""
-    token = request.headers.get('Authorization', '').replace('Bearer ', '')
+# NOTE: These handlers are commented out because hub.py now handles connections
+# If you need to re-enable, make sure to disable the hub handlers first
 
-    # Try query param if header not present
-    if not token:
-        token = request.args.get('token', '')
+# @socketio.on('connect')
+# def handle_connect():
+#     """Handle new socket connection - MOVED TO hub.py"""
+#     pass
 
-    payload = authenticate_socket(token)
-    if not payload:
-        emit('error', {'code': 'UNAUTHORIZED', 'message': 'Invalid or missing token'})
-        disconnect()
-        return
+# @socketio.on('disconnect')
+# def handle_disconnect():
+#     """Handle socket disconnection - MOVED TO hub.py"""
+#     pass
 
-    user_key = payload.get('user_key')
-    account_key = payload.get('account_key')
-    socket_id = request.sid
-
-    # Store connection
-    connected_users[socket_id] = {
-        'user_key': user_key,
-        'account_key': account_key,
-        'connected_at': datetime.utcnow().isoformat()
-    }
-
-    # Add to user's socket list (support multiple devices)
-    if user_key not in user_sockets:
-        user_sockets[user_key] = []
-    user_sockets[user_key].append(socket_id)
-
-    # Join user's personal room and account room
-    join_room(user_key)
-    join_room(account_key)
-
-    # Update presence
-    repo = get_messaging_repository()
-    device_info = {
-        'user_agent': request.headers.get('User-Agent'),
-        'ip': request.remote_addr
-    }
-    repo.set_user_online(user_key, socket_id, device_info)
-
-    # Join all user's conversations
-    conversations = repo.get_user_conversations(user_key, account_key)
-    for conv in conversations:
-        conv_id = conv.get('conversation_id') or str(conv.get('_id'))
-        join_room(f"conv:{conv_id}")
-
-    # Notify contacts that user is online
-    broadcast_presence(user_key, PresenceStatus.ONLINE)
-
-    # Send connection success
-    emit('connected', {
-        'message': 'Connected to messaging service',
-        'user_key': user_key,
-        'socket_id': socket_id
-    })
-
-    # Send pending messages/notifications
-    send_pending_messages(user_key)
-
-    logger.info(f"User {user_key} connected (socket: {socket_id})")
-
-
-@socketio.on('disconnect')
-def handle_disconnect():
-    """Handle socket disconnection."""
-    socket_id = request.sid
-    user_info = connected_users.pop(socket_id, None)
-
-    if user_info:
-        user_key = user_info.get('user_key')
-
-        # Remove from user's socket list
-        if user_key in user_sockets:
-            user_sockets[user_key] = [s for s in user_sockets[user_key] if s != socket_id]
-
-            # If no more connections, set offline
-            if not user_sockets[user_key]:
-                del user_sockets[user_key]
-                repo = get_messaging_repository()
-                repo.set_user_offline(user_key)
-                broadcast_presence(user_key, PresenceStatus.OFFLINE)
-
-        logger.info(f"User {user_key} disconnected (socket: {socket_id})")
+logger.info("SOCKET_SERVER: Connection handlers disabled (handled by WebSocket Hub)")
 
 
 # =============================================================================
-# Messaging Events
+# Messaging Events (LEGACY - kept for backward compatibility)
+# These will be called if the corresponding events are emitted
 # =============================================================================
 
 @socketio.on('message:send')
 def handle_send_message(data):
     """Handle sending a new message."""
+    logger.info(f"SOCKET_SERVER: message:send received (legacy handler)")
     user_info = get_user_from_socket()
     if not user_info:
         emit('error', {'code': 'UNAUTHORIZED', 'message': 'Not authenticated'})

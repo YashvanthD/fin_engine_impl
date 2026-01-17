@@ -308,3 +308,90 @@ class UserPresence:
             'device_info': self.device_info
         }
 
+
+class UserConversations:
+    """Maps user_key to their conversation IDs for fast lookup.
+
+    Collection: user_conversations
+
+    Schema:
+    {
+        "_id": "user_key",
+        "user_key": "184517846618",
+        "conversations": [
+            {
+                "conversation_id": "conv_123",
+                "joined_at": datetime,
+                "is_muted": false,
+                "is_pinned": false,
+                "is_archived": false,
+                "last_read_at": datetime,
+                "unread_count": 5
+            }
+        ],
+        "updated_at": datetime
+    }
+    """
+
+    def __init__(
+        self,
+        user_key: str,
+        conversations: Optional[List[Dict[str, Any]]] = None
+    ):
+        self.user_key = user_key
+        self.conversations = conversations or []
+        self.updated_at = datetime.utcnow()
+
+    def add_conversation(self, conversation_id: str):
+        """Add a conversation to user's list."""
+        # Check if already exists
+        for conv in self.conversations:
+            if conv.get('conversation_id') == conversation_id:
+                return
+
+        self.conversations.append({
+            'conversation_id': conversation_id,
+            'joined_at': datetime.utcnow(),
+            'is_muted': False,
+            'is_pinned': False,
+            'is_archived': False,
+            'last_read_at': None,
+            'unread_count': 0
+        })
+        self.updated_at = datetime.utcnow()
+
+    def remove_conversation(self, conversation_id: str):
+        """Remove a conversation from user's list."""
+        self.conversations = [
+            c for c in self.conversations
+            if c.get('conversation_id') != conversation_id
+        ]
+        self.updated_at = datetime.utcnow()
+
+    def get_conversation_ids(self) -> List[str]:
+        """Get list of conversation IDs."""
+        return [c.get('conversation_id') for c in self.conversations]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'userKey': self.user_key,
+            'conversations': self.conversations,
+            'updatedAt': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+    def to_db_doc(self) -> Dict[str, Any]:
+        return {
+            '_id': self.user_key,
+            'user_key': self.user_key,
+            'conversations': self.conversations,
+            'updated_at': self.updated_at
+        }
+
+    @classmethod
+    def from_doc(cls, doc: Dict[str, Any]) -> 'UserConversations':
+        return cls(
+            user_key=doc.get('user_key'),
+            conversations=doc.get('conversations', [])
+        )
+
+

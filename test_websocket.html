@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Test</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1e1e1e; color: #0f0; }
+        #log { background: #000; padding: 15px; height: 400px; overflow-y: auto; border: 1px solid #0f0; }
+        .log-entry { margin: 5px 0; }
+        .error { color: #f00; }
+        .success { color: #0f0; }
+        .info { color: #0ff; }
+        .warn { color: #ff0; }
+        input, button { padding: 10px; margin: 5px; font-family: monospace; }
+        input { width: 300px; background: #333; color: #fff; border: 1px solid #0f0; }
+        button { background: #0f0; color: #000; border: none; cursor: pointer; }
+        button:hover { background: #0a0; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #333; }
+        h3 { color: #0ff; margin-top: 0; }
+    </style>
+</head>
+<body>
+    <h1>🔌 WebSocket Connection Test</h1>
+
+    <div class="section">
+        <h3>1. Configuration</h3>
+        <label>Server URL:</label><br>
+        <input type="text" id="serverUrl" value="http://localhost:5000" /><br>
+        <label>JWT Token:</label><br>
+        <input type="text" id="token" placeholder="Paste your JWT token here" /><br>
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()" id="disconnectBtn" disabled>Disconnect</button>
+    </div>
+
+    <div class="section">
+        <h3>2. Test Events</h3>
+        <button onclick="sendPing()" id="pingBtn" disabled>Send Ping</button>
+        <button onclick="createConversation()" id="createConvBtn" disabled>Create Conversation</button>
+        <button onclick="testChatSend()" id="chatBtn" disabled>Send Message</button>
+        <button onclick="testTyping()" id="typingBtn" disabled>Test Typing</button>
+        <br><br>
+        <label>Target User Key (for conversation):</label><br>
+        <input type="text" id="targetUserKey" placeholder="Enter another user's key" /><br>
+        <label>Current Conversation ID:</label><br>
+        <input type="text" id="conversationId" placeholder="Will be filled after creating conversation" /><br>
+        <label>Message:</label><br>
+        <input type="text" id="messageContent" value="Hello from WebSocket test!" />
+    </div>
+
+    <div class="section">
+        <h3>3. Connection Log</h3>
+        <button onclick="clearLog()">Clear Log</button>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        let socket = null;
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function setButtonsEnabled(enabled) {
+            document.getElementById('disconnectBtn').disabled = !enabled;
+            document.getElementById('pingBtn').disabled = !enabled;
+            document.getElementById('createConvBtn').disabled = !enabled;
+            document.getElementById('chatBtn').disabled = !enabled;
+            document.getElementById('typingBtn').disabled = !enabled;
+        }
+
+        function connect() {
+            const serverUrl = document.getElementById('serverUrl').value;
+            const token = document.getElementById('token').value;
+
+            if (!token) {
+                log('ERROR: Please enter a JWT token!', 'error');
+                return;
+            }
+
+            log(`Connecting to ${serverUrl}...`, 'info');
+            log(`Token: ${token.substring(0, 30)}...`, 'info');
+
+            try {
+                socket = io(serverUrl, {
+                    auth: { token: token },
+                    transports: ['websocket', 'polling'],
+                    reconnection: true,
+                    reconnectionAttempts: 3,
+                    timeout: 10000,
+                });
+
+                // ===============================================
+                // Connection Events
+                // ===============================================
+                socket.on('connect', () => {
+                    log(`✅ CONNECTED! Socket ID: ${socket.id}`, 'success');
+                    setButtonsEnabled(true);
+                });
+
+                socket.on('disconnect', (reason) => {
+                    log(`❌ DISCONNECTED: ${reason}`, 'warn');
+                    setButtonsEnabled(false);
+                });
+
+                socket.on('connect_error', (error) => {
+                    log(`❌ CONNECTION ERROR: ${error.message}`, 'error');
+                });
+
+                // Backend sends 'connected' after successful auth
+                socket.on('connected', (data) => {
+                    log(`✅ AUTHENTICATED!`, 'success');
+                    log(`   User Key: ${data.user_key}`, 'success');
+                    log(`   Socket ID: ${data.socket_id}`, 'success');
+                    log(`   Features: ${data.features?.join(', ')}`, 'success');
+                });
+
+                socket.on('error', (error) => {
+                    log(`❌ SERVER ERROR: ${JSON.stringify(error)}`, 'error');
+                });
+
+                // ===============================================
+                // Chat Events
+                // ===============================================
+                socket.on('chat:message', (data) => {
+                    log(`📨 NEW MESSAGE: ${JSON.stringify(data)}`, 'info');
+                });
+
+                socket.on('chat:message:sent', (data) => {
+                    log(`✅ MESSAGE SENT: ${JSON.stringify(data)}`, 'success');
+                });
+
+                socket.on('chat:message:delivered', (data) => {
+                    log(`📬 MESSAGE DELIVERED: ${JSON.stringify(data)}`, 'info');
+                });
+
+                socket.on('chat:message:read', (data) => {
+                    log(`👁 MESSAGE READ: ${JSON.stringify(data)}`, 'info');
+                });
+
+                socket.on('chat:typing:start', (data) => {
+                    log(`⌨️ TYPING START: ${JSON.stringify(data)}`, 'info');
+                });
+
+                socket.on('chat:typing:stop', (data) => {
+                    log(`⌨️ TYPING STOP: ${JSON.stringify(data)}`, 'info');
+                });
+
+                socket.on('chat:error', (data) => {
+                    log(`❌ CHAT ERROR: ${JSON.stringify(data)}`, 'error');
+                });
+
+                socket.on('chat:conversation:created', (data) => {
+                    log(`💬 CONVERSATION CREATED: ${JSON.stringify(data)}`, 'success');
+                    // Auto-fill the conversation ID for testing
+                    if (data.conversationId) {
+                        document.getElementById('conversationId').value = data.conversationId;
+                        log(`📝 Conversation ID auto-filled: ${data.conversationId}`, 'info');
+                    }
+                });
+
+                socket.on('chat:presence', (data) => {
+                    log(`👤 PRESENCE UPDATE: ${JSON.stringify(data)}`, 'info');
+                });
+
+                // ===============================================
+                // Notification & Alert Events
+                // ===============================================
+                socket.on('notification:new', (data) => {
+                    log(`🔔 NEW NOTIFICATION: ${JSON.stringify(data)}`, 'info');
+                });
+
+                socket.on('notification:count', (data) => {
+                    log(`🔔 NOTIFICATION COUNT: ${JSON.stringify(data)}`, 'info');
+                });
+
+                socket.on('alert:new', (data) => {
+                    log(`⚠️ NEW ALERT: ${JSON.stringify(data)}`, 'warn');
+                });
+
+                socket.on('alert:count', (data) => {
+                    log(`⚠️ ALERT COUNT: ${JSON.stringify(data)}`, 'info');
+                });
+
+                // ===============================================
+                // Utility Events
+                // ===============================================
+                socket.on('pong', (data) => {
+                    log(`🏓 PONG received: ${JSON.stringify(data)}`, 'success');
+                });
+
+                // Catch-all for debugging
+                socket.onAny((event, ...args) => {
+                    if (!['connect', 'disconnect', 'connected'].includes(event)) {
+                        log(`📡 EVENT [${event}]: ${JSON.stringify(args)}`, 'info');
+                    }
+                });
+
+            } catch (error) {
+                log(`❌ EXCEPTION: ${error.message}`, 'error');
+            }
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+                log('Disconnected manually', 'warn');
+                setButtonsEnabled(false);
+            }
+        }
+
+        function sendPing() {
+            if (socket && socket.connected) {
+                log('🏓 Sending PING...', 'info');
+                socket.emit('ping');
+            } else {
+                log('Not connected!', 'error');
+            }
+        }
+
+        function createConversation() {
+            if (socket && socket.connected) {
+                const targetUserKey = document.getElementById('targetUserKey').value;
+
+                if (!targetUserKey) {
+                    log('❌ Please enter a target user key first!', 'error');
+                    return;
+                }
+
+                const convData = {
+                    type: 'direct',
+                    participants: [targetUserKey],  // Backend will add current user
+                    name: null
+                };
+                log(`💬 Creating conversation: ${JSON.stringify(convData)}`, 'info');
+                socket.emit('chat:conversation:create', convData);
+            } else {
+                log('Not connected!', 'error');
+            }
+        }
+
+        function testChatSend() {
+            if (socket && socket.connected) {
+                const conversationId = document.getElementById('conversationId').value;
+                const content = document.getElementById('messageContent').value;
+
+                if (!conversationId) {
+                    log('❌ Please enter a conversation ID or create a conversation first!', 'error');
+                    return;
+                }
+
+                const testMessage = {
+                    conversationId: conversationId,
+                    content: content || 'Hello from WebSocket test!',
+                    type: 'text',
+                    tempId: 'temp_' + Date.now()
+                };
+                log(`📤 Sending chat:send: ${JSON.stringify(testMessage)}`, 'info');
+                socket.emit('chat:send', testMessage);
+            } else {
+                log('Not connected!', 'error');
+            }
+        }
+
+        function testTyping() {
+            if (socket && socket.connected) {
+                const conversationId = document.getElementById('conversationId').value;
+
+                if (!conversationId) {
+                    log('❌ Please enter a conversation ID or create a conversation first!', 'error');
+                    return;
+                }
+
+                const typingData = {
+                    conversationId: conversationId,
+                    isTyping: true
+                };
+                log(`⌨️ Sending chat:typing: ${JSON.stringify(typingData)}`, 'info');
+                socket.emit('chat:typing', typingData);
+
+                // Auto-stop typing after 2 seconds
+                setTimeout(() => {
+                    if (socket && socket.connected) {
+                        socket.emit('chat:typing', { conversationId: conversationId, isTyping: false });
+                        log(`⌨️ Sent typing stop`, 'info');
+                    }
+                }, 2000);
+            } else {
+                log('Not connected!', 'error');
+            }
+        }
+
+        // Auto-fill token from localStorage if available
+        window.onload = function() {
+            const savedToken = localStorage.getItem('auth_token');
+            if (savedToken) {
+                document.getElementById('token').value = savedToken;
+                log('Token loaded from localStorage', 'info');
+            }
+            log('WebSocket Test Ready. Enter token and click Connect.', 'info');
+        };
+    </script>
+</body>
+</html>
+

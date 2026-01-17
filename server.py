@@ -6,6 +6,14 @@ This is the main entry point for the Flask application.
 import argparse
 import warnings
 import logging
+
+# Configure logging FIRST before any other imports
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -82,14 +90,25 @@ def create_app() -> Flask:
     app.register_blueprint(chat_bp)
     app.register_blueprint(openai_bp)
 
-    # Initialize WebSocket hub for real-time notifications/alerts/chat
-    logging.info("=" * 60)
-    logging.info("INITIALIZING WEBSOCKET HUB")
-    init_websocket_hub(app, socketio)
-    logging.info("WEBSOCKET HUB INITIALIZED")
-    logging.info("=" * 60)
+    # Initialize SocketIO with Flask app FIRST
+    print("=" * 60)
+    print("INITIALIZING SOCKETIO WITH FLASK APP")
+    logger.info("=" * 60)
+    logger.info("INITIALIZING SOCKETIO WITH FLASK APP")
+    socketio.init_app(app, cors_allowed_origins="*", async_mode='threading')
+    print(f"SocketIO initialized with async_mode: {getattr(socketio, 'async_mode', 'unknown')}")
+    logger.info(f"SocketIO initialized with async_mode: {getattr(socketio, 'async_mode', 'unknown')}")
+    print("=" * 60)
+    logger.info("=" * 60)
 
-    logging.basicConfig(level=logging.INFO)
+    # THEN Initialize WebSocket hub for real-time notifications/alerts/chat
+    print("INITIALIZING WEBSOCKET HUB")
+    logger.info("INITIALIZING WEBSOCKET HUB")
+    init_websocket_hub(app, socketio)
+    print("WEBSOCKET HUB INITIALIZED")
+    logger.info("WEBSOCKET HUB INITIALIZED")
+    print("=" * 60)
+    logger.info("=" * 60)
 
     # Error handlers
     @app.errorhandler(Unauthorized)
@@ -127,7 +146,6 @@ def create_app() -> Flask:
             pass
         return response
 
-    logger = logging.getLogger(__name__)
 
     @app.route('/metrics', methods=['GET'])
     def _metrics_endpoint():
@@ -185,8 +203,20 @@ if __name__ == "__main__":
         start_notification_worker()
 
     try:
-        logging.info('Starting server on port %s', args.port)
-        socketio.init_app(app, cors_allowed_origins=config.CORS_ORIGINS)
-        socketio.run(app, host="0.0.0.0", port=args.port, debug=config.DEBUG)
+        logger.info("=" * 70)
+        logger.info("SERVER: Starting AquaFarm Pro Backend...")
+        logger.info(f"SERVER: Port: {args.port}")
+        logger.info(f"SERVER: Debug: {config.DEBUG}")
+        logger.info(f"SERVER: CORS Origins: {config.CORS_ORIGINS}")
+        logger.info("=" * 70)
+
+        logger.info("SERVER: ★★★ WEBSOCKET READY ★★★")
+        logger.info(f"SERVER: WebSocket URL: ws://localhost:{args.port}")
+        logger.info(f"SERVER: WebSocket Path: /socket.io")
+        logger.info("SERVER: Auth methods: auth.token, ?token=, Authorization header")
+        logger.info("=" * 70)
+
+        logger.info(f"SERVER: Starting on http://0.0.0.0:{args.port}")
+        socketio.run(app, host="0.0.0.0", port=args.port, debug=config.DEBUG, allow_unsafe_werkzeug=True)
     except Exception as exc:
-        logging.exception('Server failed to start: %s', exc)
+        logger.exception('Server failed to start: %s', exc)

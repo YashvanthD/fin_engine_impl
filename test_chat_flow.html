@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Flow Test - Full Happy Path</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1a1a2e; color: #eee; }
+        .container { display: flex; gap: 20px; }
+        .user-panel { flex: 1; border: 2px solid #4a4a6a; border-radius: 10px; padding: 15px; }
+        .user-a { border-color: #4CAF50; }
+        .user-b { border-color: #2196F3; }
+        h2 { margin-top: 0; }
+        .user-a h2 { color: #4CAF50; }
+        .user-b h2 { color: #2196F3; }
+        input, button { padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+        input { background: #2a2a4a; color: #fff; border: 1px solid #4a4a6a; border-radius: 5px; }
+        button { background: #4a4a6a; color: #fff; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #5a5a7a; }
+        button:disabled { background: #3a3a4a; cursor: not-allowed; }
+        button.primary { background: #4CAF50; }
+        button.primary:hover { background: #45a049; }
+        .log { background: #0a0a1a; padding: 10px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; border-radius: 5px; margin: 10px 0; }
+        .log-entry { margin: 3px 0; padding: 3px; border-radius: 3px; }
+        .success { background: #1a3a1a; color: #4CAF50; }
+        .info { background: #1a2a3a; color: #64B5F6; }
+        .error { background: #3a1a1a; color: #f44336; }
+        .warn { background: #3a3a1a; color: #FFC107; }
+        .message { background: #2a2a4a; color: #fff; }
+        .status { padding: 5px 10px; border-radius: 15px; display: inline-block; margin: 5px 0; }
+        .status.connected { background: #4CAF50; }
+        .status.disconnected { background: #f44336; }
+        .chat-box { background: #2a2a4a; padding: 10px; border-radius: 5px; min-height: 100px; margin: 10px 0; }
+        .chat-message { padding: 8px; margin: 5px 0; border-radius: 8px; }
+        .chat-message.sent { background: #4CAF50; margin-left: 20%; }
+        .chat-message.received { background: #2196F3; margin-right: 20%; }
+        .chat-message .meta { font-size: 10px; opacity: 0.7; }
+        .section { margin: 15px 0; padding: 10px; background: #2a2a4a; border-radius: 5px; }
+        .section h4 { margin: 0 0 10px 0; color: #aaa; }
+    </style>
+</head>
+<body>
+    <h1>🔄 Chat Flow Test - Full Happy Path</h1>
+    <p>Test the complete flow: Connect → Create Conversation → Send Message → Receive → Read Receipt</p>
+
+    <div class="container">
+        <!-- User A Panel -->
+        <div class="user-panel user-a">
+            <h2>👤 User A (Sender)</h2>
+            <span class="status disconnected" id="statusA">Disconnected</span>
+
+            <div class="section">
+                <h4>1. Connect</h4>
+                <input type="text" id="tokenA" placeholder="User A JWT Token" />
+                <button onclick="connectA()">Connect User A</button>
+            </div>
+
+            <div class="section">
+                <h4>2. Create Conversation</h4>
+                <input type="text" id="targetUserKey" placeholder="User B's user_key" />
+                <button onclick="createConversation()" id="createConvBtn" disabled>Create Conversation</button>
+            </div>
+
+            <div class="section">
+                <h4>3. Send Message</h4>
+                <input type="text" id="messageA" placeholder="Type a message..." value="Hello User B! How are you?" />
+                <button onclick="sendMessageA()" id="sendBtnA" disabled class="primary">Send Message</button>
+            </div>
+
+            <div class="section">
+                <h4>Chat</h4>
+                <div class="chat-box" id="chatA"></div>
+            </div>
+
+            <div class="section">
+                <h4>Log</h4>
+                <div class="log" id="logA"></div>
+            </div>
+        </div>
+
+        <!-- User B Panel -->
+        <div class="user-panel user-b">
+            <h2>👤 User B (Receiver)</h2>
+            <span class="status disconnected" id="statusB">Disconnected</span>
+
+            <div class="section">
+                <h4>1. Connect</h4>
+                <input type="text" id="tokenB" placeholder="User B JWT Token" />
+                <button onclick="connectB()">Connect User B</button>
+            </div>
+
+            <div class="section">
+                <h4>2. Conversation ID (auto-filled)</h4>
+                <input type="text" id="convIdB" placeholder="Will be filled when conversation is created" readonly />
+            </div>
+
+            <div class="section">
+                <h4>3. Actions</h4>
+                <button onclick="markReadB()" id="readBtnB" disabled class="primary">Mark as Read</button>
+                <button onclick="sendReplyB()" id="replyBtnB" disabled>Send Reply</button>
+            </div>
+
+            <div class="section">
+                <h4>Chat</h4>
+                <div class="chat-box" id="chatB"></div>
+            </div>
+
+            <div class="section">
+                <h4>Log</h4>
+                <div class="log" id="logB"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socketA = null;
+        let socketB = null;
+        let conversationId = null;
+        let userAKey = null;
+        let userBKey = null;
+
+        const SERVER_URL = 'http://localhost:5000';
+
+        // =====================================================================
+        // Logging
+        // =====================================================================
+        function log(panel, message, type = 'info') {
+            const logDiv = document.getElementById(`log${panel}`);
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const time = new Date().toLocaleTimeString();
+            entry.textContent = `[${time}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function addChatMessage(panel, content, isSent, meta = '') {
+            const chatDiv = document.getElementById(`chat${panel}`);
+            const msg = document.createElement('div');
+            msg.className = `chat-message ${isSent ? 'sent' : 'received'}`;
+            msg.innerHTML = `${content}<div class="meta">${meta}</div>`;
+            chatDiv.appendChild(msg);
+            chatDiv.scrollTop = chatDiv.scrollHeight;
+        }
+
+        function setStatus(panel, connected) {
+            const status = document.getElementById(`status${panel}`);
+            status.textContent = connected ? 'Connected' : 'Disconnected';
+            status.className = `status ${connected ? 'connected' : 'disconnected'}`;
+        }
+
+        // =====================================================================
+        // User A Connection
+        // =====================================================================
+        function connectA() {
+            const token = document.getElementById('tokenA').value;
+            if (!token) {
+                log('A', 'Please enter a JWT token!', 'error');
+                return;
+            }
+
+            log('A', 'Connecting to server...', 'info');
+
+            socketA = io(SERVER_URL, {
+                auth: { token },
+                transports: ['websocket', 'polling']
+            });
+
+            socketA.on('connect', () => {
+                log('A', '✅ Socket connected: ' + socketA.id, 'success');
+                setStatus('A', true);
+            });
+
+            socketA.on('connected', (data) => {
+                log('A', `✅ Authenticated as: ${data.user_key}`, 'success');
+                userAKey = data.user_key;
+                document.getElementById('createConvBtn').disabled = false;
+            });
+
+            socketA.on('disconnect', () => {
+                log('A', '❌ Disconnected', 'warn');
+                setStatus('A', false);
+            });
+
+            socketA.on('error', (err) => {
+                log('A', `❌ Error: ${JSON.stringify(err)}`, 'error');
+            });
+
+            // Chat events
+            socketA.on('chat:conversation:created', (data) => {
+                log('A', `💬 Conversation created: ${data.conversationId}`, 'success');
+                conversationId = data.conversationId;
+                document.getElementById('sendBtnA').disabled = false;
+                document.getElementById('convIdB').value = data.conversationId;
+            });
+
+            socketA.on('chat:message:sent', (data) => {
+                log('A', `✅ Message sent! ID: ${data.messageId}`, 'success');
+                addChatMessage('A', data.content, true, `Sent • ${data.messageId.slice(-6)}`);
+            });
+
+            socketA.on('chat:message:delivered', (data) => {
+                log('A', `✓ Delivered to ${data.deliveredTo}`, 'success');
+                // Update UI to show single checkmark
+            });
+
+            socketA.on('chat:message:read', (data) => {
+                log('A', `✓✓ Read by ${data.readBy}`, 'success');
+                // Update UI to show double checkmark
+            });
+
+            socketA.on('chat:message', (data) => {
+                log('A', `📨 Message from ${data.senderKey}: ${data.content}`, 'message');
+                addChatMessage('A', data.content, false, `From ${data.senderName || data.senderKey}`);
+            });
+
+            socketA.on('chat:typing:start', (data) => {
+                log('A', `⌨️ ${data.userKey} is typing...`, 'info');
+            });
+
+            socketA.on('chat:error', (data) => {
+                log('A', `❌ Chat error: ${data.code} - ${data.message}`, 'error');
+            });
+        }
+
+        // =====================================================================
+        // User B Connection
+        // =====================================================================
+        function connectB() {
+            const token = document.getElementById('tokenB').value;
+            if (!token) {
+                log('B', 'Please enter a JWT token!', 'error');
+                return;
+            }
+
+            log('B', 'Connecting to server...', 'info');
+
+            socketB = io(SERVER_URL, {
+                auth: { token },
+                transports: ['websocket', 'polling']
+            });
+
+            socketB.on('connect', () => {
+                log('B', '✅ Socket connected: ' + socketB.id, 'success');
+                setStatus('B', true);
+            });
+
+            socketB.on('connected', (data) => {
+                log('B', `✅ Authenticated as: ${data.user_key}`, 'success');
+                userBKey = data.user_key;
+                document.getElementById('targetUserKey').value = data.user_key;
+            });
+
+            socketB.on('disconnect', () => {
+                log('B', '❌ Disconnected', 'warn');
+                setStatus('B', false);
+            });
+
+            socketB.on('error', (err) => {
+                log('B', `❌ Error: ${JSON.stringify(err)}`, 'error');
+            });
+
+            // Chat events
+            socketB.on('chat:conversation:created', (data) => {
+                log('B', `💬 Added to conversation: ${data.conversationId}`, 'success');
+                conversationId = data.conversationId;
+                document.getElementById('convIdB').value = data.conversationId;
+                document.getElementById('readBtnB').disabled = false;
+                document.getElementById('replyBtnB').disabled = false;
+            });
+
+            socketB.on('chat:message', (data) => {
+                log('B', `📨 New message from ${data.senderName || data.senderKey}!`, 'message');
+                log('B', `   Content: "${data.content}"`, 'info');
+                addChatMessage('B', data.content, false, `From ${data.senderName || data.senderKey}`);
+                document.getElementById('readBtnB').disabled = false;
+            });
+
+            socketB.on('chat:message:sent', (data) => {
+                log('B', `✅ Reply sent! ID: ${data.messageId}`, 'success');
+                addChatMessage('B', data.content, true, `Sent • ${data.messageId.slice(-6)}`);
+            });
+
+            socketB.on('chat:typing:start', (data) => {
+                log('B', `⌨️ ${data.userKey} is typing...`, 'info');
+            });
+
+            socketB.on('chat:error', (data) => {
+                log('B', `❌ Chat error: ${data.code} - ${data.message}`, 'error');
+            });
+        }
+
+        // =====================================================================
+        // Actions
+        // =====================================================================
+        function createConversation() {
+            const targetKey = document.getElementById('targetUserKey').value;
+            if (!targetKey) {
+                log('A', 'Please enter User B\'s user_key!', 'error');
+                return;
+            }
+
+            log('A', `Creating conversation with ${targetKey}...`, 'info');
+            socketA.emit('chat:conversation:create', {
+                type: 'direct',
+                participants: [targetKey]
+            });
+        }
+
+        function sendMessageA() {
+            const content = document.getElementById('messageA').value;
+            if (!content || !conversationId) {
+                log('A', 'No message or conversation!', 'error');
+                return;
+            }
+
+            const tempId = 'temp_' + Date.now();
+            log('A', `📤 Sending message...`, 'info');
+
+            socketA.emit('chat:send', {
+                conversationId: conversationId,
+                content: content,
+                type: 'text',
+                tempId: tempId
+            });
+
+            document.getElementById('messageA').value = '';
+        }
+
+        function markReadB() {
+            if (!conversationId) {
+                log('B', 'No conversation!', 'error');
+                return;
+            }
+
+            log('B', `👁 Marking conversation as read...`, 'info');
+            socketB.emit('chat:read', {
+                conversationId: conversationId
+            });
+            log('B', `✅ Marked as read`, 'success');
+        }
+
+        function sendReplyB() {
+            if (!conversationId) {
+                log('B', 'No conversation!', 'error');
+                return;
+            }
+
+            const content = "Thanks! I'm doing great! 😊";
+            const tempId = 'temp_' + Date.now();
+
+            log('B', `📤 Sending reply...`, 'info');
+            socketB.emit('chat:send', {
+                conversationId: conversationId,
+                content: content,
+                type: 'text',
+                tempId: tempId
+            });
+        }
+    </script>
+</body>
+</html>
+

@@ -50,6 +50,7 @@ class MessagingRepository:
         self._messages_repo = None
         self._receipts_repo = None
         self._presence_repo = None
+        self._user_conversations_repo = None
         self._collections_initialized = False
         self._initialized = True
         logger.info("MessagingRepository initialized (lazy loading enabled)")
@@ -64,6 +65,7 @@ class MessagingRepository:
         self._messages_repo = get_collection('chat_messages')
         self._receipts_repo = get_collection('message_receipts')
         self._presence_repo = get_collection('user_presence')
+        self._user_conversations_repo = get_collection('user_conversations')
 
         # Log initialization status
         if self._conversations_repo is None:
@@ -78,6 +80,10 @@ class MessagingRepository:
             logger.warning("MessagingRepository: 'message_receipts' repository is None")
         if self._presence_repo is None:
             logger.warning("MessagingRepository: 'user_presence' repository is None")
+        if self._user_conversations_repo is None:
+            logger.warning("MessagingRepository: 'user_conversations' repository is None")
+        else:
+            logger.info("MessagingRepository: 'user_conversations' repository initialized")
 
         self._collections_initialized = True
 
@@ -113,6 +119,14 @@ class MessagingRepository:
             return None
         return getattr(self._presence_repo, 'collection', None)
 
+    @property
+    def user_conversations(self):
+        """Get user_conversations collection (lazy load)."""
+        self._ensure_collections()
+        if self._user_conversations_repo is None:
+            return None
+        return getattr(self._user_conversations_repo, 'collection', None)
+
     def is_available(self) -> bool:
         """Check if messaging repository is properly initialized."""
         self._ensure_collections()
@@ -131,6 +145,12 @@ class MessagingRepository:
         doc['created_at'] = datetime.utcnow()
         doc['last_activity'] = datetime.utcnow()
 
+        print(f"REPO: Creating conversation: {conversation.conversation_id}")
+        print(f"REPO: Participants: {conversation.participants}")
+        print(f"REPO: Participants type: {type(conversation.participants)}")
+        print(f"REPO: Account key: {conversation.account_key}")
+        print(f"REPO: Doc to insert: {doc}")
+
         # For direct conversations, check if one already exists
         if conversation.conversation_type == ConversationType.DIRECT:
             existing = self.find_direct_conversation(
@@ -139,10 +159,51 @@ class MessagingRepository:
                 conversation.account_key
             )
             if existing:
-                return existing.get('conversation_id') or str(existing.get('_id'))
+                existing_id = existing.get('conversation_id') or str(existing.get('_id'))
+                print(f"REPO: Existing direct conversation found: {existing_id}")
+                return existing_id
 
         result = self.conversations.insert_one(doc)
-        return str(result.inserted_id)
+        conv_id = conversation.conversation_id
+        print(f"REPO: Conversation created successfully: {conv_id} (MongoDB _id: {result.inserted_id})")
+
+        # Add conversation to each participant's user_conversations
+        self._add_conversation_to_users(conv_id, conversation.participants)
+
+        return conv_id
+
+    def _add_conversation_to_users(self, conversation_id: str, participants: list):
+        """Add conversation to each participant's user_conversations collection."""
+        if self.user_conversations is None:
+            print("REPO: user_conversations collection not available, skipping")
+            return
+
+        now = datetime.utcnow()
+        conv_entry = {
+            'conversation_id': conversation_id,
+            'joined_at': now,
+            'is_muted': False,
+            'is_pinned': False,
+            'is_archived': False,
+            'last_read_at': None,
+            'unread_count': 0
+        }
+
+        for user_key in participants:
+            try:
+                # Upsert: create user doc if not exists, add conversation to array
+                self.user_conversations.update_one(
+                    {'user_key': user_key},
+                    {
+                        '$setOnInsert': {'user_key': user_key, 'created_at': now},
+                        '$push': {'conversations': conv_entry},
+                        '$set': {'updated_at': now}
+                    },
+                    upsert=True
+                )
+                print(f"REPO: Added conversation {conversation_id} to user {user_key}")
+            except Exception as e:
+                print(f"REPO: ERROR adding conversation to user {user_key}: {e}")
 
     def find_direct_conversation(self, user1: str, user2: str, account_key: str) -> Optional[Dict]:
         """Find existing direct conversation between two users."""
@@ -160,19 +221,52 @@ class MessagingRepository:
     def get_conversation(self, conversation_id: str, user_key: str = None) -> Optional[Dict]:
         """Get conversation by ID."""
         if self.conversations is None:
-            logger.error("Conversations collection not available")
+            print("REPO: ERROR - Conversations collection not available")
             return None
 
-        query = {'conversation_id': conversation_id}
-        if user_key:
-            query['participants'] = user_key
-        conv = self.conversations.find_one(query)
+        print(f"REPO: get_conversation - conversation_id={conversation_id}, user_key={user_key}")
+
+        # First try to find by conversation_id only
+        conv = self.conversations.find_one({'conversation_id': conversation_id})
+
         if not conv:
+            print(f"REPO: Not found by conversation_id, trying by _id...")
             # Try by _id
             try:
+                from bson import ObjectId
                 conv = self.conversations.find_one({'_id': ObjectId(conversation_id)})
             except:
                 conv = self.conversations.find_one({'_id': conversation_id})
+
+        if conv:
+            print(f"REPO: Found conversation: {conv.get('conversation_id', conv.get('_id'))}")
+            print(f"REPO: Participants: {conv.get('participants')}")
+            print(f"REPO: Participants type: {type(conv.get('participants'))}")
+
+            # Check if user is a participant
+            if user_key:
+                participants = conv.get('participants', [])
+                print(f"REPO: Checking if user_key '{user_key}' is in participants: {participants}")
+
+                # Handle both string and list participants
+                if isinstance(participants, list):
+                    is_participant = user_key in participants
+                else:
+                    is_participant = user_key == participants
+
+                print(f"REPO: Is participant: {is_participant}")
+
+                if not is_participant:
+                    print(f"REPO: WARNING - User {user_key} is NOT a participant in conversation {conversation_id}")
+                    return None
+        else:
+            print(f"REPO: Conversation not found: {conversation_id}")
+            # Debug: list all conversations
+            all_convs = list(self.conversations.find({}).limit(10))
+            print(f"REPO: Total conversations in DB (first 10):")
+            for c in all_convs:
+                print(f"REPO:   - ID: {c.get('conversation_id', c.get('_id'))}, participants: {c.get('participants')}")
+
         return conv
 
     def get_user_conversations(
@@ -198,6 +292,108 @@ class MessagingRepository:
         cursor = self.conversations.find(query).sort('last_activity', -1).skip(skip).limit(limit)
         return list(cursor)
 
+    def get_user_conversation_ids(self, user_key: str) -> List[str]:
+        """Get list of conversation IDs for a user (fast lookup from user_conversations).
+
+        Returns:
+            List of conversation_id strings
+        """
+        if self.user_conversations is None:
+            print(f"REPO: user_conversations collection not available, falling back to conversations")
+            # Fallback to querying conversations collection
+            if self.conversations is None:
+                return []
+            cursor = self.conversations.find(
+                {'participants': user_key},
+                {'conversation_id': 1}
+            )
+            return [c.get('conversation_id') or str(c.get('_id')) for c in cursor]
+
+        doc = self.user_conversations.find_one({'user_key': user_key})
+        if not doc:
+            return []
+
+        conversations = doc.get('conversations', [])
+        return [c.get('conversation_id') for c in conversations if c.get('conversation_id')]
+
+    def get_user_conversations_summary(self, user_key: str) -> Dict:
+        """Get user's conversation summary (for initial load).
+
+        Returns:
+            {
+                'user_key': '...',
+                'conversations': [
+                    {
+                        'conversation_id': 'conv_123',
+                        'is_muted': False,
+                        'is_pinned': True,
+                        'unread_count': 5,
+                        ...
+                    }
+                ],
+                'total_unread': 10
+            }
+        """
+        if self.user_conversations is None:
+            return {'user_key': user_key, 'conversations': [], 'total_unread': 0}
+
+        doc = self.user_conversations.find_one({'user_key': user_key})
+        if not doc:
+            return {'user_key': user_key, 'conversations': [], 'total_unread': 0}
+
+        conversations = doc.get('conversations', [])
+        total_unread = sum(c.get('unread_count', 0) for c in conversations)
+
+        return {
+            'user_key': user_key,
+            'conversations': conversations,
+            'total_unread': total_unread
+        }
+
+    def update_user_conversation_unread(self, user_key: str, conversation_id: str, unread_count: int):
+        """Update unread count for a user's conversation."""
+        if self.user_conversations is None:
+            return
+
+        self.user_conversations.update_one(
+            {'user_key': user_key, 'conversations.conversation_id': conversation_id},
+            {
+                '$set': {
+                    'conversations.$.unread_count': unread_count,
+                    'updated_at': datetime.utcnow()
+                }
+            }
+        )
+
+    def increment_user_conversation_unread(self, user_key: str, conversation_id: str):
+        """Increment unread count for a user's conversation."""
+        if self.user_conversations is None:
+            return
+
+        self.user_conversations.update_one(
+            {'user_key': user_key, 'conversations.conversation_id': conversation_id},
+            {
+                '$inc': {'conversations.$.unread_count': 1},
+                '$set': {'updated_at': datetime.utcnow()}
+            }
+        )
+
+    def mark_user_conversation_read(self, user_key: str, conversation_id: str):
+        """Mark a conversation as read (reset unread count)."""
+        if self.user_conversations is None:
+            return
+
+        self.user_conversations.update_one(
+            {'user_key': user_key, 'conversations.conversation_id': conversation_id},
+            {
+                '$set': {
+                    'conversations.$.unread_count': 0,
+                    'conversations.$.last_read_at': datetime.utcnow(),
+                    'updated_at': datetime.utcnow()
+                }
+            }
+        )
+
     def add_participant(self, conversation_id: str, user_key: str, added_by: str) -> bool:
         """Add participant to group conversation."""
         if self.conversations is None:
@@ -213,6 +409,11 @@ class MessagingRepository:
                 '$set': {'last_activity': datetime.utcnow()}
             }
         )
+
+        if result.modified_count > 0:
+            # Also add to user_conversations
+            self._add_conversation_to_users(conversation_id, [user_key])
+
         return result.modified_count > 0
 
     def remove_participant(self, conversation_id: str, user_key: str, removed_by: str) -> bool:
@@ -227,7 +428,26 @@ class MessagingRepository:
                 '$set': {'last_activity': datetime.utcnow()}
             }
         )
+
+        if result.modified_count > 0:
+            # Also remove from user_conversations
+            self._remove_conversation_from_user(user_key, conversation_id)
+
         return result.modified_count > 0
+
+    def _remove_conversation_from_user(self, user_key: str, conversation_id: str):
+        """Remove a conversation from user's user_conversations."""
+        if self.user_conversations is None:
+            return
+
+        self.user_conversations.update_one(
+            {'user_key': user_key},
+            {
+                '$pull': {'conversations': {'conversation_id': conversation_id}},
+                '$set': {'updated_at': datetime.utcnow()}
+            }
+        )
+        print(f"REPO: Removed conversation {conversation_id} from user {user_key}")
 
     def update_conversation(self, conversation_id: str, updates: Dict[str, Any]) -> bool:
         """Update conversation metadata."""
@@ -286,18 +506,24 @@ class MessagingRepository:
 
     def send_message(self, message: Message) -> str:
         """Send a new message."""
+        print(f"REPO: send_message - message_id={message.message_id}, conversation_id={message.conversation_id}")
+
         if self.messages is None:
+            print("REPO: ERROR - Messages collection not available")
             raise RuntimeError("Messages collection not available - MongoDB may not be connected")
 
         doc = message.to_db_doc()
         doc['created_at'] = datetime.utcnow()
 
+        print(f"REPO: Inserting message document: conversation_id={doc.get('conversation_id')}")
+
         result = self.messages.insert_one(doc)
         message_id = str(result.inserted_id)
+        print(f"REPO: Message inserted with _id={message_id}")
 
         # Update conversation last_message and last_activity
-        if self.conversations:
-            self.conversations.update_one(
+        if self.conversations is not None:
+            update_result = self.conversations.update_one(
                 {'conversation_id': message.conversation_id},
                 {
                     '$set': {
@@ -312,6 +538,7 @@ class MessagingRepository:
                     }
                 }
             )
+            print(f"REPO: Conversation updated, matched={update_result.matched_count}, modified={update_result.modified_count}")
 
         return message_id
 
@@ -336,8 +563,10 @@ class MessagingRepository:
         limit: int = 50
     ) -> List[Dict]:
         """Get messages in a conversation with pagination."""
+        print(f"REPO: get_conversation_messages - conversation_id={conversation_id}, limit={limit}")
+
         if self.messages is None:
-            logger.error("Messages collection not available")
+            print("REPO: ERROR - Messages collection not available")
             return []
 
         query = {'conversation_id': conversation_id, 'deleted_at': None}
@@ -347,8 +576,10 @@ class MessagingRepository:
         elif after:
             query['created_at'] = {'$gt': after}
 
+        print(f"REPO: Query: {query}")
         cursor = self.messages.find(query).sort('created_at', -1).limit(limit)
         messages = list(cursor)
+        print(f"REPO: Found {len(messages)} messages")
         messages.reverse()  # Return in chronological order
         return messages
 
@@ -453,7 +684,7 @@ class MessagingRepository:
 
     def mark_conversation_read(self, conversation_id: str, user_key: str) -> int:
         """Mark all messages in conversation as read."""
-        if not self.messages or not self.message_receipts:
+        if self.messages is None or self.message_receipts is None:
             logger.error("Messages or message_receipts collection not available")
             return 0
 
@@ -481,7 +712,7 @@ class MessagingRepository:
 
     def get_unread_count(self, conversation_id: str, user_key: str) -> int:
         """Get unread message count for a conversation."""
-        if not self.messages or not self.message_receipts:
+        if self.messages is None or self.message_receipts is None:
             logger.error("Messages or message_receipts collection not available")
             return 0
 

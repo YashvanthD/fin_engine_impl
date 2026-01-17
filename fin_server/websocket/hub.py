@@ -41,24 +41,58 @@ class WebSocketHub:
             app: Flask application
             socketio: Socket.IO instance
         """
+        print("=" * 60)
+        print("WEBSOCKET HUB: Starting initialization...")
+        print(f"WEBSOCKET HUB: Flask app: {app.name}")
+        print(f"WEBSOCKET HUB: SocketIO instance: {socketio}")
+        print(f"WEBSOCKET HUB: SocketIO async_mode: {getattr(socketio, 'async_mode', 'unknown')}")
+
+        logger.info("=" * 60)
+        logger.info("WEBSOCKET HUB: Starting initialization...")
+        logger.info(f"WEBSOCKET HUB: Flask app: {app.name}")
+        logger.info(f"WEBSOCKET HUB: SocketIO instance: {socketio}")
+        logger.info(f"WEBSOCKET HUB: SocketIO async_mode: {getattr(socketio, 'async_mode', 'unknown')}")
+
         self.socketio = socketio
         self.app = app
 
         # Set up event emitter with socketio instance
         set_socketio(socketio)
         set_user_tracking(self.connected_users, self.user_sockets)
+        print("WEBSOCKET HUB: ✓ Event emitter configured")
+        logger.info("WEBSOCKET HUB: ✓ Event emitter configured")
 
         # Register event handlers
         self._register_handlers()
+        print("WEBSOCKET HUB: ✓ Event handlers registered")
+        logger.info("WEBSOCKET HUB: ✓ Event handlers registered")
 
         # Initialize chat handler
         self._init_chat_handler()
+        print("WEBSOCKET HUB: ✓ Chat handler initialized")
+        logger.info("WEBSOCKET HUB: ✓ Chat handler initialized")
 
         self._initialized = True
+        print("=" * 60)
+        print("WEBSOCKET HUB: ★★★ INITIALIZATION COMPLETE ★★★")
+        print("=" * 60)
+        print("WEBSOCKET HUB: Listening for events:")
+        print("  - connect / disconnect")
+        print("  - chat:send, chat:read, chat:typing, chat:edit, chat:delete")
+        print("=" * 60)
+
         logger.info("=" * 60)
-        logger.info("WebSocket Hub initialized SUCCESSFULLY")
-        logger.info("Registered handlers: connect, disconnect, notification:*, alert:*, presence:*, subscribe, ping")
-        logger.info("Chat handlers: chat:send, chat:read, chat:typing, chat:edit, chat:delete, chat:conversation:*")
+        logger.info("WEBSOCKET HUB: ★★★ INITIALIZATION COMPLETE ★★★")
+        logger.info("=" * 60)
+        logger.info("WEBSOCKET HUB: Listening for events:")
+        logger.info("  - connect / disconnect")
+        logger.info("  - notification:mark_read, notification:mark_all_read")
+        logger.info("  - alert:acknowledge")
+        logger.info("  - presence:update")
+        logger.info("  - subscribe / unsubscribe")
+        logger.info("  - ping")
+        logger.info("  - chat:send, chat:read, chat:typing, chat:edit, chat:delete")
+        logger.info("  - chat:conversation:create, chat:conversation:join, chat:conversation:leave")
         logger.info("=" * 60)
 
     def _init_chat_handler(self):
@@ -77,10 +111,23 @@ class WebSocketHub:
     def _register_handlers(self):
         """Register all WebSocket event handlers."""
 
-        # Debug: Log all incoming events
+        print("WEBSOCKET: Registering event handlers...")
+        logger.info("WEBSOCKET: Registering event handlers...")
+
+        # Debug: Log all incoming events with a catch-all handler
         @self.socketio.on_error_default
         def default_error_handler(e):
+            print(f"WEBSOCKET ERROR: {e}")
             logger.error(f"WEBSOCKET ERROR: {e}")
+
+        # Catch-all event handler for debugging - logs ANY event received
+        @self.socketio.on('*')
+        def catch_all(event, data=None):
+            print(f"WEBSOCKET CATCH-ALL: Received event '{event}' with data: {data}")
+            logger.info(f"WEBSOCKET CATCH-ALL: Received event '{event}' with data: {data}")
+
+        print("WEBSOCKET: ✓ Registered catch-all event handler")
+        logger.info("WEBSOCKET: ✓ Registered catch-all event handler")
 
         # =====================================================================
         # Connection Events
@@ -91,9 +138,17 @@ class WebSocketHub:
             """Handle new WebSocket connection."""
             from flask import request
 
+            print("=" * 60)
+            print("WEBSOCKET: ★★★ NEW CONNECTION ATTEMPT ★★★")
+            print(f"WEBSOCKET: Auth data received: {auth}")
+            print(f"WEBSOCKET: Request SID: {getattr(request, 'sid', 'N/A')}")
+            print(f"WEBSOCKET: Remote addr: {request.remote_addr}")
+
             logger.info("=" * 60)
-            logger.info("WEBSOCKET: New connection attempt")
+            logger.info("WEBSOCKET: ★★★ NEW CONNECTION ATTEMPT ★★★")
             logger.info(f"WEBSOCKET: Auth data received: {auth}")
+            logger.info(f"WEBSOCKET: Request SID: {getattr(request, 'sid', 'N/A')}")
+            logger.info(f"WEBSOCKET: Remote addr: {request.remote_addr}")
             logger.info(f"WEBSOCKET: Headers: {dict(request.headers)}")
 
             # Get token from auth data or headers

@@ -131,6 +131,7 @@ class MongoRepo:
         self.chat_messages: Any = None
         self.message_receipts: Any = None
         self.user_presence: Any = None
+        self.user_conversations: Any = None
 
         # FISH DB REPOSITORIES
         self.fish: Any = None
@@ -212,6 +213,7 @@ class MongoRepo:
                 MessageRepository, NotificationRepository, NotificationQueueRepository, TaskRepository,
                 ConversationRepository, ChatMessageRepository, UserPresenceRepository, MessageReceiptRepository
             )
+            from fin_server.repository.media.user_conversations_repository import UserConversationsRepository
             from fin_server.repository.user import UserRepository, FishMappingRepository, CompanyRepository
             from fin_server.repository.user.ai_usage_repository import AIUsageRepository
 
@@ -234,6 +236,7 @@ class MongoRepo:
                 self.chat_messages = ChatMessageRepository(self.media_db)
                 self.message_receipts = MessageReceiptRepository(self.media_db)
                 self.user_presence = UserPresenceRepository(self.media_db)
+                self.user_conversations = UserConversationsRepository(self.media_db)
                 logger.info("Chat/Messaging repositories initialized in media_db")
 
             # FISH DB REPOSITORIES
